@@ -1,19 +1,19 @@
 const newsItems = [
   {
     badge: "Open alpha",
-    text: "taxee is in open alpha — register your agent and try watch mode today.",
+    text: "First DeFi portfolio agent optimizing after-tax return — not gross performance.",
   },
   {
-    badge: "Protocol",
-    text: "After-tax optimization now live across Base, Ethereum, and Arbitrum.",
+    badge: "Cross-chain",
+    text: "Ethereum, Base, and Arbitrum — rebalance, harvest, and park with tax awareness.",
   },
   {
-    badge: "Upgrade",
-    text: "Delegated approval or manual Execute / Defer / Skip — your choice.",
+    badge: "Control",
+    text: "Manual Execute / Defer / Skip or delegate within policy — Arc audit on every move.",
   },
   {
-    badge: "Arc",
-    text: "Every disposal logged for Form 8949 pre-fill via Circle stack.",
+    badge: "USYC",
+    text: "Lots near 365-day threshold park in USYC for yield while maturing to long-term.",
   },
 ];
 
@@ -26,11 +26,11 @@ function NewsItem({
 }) {
   return (
     <span className="mx-5 inline-flex items-center gap-2 sm:mx-6">
-      <span className="inline-flex shrink-0 items-center gap-1.5 bg-[#ecfdf3] px-2 py-0.5 font-landing text-[10px] font-bold uppercase tracking-wide text-[#166534]">
+      <span className="inline-flex shrink-0 items-center gap-1.5 bg-[#ecfdf3] px-2 py-0.5 font-landing text-[10px] font-bold uppercase tracking-wide text-[#166534] dark:bg-[#14532d]/40 dark:text-[#86efac]">
         <span className="h-1.5 w-1.5 animate-pulse bg-[#3dcc4e]" />
         {badge}
       </span>
-      <span className="whitespace-nowrap font-landing text-[12px] text-[#374151] sm:text-[13px]">
+      <span className="whitespace-nowrap font-landing text-[12px] text-[#374151] dark:text-[#d1d5db] sm:text-[13px]">
         {text}
       </span>
     </span>
@@ -53,8 +53,8 @@ export function NewsMarquee() {
       className="relative hidden min-w-0 flex-1 items-center overflow-hidden md:flex"
       aria-label="Product news"
     >
-      <div className="pointer-events-none absolute left-0 z-10 h-full w-8 bg-gradient-to-r from-white to-transparent" />
-      <div className="pointer-events-none absolute right-0 z-10 h-full w-8 bg-gradient-to-l from-white to-transparent" />
+      <div className="pointer-events-none absolute left-0 z-10 h-full w-8 bg-gradient-to-r from-white to-transparent dark:from-[#0f1419]" />
+      <div className="pointer-events-none absolute right-0 z-10 h-full w-8 bg-gradient-to-l from-white to-transparent dark:from-[#0f1419]" />
       <div className="landing-marquee-track flex w-max items-center py-1">
         {track}
         {track}

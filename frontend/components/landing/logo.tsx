@@ -1,27 +1,30 @@
-export function TaxeeLogo({ className = "" }: { className?: string }) {
+import Link from "next/link";
+import { TaxeeLogoMark } from "@/components/landing/taxee-logo-mark";
+
+export function TaxeeLogo({ showWordmark = false }: { showWordmark?: boolean }) {
   return (
-    <div className={`flex items-center gap-2.5 ${className}`}>
-      <svg
-        width="32"
-        height="32"
-        viewBox="0 0 32 32"
-        fill="none"
-        aria-hidden
-      >
-        <path
-          d="M6 26V10L16 6L26 10V26L16 30L6 26Z"
-          fill="#111827"
-        />
-        <path
-          d="M16 6V30M6 10L26 22M26 10L6 22"
-          stroke="white"
-          strokeWidth="1.25"
-          strokeLinecap="round"
-        />
-      </svg>
-      <span className="font-landing text-[22px] font-bold tracking-tight text-black">
-        taxee
-      </span>
-    </div>
+    <span className="flex items-center gap-2.5 text-[#111827] dark:text-[#f9fafb]">
+      <TaxeeLogoMark
+        className="h-8 w-[27px] sm:h-9 sm:w-[31px]"
+        title="taxee"
+      />
+      {showWordmark ? (
+        <span className="font-landing text-[15px] font-semibold tracking-tight">
+          taxee
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+export function Logo() {
+  return (
+    <Link
+      href="/"
+      className="flex shrink-0 items-center gap-2.5 transition-opacity hover:opacity-80"
+      aria-label="taxee home"
+    >
+      <TaxeeLogo showWordmark />
+    </Link>
   );
 }

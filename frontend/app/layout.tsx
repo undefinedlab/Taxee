@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Inter, Playfair_Display } from "next/font/google";
+import { ThemeScript } from "@/components/landing/theme-script";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -24,9 +25,9 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "taxee — AI Tax Intelligence Solution",
+  title: "taxee — After-tax DeFi portfolio agent",
   description:
-    "Smarter AI taxes for your DeFi portfolio. After-tax return as the optimization target.",
+    "The first DeFi portfolio agent that optimizes after-tax return — not gross performance. Cross-chain rebalance, harvest, and hold with tax awareness embedded in every decision.",
 };
 
 export default function RootLayout({
@@ -35,7 +36,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <ThemeScript />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${inter.variable} ${playfair.variable} font-sans antialiased`}
       >

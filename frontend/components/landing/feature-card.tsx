@@ -33,14 +33,16 @@ export function FeatureCard({
             <span className="h-2.5 w-2.5 bg-[#4a9eed]" />
           ) : null}
           {tag && (
-            <span className="font-landing text-[10px] font-bold uppercase tracking-[0.12em] text-[#6b7280]">
+            <span className="font-landing text-[10px] font-bold uppercase tracking-[0.12em] text-[#6b7280] dark:text-[#9ca3af]">
               {tag}
             </span>
           )}
         </div>
         {metric && (
           <div className="text-right">
-            <p className="font-landing text-xl font-bold text-black">{metric}</p>
+            <p className="font-landing text-xl font-bold text-black dark:text-[#f9fafb]">
+              {metric}
+            </p>
             {metricLabel && (
               <p className="font-landing text-[10px] text-[#9ca3af]">
                 {metricLabel}
@@ -49,17 +51,17 @@ export function FeatureCard({
           </div>
         )}
       </div>
-      <h3 className="mt-4 font-landing text-lg font-semibold text-black">
+      <h3 className="mt-4 font-landing text-lg font-semibold text-black dark:text-[#f9fafb]">
         {title}
       </h3>
-      <p className="mt-3 font-landing text-[13px] leading-[1.65] text-[#4b5563]">
+      <p className="mt-3 font-landing text-[13px] leading-[1.65] text-[#4b5563] dark:text-[#9ca3af]">
         {description}
       </p>
     </>
   );
 
   const baseClass = cn(
-    "landing-grid-line flex h-full flex-col border p-7 transition-colors hover:bg-[#fafbfc] sm:p-8 lg:p-10",
+    "landing-grid-line flex h-full flex-col border p-7 transition-colors hover:bg-[#fafbfc] dark:hover:bg-[#141a24] sm:p-8 lg:p-10",
     className,
   );
 
