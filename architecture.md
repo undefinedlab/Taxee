@@ -16,6 +16,8 @@ How to build a DeFi portfolio agent that optimizes **after-tax return**, not gro
 | Cross-chain is native | Portfolio state aggregates across chains; execution routes through Circle CCTP / Gateway |
 | Auditability by default | Every disposal is logged to Arc with lot selection rationale — Form 8949 is a projection, not an afterthought |
 | Fail closed on tax ambiguity | If lot identity or holding period is unknown, defer or split rather than realize at worst-case rates |
+| Human-in-the-loop by default | Agent proposes; user approves via Execute / Defer / Skip — no silent mainnet txs in MVP |
+| Frictionless onboarding | Register once (wallet + history + prefs); heartbeat runs forever without re-setup |
 
 ---
 
@@ -59,11 +61,325 @@ User Goal (natural language)
 
 The LLM is not doing math. It receives structured inputs and applies judgment — which is exactly what it's good at.
 
+The pipeline above runs inside a **hosted heartbeat** (always-on scan) or is invoked on-demand via **MCP** from a user's own OpenClaw-style agent. User flows (§3–§7) define how people register, get notified, and approve actions.
+
 ---
 
-## 3. Building Blocks
+## 3. User Lifecycle — Three Phases
 
-### 3.1 Data Aggregator
+taxee is an **always-on agent** attached to a registered wallet (or wallet set). The user experience splits into three phases:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PHASE 1 — ONCE (Onboarding)                                                │
+│                                                                             │
+│   Connect wallet(s)  →  Import history  →  Set preferences  →  Done         │
+│   (SIWE / Circle)       (CSV / onchain)    (jurisdiction,      (never       │
+│                                             thresholds)        again)       │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      ↓
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PHASE 2 — ALWAYS ON (Heartbeat)                                            │
+│                                                                             │
+│   Hourly scan  →  Agent reasons  →  Nothing? → wait, rescan                 │
+│   prices, lots,      harvest?         │                                     │
+│   regime              rebalance?       └── Opportunity? → NOTIFY USER       │
+│                       park?                    (TG · email · push · MCP)    │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      ↓
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PHASE 3 — ACTION LOOP (Human approves)                                     │
+│                                                                             │
+│   Notification card  →  [ Execute ]  [ Defer ]  [ Skip ]                  │
+│         ↓ Execute                                                           │
+│   Circle Wallets  →  Arc records  →  USYC parks if needed  →  Confirmed     │
+│   "$600 loss booked" + LLM explanation                                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+| Phase | User effort | System behavior |
+|-------|-------------|-----------------|
+| **Once** | ~2 minutes | Bind identity, import lots, set policy — then never repeat |
+| **Always on** | Zero | Heartbeat scans portfolio; LLM reasons; surfaces opportunities only |
+| **Action loop** | One tap | User chooses Execute / Defer / Skip; execution only after approval |
+
+---
+
+## 4. Onboarding & Agent Registration
+
+Goal: **frictionless registration** — wallet linked, history imported, agent running, reachable from any surface the user prefers.
+
+### 4.1 Registration surfaces
+
+| Surface | Flow | Best for |
+|---------|------|----------|
+| **Web app** | Connect wallet (SIWE) → import CSV or onchain scan → set prefs → agent spawned | Power users, demo |
+| **Telegram bot** | `/start` → link wallet (deep link or paste address) → auto-import onchain history → prefs via chat | Mobile-first, lowest friction |
+| **MCP / OpenClaw** | User's agent calls `taxee_register_wallet` → returns `agentId` + webhook URL | Developers, custom flows |
+
+All surfaces write to the same **`Agent` record** in the backend — one wallet set, one heartbeat, many notification channels.
+
+### 4.2 Telegram bot — onboarding angle
+
+Telegram is a strong hackathon/demo channel: users already live there; no app install.
+
+**Proposed TG flow:**
+
+```
+User: /start
+Bot:  Welcome to taxee. I'll watch your portfolio for tax-smart moves.
+      Send your wallet address (or tap to connect via WalletConnect link).
+
+User: 0xabc... 
+Bot:  Scanning onchain history on Base + Ethereum… (30–60s)
+Bot:  Found 4 positions, 12 lots. Estimated YTD gains: $8,400.
+      Jurisdiction? [US] [Other]
+      Harvest when loss exceeds? [5%] [8%] [10%]
+
+User: US, 8%
+Bot:  Agent active. Heartbeat every hour. I'll message you when there's something to do.
+      Dashboard: https://taxee.app/a/{agentId}
+```
+
+**Auto-import on registration:**
+- Read-only RPC/indexer: reconstruct transfers → provisional lots
+- User can upload CSV to correct cost basis (optional, post-registration)
+- Arc stores canonical lots after first confirmed disposal
+
+**TG is notification + lightweight approval**, not key custody — see §7.
+
+### 4.3 `Agent` entity (backend)
+
+```typescript
+Agent {
+  id: string
+  userId: string                    // TG user id, email, or SIWE address hash
+  status: "pending" | "active" | "paused"
+  wallets: WalletBinding[]        // one or more watch addresses
+  policy: UserPolicy                // from Goal Parser / onboarding
+  deploymentMode: "hosted" | "mcp"
+  notificationChannels: Channel[]   // telegram, email, webhook, mcp
+  heartbeatIntervalMinutes: 60
+  createdAt: timestamp
+}
+
+WalletBinding {
+  address: string
+  chains: number[]
+  circleWalletId?: string           // only if execution mode uses Circle Wallets
+  importSource: "onchain" | "csv" | "manual"
+}
+```
+
+### 4.4 Agent spawn (after onboarding)
+
+On `Done`:
+1. Persist `Agent` + `WalletBinding`(s) + imported lots
+2. Enqueue first heartbeat job
+3. Register notification webhooks (TG chat id, optional email)
+4. Return deep link: dashboard + TG "View portfolio" button
+
+User never configures cron or infrastructure — **registration = agent is live**.
+
+---
+
+## 5. Deployment Modes — Hosted vs MCP / OpenClaw
+
+Two ways to run the same taxee brain:
+
+```
+                    ┌─────────────────────────────────────┐
+                    │         taxee Core (shared)          │
+                    │  Aggregator · Decision · LLM · Arc   │
+                    └──────────────┬──────────────────────┘
+                                   │
+              ┌────────────────────┴────────────────────┐
+              ▼                                         ▼
+   ┌──────────────────────┐               ┌──────────────────────┐
+   │  MODE A: Hosted       │               │  MODE B: MCP Bridge    │
+   │  (OpenClaw-style)     │               │  (Bring your agent)    │
+   │                       │               │                        │
+   │  taxee runs heartbeat │               │  User's OpenClaw /     │
+   │  on our infra         │               │  Claude Desktop agent  │
+   │  TG + web notify      │               │  calls taxee MCP     │
+   │  Circle executes      │               │  tools on demand       │
+   └──────────────────────┘               └──────────────────────┘
+```
+
+| Aspect | **Hosted (Mode A)** | **MCP / OpenClaw (Mode B)** |
+|--------|---------------------|-----------------------------|
+| Who runs the loop | taxee worker (hourly cron) | User's agent invokes tools |
+| Notifications | TG, email, push, web | MCP tool results → user's channel |
+| Execution | Circle Wallets on our side (with user approval) | `taxee_propose_action` → user agent asks human → `taxee_execute` |
+| Best for | Default retail UX | Power users, custom workflows, multi-agent stacks |
+| Registration | Web or TG bot | `taxee_register_agent` MCP tool |
+
+### 5.1 MCP toolset (sketch)
+
+Expose taxee as an MCP server so external agents can participate without hosted heartbeat:
+
+| Tool | Purpose |
+|------|---------|
+| `taxee_register_wallet` | Bind address, trigger history import, return `agentId` |
+| `taxee_get_portfolio` | Current snapshot + lots + YTD realized |
+| `taxee_scan` | Run one heartbeat cycle (decision engine + LLM reasoner) |
+| `taxee_list_opportunities` | Pending `CandidateAction`s awaiting approval |
+| `taxee_approve_action` | Execute / defer / skip by action id |
+| `taxee_get_arc_records` | Compliance export for user's agent to summarize |
+
+Hosted mode uses the same tools internally; MCP mode exposes them to the user's OpenClaw instance.
+
+### 5.2 Custom flows (OpenClaw)
+
+Power users compose taxee into larger automations:
+
+```
+OpenClaw agent:
+  1. taxee_scan(agentId)
+  2. if opportunities → post to Slack + ask human
+  3. on approval → taxee_approve_action(id, "execute")
+  4. summarize Arc record → weekly tax report Notion page
+```
+
+taxee does not need to own the notification channel in this mode — the parent agent does.
+
+---
+
+## 6. Notifications & Action Loop
+
+### 6.1 Notification payload
+
+When heartbeat finds an opportunity, emit a structured card (all channels render the same data):
+
+```typescript
+OpportunityNotification {
+  agentId: string
+  actionId: string
+  type: "HARVEST" | "REBALANCE" | "PARK"
+  headline: "Harvest opportunity — wETH down $600"
+  taxSavingEstimate: 180
+  llmReasoning: string              // plain English, 2–3 sentences
+  buttons: ["execute", "defer", "skip"]
+  deferOptions?: { days: 12, reason: "wash sale window" }
+  dashboardUrl: string
+}
+```
+
+**Example (matches product narrative):**
+
+> Harvest opportunity found. wETH down $600 — saving ~$180 tax. Rebuy immediately after — no wait.  
+> [Execute] [Defer 12d] [Skip]
+
+### 6.2 Channel matrix
+
+| Channel | Onboarding | Notify | Approve action |
+|---------|------------|--------|----------------|
+| **Web dashboard** | ✓ | ✓ | ✓ (primary for demo) |
+| **Telegram** | ✓ bot | ✓ inline buttons | ✓ callback → API |
+| **Email** | ✓ magic link | ✓ | ✓ link back to web |
+| **Push** | ✓ PWA | ✓ | Deep link to web |
+| **MCP** | via tool | user's agent | `taxee_approve_action` |
+
+### 6.3 Action loop state machine
+
+```
+OPPORTUNITY_DETECTED
+    → notify user
+    → await_user_decision (timeout: 24h default → auto-defer or skip per policy)
+
+EXECUTE  → execution layer → Arc write → confirmation notify
+DEFER    → schedule re-check (e.g. 12d) → heartbeat skips until due
+SKIP     → log dismissed → no re-notify for same lot 7d
+```
+
+Execution **never** fires without explicit approval in MVP (hosted or MCP).
+
+---
+
+## 7. Identity & Key Management
+
+The hardest onboarding question: **who holds keys, and what can taxee actually sign?**
+
+### 7.1 Recommended model (hackathon → production)
+
+**Tiered capability — start read-only, upgrade to execute:**
+
+| Tier | Keys | Agent can | User gives |
+|------|------|-----------|------------|
+| **Watch** | User keeps all keys | Scan, reason, notify | Address(es) only |
+| **Execute** | Circle Programmable Wallets or session key | Execute approved txs | Wallet creation / delegation via Circle |
+| **Bring-your-own** | User's OpenClaw holds keys | taxee proposes only | MCP connection, no keys to taxee |
+
+**Default onboarding = Watch tier.** User registers an address; taxee imports history and runs heartbeat with zero custody friction. Execute tier is opt-in when they first tap **Execute**.
+
+### 7.2 Option comparison
+
+| Model | Friction | Security | Execute? | Notes |
+|-------|----------|----------|----------|-------|
+| **Address-only (watch)** | Lowest | Highest | No — notify only | TG bot works day one; user executes in their own wallet |
+| **Circle Programmable Wallet** | Medium | Strong — MPC, policies | Yes | User creates/funds Circle wallet; taxee signs via API with spend limits |
+| **Session key / smart wallet** | Medium | Good — scoped permissions | Yes | Delegate limited swap permissions on Base etc. |
+| **Export private key to taxee** | Low | **Never** | Yes | ❌ Exclude — unacceptable for DeFi product |
+| **MCP / OpenClaw BYO** | Low for devs | User owns keys | User's agent signs | taxee never sees keys; `approve_action` returns unsigned tx or Circle job id |
+
+### 7.3 Telegram + keys (explicit)
+
+**The TG bot must NOT ask for seed phrases or private keys.**
+
+| TG can do | TG must not do |
+|-----------|----------------|
+| Accept **public address** for watch mode | Request seed phrase / private key |
+| Deep-link to **WalletConnect** for Circle wallet setup | Store signing material in chat logs |
+| Relay **Execute** as API call to Circle (server-side) | Broadcast txs with bot-held hot wallet |
+
+Flow for execute via TG:
+
+```
+User taps [Execute] on harvest card
+  → API validates agentId + actionId + TG user binding
+  → If watch-only: return "Connect execution wallet" link (Circle onboarding)
+  → If execute-enabled: Circle Wallets API signs tx (HIFO lot manifest)
+  → Arc write + TG confirmation message
+```
+
+### 7.4 Circle Wallets as execution layer
+
+Aligns with existing stack:
+
+1. **Onboarding (execute tier):** User completes Circle wallet creation (web or WC link from TG)
+2. **Funding:** User bridges/sends assets to Circle wallet OR authorizes delegation from existing wallet (product decision)
+3. **Policy guardrails:** Max tx size, allowed contracts (USYC, DEX routers), daily spend cap — enforced in code before Circle API call
+4. **Signing:** Server calls Circle API with **entity secret / API key** (taxee infra), not user private key in chat
+
+taxee stores: `circleWalletId`, policy limits, **never** user seed.
+
+### 7.5 History import without keys
+
+Auto-import on registration is **read-only**:
+
+- Indexer / RPC: `eth_getLogs`, transfer traces, DEX swap events
+- Heuristic lot reconstruction → `provisional: true` flag
+- User confirms or uploads CSV before first tax-critical execution
+
+### 7.6 MCP / OpenClaw key model
+
+```
+User's machine (OpenClaw)
+  ├── holds signing keys or Circle session
+  └── calls taxee MCP (API key per agentId, read/write scoped)
+
+taxee cloud
+  ├── no user private keys
+  └── returns Proposal + tx payload OR Circle job reference
+```
+
+User's agent decides whether to sign locally. taxee stays propose-only unless hosted execute tier is enabled.
+
+---
+
+## 8. Building Blocks
+
+### 8.1 Data Aggregator
 
 **Responsibility:** Pure data plumbing. Everything the agent needs before it can act. No LLM.
 
@@ -105,13 +421,13 @@ Lot {
 
 **Implementation:**
 - Poll Circle Wallets API on interval (or webhook on balance change)
-- Read lot history + YTD realized G/L from Arc (write path separate — see §3.6)
+- Read lot history + YTD realized G/L from Arc (write path separate — see §8.6)
 - Fetch prices from CoinGecko / Chainlink / Pyth
 - Collect regime signals into a structured `RegimeSignals` object — no classification yet
 
 ---
 
-### 3.2 LLM Goal Parser
+### 8.2 LLM Goal Parser
 
 **Responsibility:** Translate natural-language user goals into machine-readable policy constraints.
 
@@ -136,7 +452,7 @@ UserPolicy {
 
 ---
 
-### 3.3 LLM Regime Classifier
+### 8.3 LLM Regime Classifier
 
 **Responsibility:** Classify market regime from structured onchain signals. First place the LLM earns its keep.
 
@@ -170,7 +486,7 @@ RegimeState {
 
 ---
 
-### 3.4 Decision Engine (deterministic code)
+### 8.4 Decision Engine (deterministic code)
 
 **Responsibility:** Continuously scan portfolio state and **flag candidate actions**. Fast, cheap, predictable. No LLM.
 
@@ -210,8 +526,7 @@ for each lot:
     flag → PARK_IN_USYC, do not dispose
 ```
 
-**Output:** list of `CandidateAction` objects passed to the LLM Action Reasoner.
-
+**Output:** list of `CandidateAction` objects passed to the LLM Action Reasoner.f
 ```typescript
 CandidateAction {
   type: "REBALANCE" | "HARVEST" | "PARK" | "HOLD"
@@ -229,7 +544,7 @@ CandidateAction {
 
 ---
 
-### 3.5 LLM Action Reasoner — the judgment layer
+### 8.5 LLM Action Reasoner — the judgment layer
 
 **Responsibility:** The deterministic engine flags candidates. The LLM decides whether to **actually execute**, handling edge cases rules can't cover.
 
@@ -273,7 +588,7 @@ That judgment — weighing wash sale timing against regime direction against tra
 
 ---
 
-### 3.6 Execution Layer (Circle stack)
+### 8.6 Execution Layer (Circle stack)
 
 **Responsibility:** Execute LLM-approved actions with minimal friction and full audit trail.
 
@@ -311,7 +626,7 @@ ApprovedAction → LotManifest → Simulate (tax + slippage) → Sign → Broadc
 
 ---
 
-### 3.7 LLM Explanation → Dashboard
+### 8.7 LLM Explanation → Dashboard
 
 **Responsibility:** Turn structured action outcomes into plain-English summaries for the user.
 
@@ -334,124 +649,160 @@ ApprovedAction → LotManifest → Simulate (tax + slippage) → Sign → Broadc
 
 ---
 
-## 4. Agent Orchestrator
+## 9. Agent Orchestrator & Heartbeat
 
-Central loop — event-driven + scheduled:
+The **heartbeat** is Phase 2 of the user lifecycle — a scheduled worker per active `Agent`, OpenClaw-style always-on but human-gated on execution.
+
+### 9.1 Heartbeat worker
 
 ```
-on cycle (every N minutes) or on wallet event:
+every agent.heartbeatIntervalMinutes (default 60):
+
+  if agent.status != "active": skip
 
   1. Data Aggregator        → PortfolioSnapshot
   2. LLM Regime Classifier  → RegimeState (cached if fresh)
   3. Decision Engine        → CandidateAction[]
-  4. for each candidate:
-       LLM Action Reasoner   → ApprovedAction | DeferredAction
-  5. Execution Layer        → broadcast approved actions
-  6. Arc Ledger Write       → immutable record per tx
-  7. LLM Explanation        → dashboard card
+  4. if no candidates: log "nothing found" → wait, rescan
+  5. for each candidate:
+       LLM Action Reasoner   → proposal (not execution)
+  6. emit OpportunityNotification → TG / email / push / MCP webhook
+  7. await user decision (Phase 3 — Action Loop)
+
+on user taps Execute:
+  8. validate approval token (agentId + actionId + channel auth)
+  9. Execution Layer → Circle Wallets (if execute tier) or return tx for BYO
+  10. Arc Ledger Write
+  11. LLM Explanation → confirmation notify
 ```
 
-**Conflict resolution (code, not LLM):**
+**Deployment:**
+- **Hosted:** `apps/agent` runs heartbeat via Inngest/cron — one job per `agentId`
+- **MCP:** no cron; user's OpenClaw calls `taxee_scan` on their schedule (same pipeline, step 6 returns to caller)
+
+### 9.2 Conflict resolution (code, not LLM)
+
 - Maturation parking (`PARK_IN_USYC`) overrides discretionary rebalances for lots within 30 days of long-term threshold
 - LLM cannot approve actions outside `UserPolicy.allowedActions`
 - If LLM API fails → fall back to deterministic recommendation; log and surface in dashboard
+- Execution **never** without user Execute (hosted or MCP) in MVP
 
 ---
 
-## 5. End-to-End Example
+## 10. End-to-End Example
 
-**Scenario:** wETH down 14%; wash sale window open; regime risk-off; deterministic engine flags harvest.
+**Scenario:** wETH down 14%; wash sale window open; regime risk-off; user registered via Telegram (watch → execute tier).
 
+**Phase 1 (already done):** User sent `0xabc` to bot; onchain import found wETH lot; policy US, −8% harvest threshold.
+
+**Phase 2 — Heartbeat:**
 1. **Data Aggregator** → wETH lot: $4,200 basis, $3,600 value; YTD gains $8,400; last buy 18 days ago
 2. **LLM Regime Classifier** → risk-off, 78% confidence
-3. **Loss harvest scanner** → flags `HARVEST` (−14% > −8% threshold); replacement stETH (ρ 0.94)
-4. **LLM Action Reasoner** → **DEFER 12 days**; park in USYC meanwhile; schedule harvest post wash-sale window
-5. **Execution** → swap wETH → USYC via Circle Wallets + Paymaster gas
-6. **Arc** → parking event logged (not a disposal); scheduled harvest queued
-7. **LLM Explanation** → "Parked wETH in USYC while wash sale window closes. Harvest scheduled Jun 1 — estimated tax saving $180."
-8. **Dashboard** → after-tax return updated; tax cost avoided +$180
+3. **Loss harvest scanner** → flags `HARVEST`; replacement stETH (ρ 0.94)
+4. **LLM Action Reasoner** → proposes **DEFER 12 days** + park in USYC meanwhile
+5. **Telegram notify** → "Harvest opportunity — wETH down $600, save ~$180. Defer 12d for wash sale? [Execute] [Defer 12d] [Skip]"
+
+**Phase 3 — User taps Defer 12d:**
+6. Scheduled re-check queued; optional **park** if user also approves interim USYC move
+7. **Arc** → parking event logged; harvest scheduled
+8. **TG + dashboard** → LLM explanation card; tax cost avoided +$180 shown when harvest completes later
 
 ---
 
-## 6. Hackathon MVP Scope (6 days)
+## 11. Hackathon MVP Scope (6 days)
 
-Build the vertical slice that demonstrates the LLM judgment layer — not the full cross-chain system.
+Build the **full user loop**: register → heartbeat finds opportunity → notify → user approves → record — plus LLM reasoning as the demo moment.
 
 | Day | Deliverable |
 |-----|-------------|
-| 1 | Circle Wallets integration (real balances or seeded demo wallet) |
-| 1 | Hardcoded cost basis for demo portfolio (3–4 positions, realistic history) |
-| 2 | Data Aggregator — balances + prices + Arc read (mock Arc OK initially) |
-| 2 | Loss harvest scanner (simplest module, most demonstrable) |
-| 3 | Holding period tracker + USYC parking for one flagged position |
-| 3 | Claude API — Regime Classifier (can stub signals for demo) |
-| 4 | Claude API — **Action Reasoner** (the demo moment: live reasoning chain) |
-| 4 | Arc write per transaction |
-| 5 | Dashboard: gross return vs after-tax return, harvested losses YTD, LLM explanation cards |
-| 6 | Polish demo flow, edge-case prompt, rehearse narrative |
+| 1 | `Agent` model + registration API (web: connect wallet + fixture import) |
+| 1 | Hardcoded / fixture demo portfolio (3–4 positions) |
+| 2 | Heartbeat worker (hourly cron) — scan → reason → notify stub |
+| 2 | Loss harvest scanner + holding period tracker |
+| 3 | Claude **Action Reasoner** — live reasoning chain (demo moment) |
+| 3 | **Telegram bot** — `/start`, address in, auto-import stub, notify with inline buttons |
+| 4 | Action loop API — Execute / Defer / Skip → state machine |
+| 4 | Web dashboard — opportunity card + gross vs after-tax metrics |
+| 5 | Circle Wallets read (watch tier); Arc write on simulated execute |
+| 6 | MCP server skeleton (`taxee_scan`, `taxee_list_opportunities`) for OpenClaw slide |
+| 6 | Rehearse: TG notify → Defer → explanation card |
 
 ### MVP checklist
 
-- [ ] Circle Wallets — read balances (demo wallet seeded with 3–4 positions)
-- [ ] Hardcoded lot history — acquisition dates, cost basis, holding periods
+**User flows**
+- [ ] Register agent (web or TG) — wallet address only, no private keys
+- [ ] Auto-import stub on registration (fixture lots marked `provisional`)
+- [ ] Heartbeat runs hourly per agent; logs "nothing found" or creates opportunity
+- [ ] Notify via TG (primary) + web dashboard
+- [ ] Execute / Defer / Skip from TG inline buttons and web UI
+
+**Agent brain**
 - [ ] Loss harvest scanner — flags positions below threshold
 - [ ] Holding period tracker — flags lots within 30 days of long-term
-- [ ] Claude Action Reasoner — structured prompt → execute / defer / park decision
-- [ ] USYC parking — one live or simulated swap for maturation demo
-- [ ] Arc write — one record per disposal with lot ID and gain/loss
-- [ ] Dashboard — gross vs after-tax return, harvested losses YTD, reasoning chain visible
+- [ ] Claude Action Reasoner — structured execute / defer / park + reasoning
+- [ ] Arc write — one record per approved action
+
+**Stretch**
+- [ ] MCP tools: `taxee_scan`, `taxee_approve_action`
+- [ ] Circle execute tier (one demo tx) — else watch-only + simulated confirm
 
 ### Explicitly out of scope for MVP
 
-- Full cross-chain CCTP (stub or single-chain only)
-- Automated rebalance execution (show drift vs tax math in UI; defer execution)
-- Production lot reconstruction from onchain history
-- Form 8949 PDF export (CSV or Arc JSON sufficient for demo)
+- Full onchain lot reconstruction (fixture + provisional flag OK)
+- Full cross-chain CCTP
+- Silent auto-execution without user tap
+- Email/push (TG + web sufficient)
+- Production key custody — watch tier default; Circle execute optional demo
 
 ---
 
-## 7. Tech Stack
+## 12. Tech Stack
 
 | Layer | Choice | Notes |
 |-------|--------|-------|
-| Agent runtime | TypeScript / Node | Fast iteration; shared types with dashboard |
+| Agent runtime | TypeScript / Node | Heartbeat worker + API |
 | LLM | Claude API (structured output) | Goal Parser, Regime Classifier, Action Reasoner, Explanation |
-| Chain reads | viem + Circle Wallets SDK | Balances, tx broadcast |
-| State DB | PostgreSQL or SQLite (hackathon) | Lots, policies, action log, LLM reasoning cache |
-| Job queue | Inngest or cron | Scheduled harvests, maturation checks, 24h re-check |
+| Notifications | Telegram Bot API (`grammy` / `telegraf`) | Onboarding + inline Execute/Defer/Skip |
+| Chain reads | viem + indexer stub | Watch tier — address-only import |
+| State DB | PostgreSQL or SQLite | `Agent`, lots, opportunities, approvals, LLM cache |
+| Job queue | Inngest or BullMQ | Per-agent heartbeat cron + deferred action queue |
 | Prices | CoinGecko / Chainlink | Mark-to-market |
-| Execution | Circle Wallets, Paymaster, USYC | CCTP stubbed for MVP |
+| Execution | Circle Wallets, Paymaster, USYC | Opt-in execute tier; CCTP stubbed |
 | Audit | Arc API | Immutable disposal log |
-| Dashboard | Next.js | After-tax alpha + LLM explanation cards |
-| Auth | Circle Wallets session | Demo wallet for hackathon |
+| Dashboard | Next.js | After-tax alpha + opportunity cards |
+| MCP | `@modelcontextprotocol/sdk` | OpenClaw / Claude Desktop integration |
+| Auth | SIWE (web) + TG user id binding | No seed phrases; Circle for execute tier |
 
 ---
 
-## 8. Repository Layout
+## 13. Repository Layout
 
 ```
 taxee/
 ├── apps/
-│   ├── agent/                  # orchestrator loop
-│   ├── dashboard/              # Next.js UI
-│   └── api/                    # REST/tRPC for dashboard reads
+│   ├── agent/                  # heartbeat worker (hosted mode)
+│   ├── api/                    # Agent CRUD, action loop, webhooks
+│   ├── dashboard/              # Next.js UI — register, opportunities, metrics
+│   ├── telegram-bot/         # TG onboarding + notify + inline buttons
+│   └── mcp-server/             # MCP tools for OpenClaw / Claude Desktop
 ├── packages/
 │   ├── aggregator/             # Data Aggregator — Wallets, Arc, oracles, signals
 │   ├── tax-engine/             # Decision Engine — harvest, rebalance, maturation
 │   ├── llm/                    # Goal Parser, Regime Classifier, Action Reasoner, Explanation
-│   │   ├── prompts/            # versioned prompt templates
-│   │   └── schemas/            # structured output JSON schemas
+│   │   ├── prompts/
+│   │   └── schemas/
+│   ├── notifications/          # TG, email, push adapters — shared OpportunityNotification
 │   ├── execution/              # Circle Wallets, Paymaster, USYC, CCTP
 │   ├── compliance/             # Arc writer, Form 8949 projection
-│   └── shared/                 # types, PortfolioSnapshot, CandidateAction, etc.
+│   └── shared/                 # Agent, WalletBinding, PortfolioSnapshot, etc.
 ├── fixtures/
-│   └── demo-portfolio.json     # hardcoded lots for hackathon demo
+│   └── demo-portfolio.json
 └── doc.md
 ```
 
 ---
 
-## 9. Implementation Notes
+## 14. Implementation Notes
 
 ### Prompt versioning
 
@@ -492,39 +843,45 @@ function validateApprovedAction(
 
 ---
 
-## 10. Risks & Open Questions
+## 15. Risks & Open Questions
 
 | Topic | Consideration |
 |-------|---------------|
-| LLM latency | Action Reasoner adds 1–3s per candidate; batch or async for multi-flag cycles |
-| LLM consistency | Same inputs should produce same decision; use low temperature + structured output |
-| Tax jurisdiction | MVP assumes US federal (365-day LT, ST/LT buckets); make rules pluggable |
-| DeFi wash sales | No clear IRS wash-sale rule for crypto yet; document substitute logic conservatively |
-| LLM override safety | Hard code guardrails; LLM recommends, code validates before broadcast |
-| Oracle / basis accuracy | MVP uses hardcoded lots; production needs CSV import + onchain reconciliation |
-| USYC substitute swaps | Confirm tax treatment with advisor; architecture preserves audit trail regardless |
+| Key custody UX | Default watch-only; execute tier requires clear Circle onboarding — never ask for seed in TG |
+| TG ↔ agent binding | Verify TG user owns wallet (signed message or WC link) before execute, not just address paste |
+| LLM latency | Action Reasoner adds 1–3s per candidate; heartbeat can async notify when ready |
+| LLM consistency | Low temperature + structured output; log prompt version per opportunity |
+| Notification fatigue | Cooldown per lot (7d after Skip); batch multiple flags into one digest optional |
+| Tax jurisdiction | MVP assumes US federal; pluggable rules later |
+| DeFi wash sales | Document substitute logic conservatively |
+| Provisional lots | Block execute on `provisional: true` until user confirms CSV or onchain reconcile |
+| MCP auth | API key per agentId; scoped tools; rate limit `taxee_scan` |
+| USYC substitute swaps | Confirm tax treatment with advisor; audit trail regardless |
 
 ---
 
-## 11. Success Criteria
+## 16. Success Criteria
 
 The architecture is working when:
 
-1. A rebalance flagged by the Decision Engine is **deferred by the LLM** when wash sale + regime + gas cost don't justify action — with visible reasoning
-2. A losing position is flagged by code, **approved or deferred by the LLM**, and the dashboard shows the reasoning chain
-3. A lot at day 340 is **parked in USYC** — not sold — and the maturation flag cannot be overridden by the LLM
-4. Every disposal produces an Arc record mappable to a Form 8949 row with specific lot ID
-5. Dashboard headline metric shows **after-tax return diverging from gross** when tax-aware actions fire
-6. Demo audience can watch the **LLM Action Reasoner** weigh trade-offs live and explain its decision in plain English
+1. User registers via **TG or web in under 2 minutes** — address only, no seed phrase — and agent status is `active`
+2. Heartbeat runs hourly; when nothing to do, system waits and rescans without bothering user
+3. When opportunity found, user gets **TG (or web) notification** with Execute / Defer / Skip and LLM reasoning visible
+4. **No transaction broadcasts** until user taps Execute (hosted Circle or BYO via MCP)
+5. Defer schedules re-check; Skip suppresses re-notify for cooldown period
+6. LLM Action Reasoner defers harvest when wash sale + regime + gas don't justify — reasoning shown in notification
+7. Arc record written on approved action; dashboard shows after-tax vs gross divergence
+8. MCP `taxee_scan` returns same opportunities as hosted heartbeat for OpenClaw demo
 
 ---
 
-## 12. Next Steps
+## 17. Next Steps
 
-1. Scaffold monorepo with `packages/shared` types (`PortfolioSnapshot`, `CandidateAction`, `UserPolicy`)
-2. Create `fixtures/demo-portfolio.json` with 3–4 realistic positions
-3. Implement `packages/tax-engine` — loss harvest scanner + holding period tracker (unit tested)
-4. Wire `packages/aggregator` — Circle Wallets read + price oracle + fixture fallback
-5. Implement `packages/llm` — Action Reasoner prompt + structured output (highest demo value)
-6. Build dashboard card that renders LLM reasoning chain alongside gross vs after-tax metrics
-7. Integrate Arc write on first real (or simulated) disposal
+1. Scaffold `Agent` + `WalletBinding` types and registration API
+2. Build `apps/telegram-bot` — `/start`, address capture, fixture import, bind `telegramChatId`
+3. Implement heartbeat in `apps/agent` — scan → reason → create `Opportunity` row → call notifier
+4. Action loop endpoints: `POST /actions/:id/execute|defer|skip` + TG callback handler
+5. `packages/llm` Action Reasoner + notification payload builder
+6. Web dashboard — register page + opportunity card + metrics
+7. `apps/mcp-server` skeleton for hackathon stretch
+8. Document watch vs execute tier in onboarding copy; Circle wallet flow for execute demo only
