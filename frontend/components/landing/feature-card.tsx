@@ -61,7 +61,7 @@ export function FeatureCard({
   );
 
   const baseClass = cn(
-    "landing-grid-line flex h-full flex-col border p-7 transition-colors hover:bg-[#fafbfc] dark:hover:bg-[#141a24] sm:p-8 lg:p-10",
+    "landing-grid-line landing-glass-cell flex h-full flex-col border p-7 sm:p-8 lg:p-10",
     className,
   );
 

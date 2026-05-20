@@ -82,13 +82,13 @@ export function HeroProfileMenu() {
         className={`hero-menu-profile-btn relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden transition-all duration-300 ease-out ${
           showProfile
             ? "rounded-full bg-gradient-to-br from-[#4a9eed] to-[#2d7fd4] ring-2 ring-white shadow-md"
-            : "bg-[#111827]"
+            : "landing-glass-btn"
         }`}
         aria-label={open ? "Close profile menu" : "Open menu"}
         aria-expanded={open}
       >
         <span
-          className={`absolute inset-0 flex items-center justify-center text-white transition-all duration-300 ${
+          className={`absolute inset-0 flex items-center justify-center text-[#111827] transition-all duration-300 dark:text-[#f9fafb] ${
             showProfile
               ? "scale-75 opacity-0 rotate-90"
               : "scale-100 opacity-100 rotate-0"
@@ -114,8 +114,8 @@ export function HeroProfileMenu() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-56 overflow-hidden border border-[#e8eaed] bg-white shadow-[0_8px_24px_rgba(0,0,0,0.1)]">
-          <div className="border-b border-[#e8eaed] px-4 py-3">
+        <div className="landing-glass-menu absolute right-0 top-[calc(100%+8px)] z-50 w-56">
+          <div className="landing-glass-menu-divider border-b px-4 py-3">
             {hasAgent ? (
               <>
                 <p className="font-landing text-xs font-semibold text-black">
@@ -140,7 +140,7 @@ export function HeroProfileMenu() {
             {hasAgent ? (
               <Link
                 href={agentId ? `/dashboard/${agentId}` : "/dashboard/demo"}
-                className="block px-3 py-2 font-landing text-sm text-black hover:bg-[#f3f4f6]"
+                className="landing-glass-menu-item block rounded-md px-3 py-2 font-landing text-sm text-black dark:text-[#f9fafb]"
                 onClick={() => setOpen(false)}
               >
                 Dashboard
@@ -149,14 +149,14 @@ export function HeroProfileMenu() {
               <>
                 <Link
                   href="/onboarding"
-                  className="block px-3 py-2 font-landing text-sm font-medium text-black hover:bg-[#f3f4f6]"
+                  className="landing-glass-menu-item block rounded-md px-3 py-2 font-landing text-sm font-medium text-black dark:text-[#f9fafb]"
                   onClick={() => setOpen(false)}
                 >
                   Log in / Register
                 </Link>
                 <Link
                   href="/dashboard/demo"
-                  className="block px-3 py-2 font-landing text-sm text-[#4b5563] hover:bg-[#f3f4f6]"
+                  className="landing-glass-menu-item block rounded-md px-3 py-2 font-landing text-sm text-[#4b5563] dark:text-[#9ca3af]"
                   onClick={() => setOpen(false)}
                 >
                   Demo dashboard
@@ -164,12 +164,12 @@ export function HeroProfileMenu() {
               </>
             )}
           </div>
-          <div className="border-t border-[#e8eaed] p-2">
+          <div className="landing-glass-menu-divider border-t p-2">
             {landingNavLinks.map((link) => (
               <a
                 key={link.href}
                 href={link.href}
-                className="block px-3 py-2 font-landing text-sm text-[#4b5563] hover:bg-[#f3f4f6]"
+                className="landing-glass-menu-item block rounded-md px-3 py-2 font-landing text-sm text-[#4b5563] dark:text-[#9ca3af]"
                 onClick={() => setOpen(false)}
               >
                 {link.label}

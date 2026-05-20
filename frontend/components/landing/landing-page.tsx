@@ -9,10 +9,11 @@ import { landingNavLinks } from "@/components/landing/nav-links";
 
 export function LandingPage() {
   return (
-    <div className="landing-root landing-marble-bg min-h-screen">
-      <div className="p-3 sm:p-5 lg:p-8">
-        <div className="mx-auto max-w-[1320px] space-y-5 sm:space-y-6">
-          <div className="landing-card-sharp landing-animate-in overflow-hidden border border-[#e5e7eb] bg-white shadow-[0_4px_24px_rgba(0,0,0,0.05)] dark:border-[#1f2937] dark:bg-[#0f1419] dark:shadow-[0_4px_24px_rgba(0,0,0,0.35)]">
+    <div className="landing-root landing-marble-bg relative min-h-screen">
+      <div className="landing-ambient" aria-hidden />
+      <div className="relative z-[1] p-3 sm:p-5 lg:p-8">
+        <div className="mx-auto max-w-[1320px] space-y-6 sm:space-y-8">
+          <div className="landing-card-sharp landing-glass landing-animate-in">
             <div className="landing-bento">
               <HeroTopBar />
 
@@ -87,9 +88,8 @@ export function LandingPage() {
                 <ProductPreview />
               </div>
 
-              <div className="landing-area-photo landing-grid-line relative hidden min-h-[200px] overflow-hidden border-b lg:block lg:min-h-[140px] lg:border-b-0 lg:border-r">
-                <div className="landing-checker absolute bottom-0 left-0 z-0 h-[45%] w-[55%]" />
-                <div className="relative z-10 flex h-full min-h-[140px] flex-col justify-end p-6 lg:p-8">
+              <div className="landing-area-photo landing-glass-cell landing-grid-line relative hidden min-h-[200px] overflow-hidden border-b lg:block lg:min-h-[140px] lg:border-b-0 lg:border-r">
+                <div className="relative flex h-full min-h-[140px] flex-col justify-end p-6 lg:p-8">
                   <p className="font-landing text-[10px] font-bold uppercase tracking-[0.12em] text-[#6b7280] dark:text-[#9ca3af]">
                     Why it matters
                   </p>

@@ -13,12 +13,11 @@ import {
 import { SectionHeader } from "@/components/landing/section-header";
 import { cn } from "@/lib/utils";
 
-const cardShell =
-  "landing-card-sharp overflow-hidden border border-[#e5e7eb] bg-white shadow-[0_4px_24px_rgba(0,0,0,0.05)] dark:border-[#1f2937] dark:bg-[#0f1419] dark:shadow-[0_4px_24px_rgba(0,0,0,0.35)]";
+const cardShell = "landing-card-sharp landing-glass";
 
 export function LandingScrollSections() {
   return (
-    <div className="mx-auto mt-10 max-w-[1320px] space-y-8 pb-16 sm:mt-12 sm:space-y-10 lg:space-y-12">
+    <div className="mx-auto mt-10 max-w-[1320px] space-y-6 pb-16 sm:mt-12 sm:space-y-8 lg:space-y-10">
       {/* Problem */}
       <section id="problem" className={cardShell}>
         <SectionHeader
@@ -26,11 +25,11 @@ export function LandingScrollSections() {
           title={problem.title}
           description={problem.lead}
         />
-        <div className="grid divide-y divide-[#e8eaed] dark:divide-[#1f2937] md:grid-cols-3 md:divide-x md:divide-y-0">
+        <div className="grid divide-y divide-white/40 dark:divide-white/10 md:grid-cols-3 md:divide-x md:divide-y-0">
           {problem.bullets.map((item) => (
             <div
               key={item.title}
-              className="px-6 py-8 sm:px-10 sm:py-10 lg:px-12 lg:py-12"
+              className="landing-glass-cell px-6 py-8 sm:px-10 sm:py-10 lg:px-12 lg:py-12"
             >
               <h3 className="font-landing text-lg font-semibold text-black dark:text-[#f9fafb]">
                 {item.title}
@@ -56,7 +55,7 @@ export function LandingScrollSections() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[520px] border-collapse font-landing text-left text-[14px]">
             <thead>
-              <tr className="landing-grid-line border-b bg-[#fafbfc] dark:bg-[#141a24]">
+              <tr className="landing-grid-line border-b landing-glass-cell">
                 <th className="px-6 py-4 font-semibold text-black dark:text-[#f9fafb] sm:px-10 lg:px-12">
                   Decision
                 </th>
@@ -71,7 +70,7 @@ export function LandingScrollSections() {
                   key={row.decision}
                   className={cn(
                     "landing-grid-line border-b last:border-b-0",
-                    i % 2 === 1 && "bg-[#fafbfc]/60 dark:bg-[#141a24]/40",
+                    i % 2 === 1 && "landing-glass-cell",
                   )}
                 >
                   <td className="px-6 py-4 font-semibold text-black dark:text-[#f9fafb] sm:px-10 lg:px-12">
@@ -97,7 +96,7 @@ export function LandingScrollSections() {
           label={howItWorks.label}
           title={howItWorks.title}
         />
-        <div className="grid divide-y divide-[#e8eaed] dark:divide-[#1f2937] sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+        <div className="grid divide-y divide-white/40 dark:divide-white/10 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
           {howItWorks.phases.map((phase) => (
             <FeatureCard
               key={phase.title}
@@ -123,7 +122,7 @@ export function LandingScrollSections() {
       {/* Features */}
       <section id="features" className={cardShell}>
         <SectionHeader label={features.label} title={features.title} />
-        <div className="grid divide-y divide-[#e8eaed] dark:divide-[#1f2937] md:grid-cols-2 md:divide-x md:divide-y-0">
+        <div className="grid divide-y divide-white/40 dark:divide-white/10 md:grid-cols-2 md:divide-x md:divide-y-0">
           {features.items.map((item, i) => (
             <FeatureCard
               key={item.title}
@@ -143,7 +142,7 @@ export function LandingScrollSections() {
       {/* Circle execution */}
       <section id="execution" className={cardShell}>
         <SectionHeader label={execution.label} title={execution.title} />
-        <div className="grid divide-y divide-[#e8eaed] dark:divide-[#1f2937] lg:grid-cols-3 lg:divide-x lg:divide-y-0">
+        <div className="grid divide-y divide-white/40 dark:divide-white/10 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
           {execution.items.map((item) => (
             <FeatureCard
               key={item.title}
@@ -169,8 +168,8 @@ export function LandingScrollSections() {
               className={cn(
                 "p-8 sm:p-10 lg:p-12",
                 mode.variant === "neutral"
-                  ? "landing-grid-line border-b md:border-b-0 md:border-r"
-                  : "bg-gradient-to-br from-[#e8f4fd] to-white dark:from-[#1a2a3d] dark:to-[#0f1419]",
+                  ? "landing-grid-line landing-glass-cell border-b md:border-b-0 md:border-r"
+                  : "landing-glass-accent",
               )}
             >
               <span
@@ -205,7 +204,7 @@ export function LandingScrollSections() {
             <div
               key={item.title}
               className={cn(
-                "landing-grid-line border-b p-7 sm:border-b-0 sm:p-8 lg:p-10",
+                "landing-grid-line landing-glass-cell border-b p-7 sm:border-b-0 sm:p-8 lg:p-10",
                 i > 0 && "sm:border-l",
               )}
             >
@@ -223,7 +222,7 @@ export function LandingScrollSections() {
       {/* CTA */}
       <section
         id="contact"
-        className="landing-card-sharp overflow-hidden border border-[#1f2937] bg-[#111827] shadow-[0_4px_24px_rgba(0,0,0,0.12)]"
+        className="landing-card-sharp landing-glass-cta"
       >
         <div className="flex flex-col items-start justify-between gap-8 px-8 py-12 sm:flex-row sm:items-center sm:px-10 lg:px-14 lg:py-16">
           <div>
@@ -237,7 +236,7 @@ export function LandingScrollSections() {
           <div className="flex flex-wrap gap-3">
             <Link
               href="/onboarding"
-              className="inline-flex items-stretch overflow-hidden bg-white font-landing text-[14px] font-medium text-[#111827]"
+              className="landing-glass-btn inline-flex items-stretch overflow-hidden rounded-lg font-landing text-[14px] font-medium text-[#111827]"
             >
               <span className="px-6 py-3">{cta.primary}</span>
               <span className="flex w-12 items-center justify-center bg-[#3dcc4e]">

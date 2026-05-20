@@ -53,8 +53,8 @@ export function NewsMarquee() {
       className="relative hidden min-w-0 flex-1 items-center overflow-hidden md:flex"
       aria-label="Product news"
     >
-      <div className="pointer-events-none absolute left-0 z-10 h-full w-8 bg-gradient-to-r from-white to-transparent dark:from-[#0f1419]" />
-      <div className="pointer-events-none absolute right-0 z-10 h-full w-8 bg-gradient-to-l from-white to-transparent dark:from-[#0f1419]" />
+      <div className="pointer-events-none absolute left-0 z-10 h-full w-12 bg-gradient-to-r from-[#f8f7f5]/95 via-[#f8f7f5]/40 to-transparent dark:from-[#0c0e12]/95 dark:via-[#0c0e12]/40" />
+      <div className="pointer-events-none absolute right-0 z-10 h-full w-12 bg-gradient-to-l from-[#f8f7f5]/95 via-[#f8f7f5]/40 to-transparent dark:from-[#0c0e12]/95 dark:via-[#0c0e12]/40" />
       <div className="landing-marquee-track flex w-max items-center py-1">
         {track}
         {track}

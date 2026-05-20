@@ -1,11 +1,11 @@
 export function TaxSummaryCard() {
   return (
-    <div className="landing-float-delay w-[236px] border border-[#e8eaed] bg-white p-3.5 shadow-[0_8px_24px_rgba(0,0,0,0.08)]">
+    <div className="landing-float-delay landing-glass-widget w-[236px] p-3.5">
       <div className="flex items-start justify-between gap-2">
         <span className="font-landing text-[13px] font-semibold text-black">
           Tax impact YTD
         </span>
-        <span className="rounded border border-[#e8eaed] px-2 py-0.5 font-landing text-[10px] text-[#6b7280]">
+        <span className="rounded border border-white/50 bg-white/30 px-2 py-0.5 font-landing text-[10px] text-[#6b7280] backdrop-blur-sm dark:border-white/15 dark:bg-white/10 dark:text-[#9ca3af]">
           Demo
         </span>
       </div>
@@ -17,7 +17,7 @@ export function TaxSummaryCard() {
         <MetricRow label="Tax cost avoided" value="$12.4k" accent="text-[#4a9eed]" />
         <MetricRow label="Est. year-end liability" value="$8.1k" accent="text-[#1f2937]" />
       </div>
-      <p className="mt-3 border-t border-[#f3f4f6] pt-2 font-landing text-[9px] text-[#9ca3af]">
+      <p className="mt-3 border-t border-white/40 pt-2 font-landing text-[9px] text-[#9ca3af] dark:border-white/15">
         Arc → Form 8949 pre-fill
       </p>
     </div>
