@@ -1,0 +1,26 @@
+{
+  "name": "taxee-backend",
+  "private": true,
+  "version": "0.1.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "clean": "turbo run clean",
+    "db:migrate": "pnpm --filter @taxee/api db:migrate",
+    "db:seed": "pnpm --filter @taxee/api db:seed",
+    "db:seed:demo": "pnpm --filter @taxee/api db:seed:demo",
+    "format": "prettier --write \"**/*.{ts,json,md}\""
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.5",
+    "prettier": "^3.2.5",
+    "@types/node": "^20.12.7"
+  }
+}
