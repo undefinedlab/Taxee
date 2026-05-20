@@ -6,7 +6,7 @@ Next.js 15 app for the taxee DeFi tax-optimization agent — onboarding, after-t
 
 | Path | Description |
 |------|-------------|
-| `/` | Landing — product pitch and three-phase lifecycle |
+| `/` | Landing — TaxMate-style grid UI (light theme, bento layout) |
 | `/onboarding` | Phase 1 — wallet, import, preferences, **approval mode**, activate agent |
 | `/dashboard/demo` | Demo dashboard with fixture portfolio |
 | `/dashboard/[agentId]` | Dashboard for a registered agent (localStorage) |

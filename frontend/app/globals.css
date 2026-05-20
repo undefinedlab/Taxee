@@ -5,6 +5,11 @@
 :root {
   --background: #0c0f14;
   --foreground: #f4f4f5;
+  --landing-blue: #4a9eed;
+  --landing-blue-deep: #2d7fd4;
+  --landing-green: #3dcc4e;
+  --landing-lime: #b8f55a;
+  --landing-grid: #e8eaed;
 }
 
 html {
@@ -17,8 +22,287 @@ body {
   min-height: 100vh;
 }
 
+body:has(.landing-root) {
+  color-scheme: light;
+  background: #f7f6f4;
+}
+
+html:has(.landing-root) {
+  scroll-behavior: smooth;
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+}
+
+/* White marble + net node grid */
+.landing-marble-bg {
+  background-color: #f8f7f5;
+  background-image:
+    /* nodes at grid intersections */
+    radial-gradient(
+      circle at center,
+      rgba(100, 116, 139, 0.14) 1.5px,
+      transparent 1.5px
+    ),
+    /* net lines */
+    linear-gradient(
+      to right,
+      rgba(0, 0, 0, 0.05) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.05) 1px,
+      transparent 1px
+    ),
+    /* marble wash */
+    radial-gradient(
+      ellipse 120% 80% at 0% 0%,
+      rgba(255, 255, 255, 0.92) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 90% 70% at 100% 20%,
+      rgba(241, 245, 249, 0.85) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      ellipse 70% 60% at 30% 100%,
+      rgba(231, 229, 228, 0.3) 0%,
+      transparent 45%
+    ),
+    linear-gradient(
+      165deg,
+      #ffffff 0%,
+      #f8f7f5 30%,
+      #f4f3f1 55%,
+      #fafaf9 80%,
+      #ffffff 100%
+    );
+  background-size:
+    56px 56px,
+    56px 56px,
+    56px 56px,
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    100% 100%;
+  background-position:
+    28px 28px,
+    0 0,
+    0 0,
+    0 0,
+    0 0,
+    0 0,
+    0 0;
+}
+
+/* Quadratic — sharp main surfaces */
+.landing-card-sharp {
+  border-radius: 0;
+}
+
+[id] {
+  scroll-margin-top: 1.25rem;
+}
+
+.landing-grid-line {
+  border-color: var(--landing-grid);
+}
+
+/* Photo corner checker (blue + lime from reference) */
+.landing-checker {
+  background-color: var(--landing-blue);
+  background-image:
+    linear-gradient(45deg, var(--landing-lime) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--landing-lime) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--landing-lime) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--landing-lime) 75%);
+  background-size: 20px 20px;
+  background-position:
+    0 0,
+    0 10px,
+    10px -10px,
+    -10px 0;
+}
+
+/* Bento grid — matches reference layout */
+.landing-bento {
+  display: grid;
+  min-height: 680px;
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "hero-topbar"
+    "hero"
+    "dashboard"
+    "photo"
+    "stats";
+}
+
+@media (min-width: 1024px) {
+  .landing-bento {
+    grid-template-columns: 212px minmax(0, 1fr) minmax(380px, 44%);
+    grid-template-rows: 56px minmax(320px, 1fr) 140px;
+    grid-template-areas:
+      "hero-topbar hero-topbar hero-topbar"
+      "nav         dashboard     hero"
+      "photo       stats         hero";
+  }
+}
+
+.landing-area-nav {
+  grid-area: nav;
+}
+
+@keyframes landing-marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.landing-marquee-track {
+  animation: landing-marquee 42s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-marquee-track {
+    animation: none;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+.landing-area-hero-topbar {
+  grid-area: hero-topbar;
+}
+.landing-area-hero {
+  grid-area: hero;
+}
+.landing-area-dashboard {
+  grid-area: dashboard;
+}
+.landing-area-photo {
+  grid-area: photo;
+}
+.landing-area-stats {
+  grid-area: stats;
+}
+.hero-menu-profile-btn:focus-visible {
+  outline: 2px solid #4a9eed;
+  outline-offset: 2px;
+}
+
+/* Entrance animations (reference video motion) */
+@keyframes landing-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes landing-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes landing-arrow-nudge {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(3px);
+  }
+}
+
+@keyframes landing-bar-grow {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes landing-line-draw {
+  from {
+    stroke-dashoffset: 200;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.landing-animate-in {
+  animation: landing-fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.landing-delay-1 {
+  animation-delay: 0.08s;
+}
+.landing-delay-2 {
+  animation-delay: 0.16s;
+}
+.landing-delay-3 {
+  animation-delay: 0.24s;
+}
+.landing-delay-4 {
+  animation-delay: 0.32s;
+}
+.landing-delay-5 {
+  animation-delay: 0.4s;
+}
+.landing-delay-6 {
+  animation-delay: 0.48s;
+}
+
+.landing-float {
+  animation: landing-float 4.5s ease-in-out infinite;
+}
+
+.landing-float-delay {
+  animation: landing-float 4.5s ease-in-out 0.8s infinite;
+}
+
+.landing-cta-arrow {
+  animation: landing-arrow-nudge 1.8s ease-in-out infinite;
+}
+
+.landing-bar-animate {
+  transform-origin: bottom;
+  animation: landing-bar-grow 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.landing-line-animate {
+  stroke-dasharray: 200;
+  animation: landing-line-draw 1.2s ease-out 0.5s both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-animate-in,
+  .landing-float,
+  .landing-float-delay,
+  .landing-cta-arrow,
+  .landing-bar-animate,
+  .landing-line-animate,
+  .landing-marquee-track {
+    animation: none;
   }
 }
