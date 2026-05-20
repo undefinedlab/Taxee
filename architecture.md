@@ -16,8 +16,8 @@ How to build a DeFi portfolio agent that optimizes **after-tax return**, not gro
 | Cross-chain is native | Portfolio state aggregates across chains; execution routes through Circle CCTP / Gateway |
 | Auditability by default | Every disposal is logged to Arc with lot selection rationale — Form 8949 is a projection, not an afterthought |
 | Fail closed on tax ambiguity | If lot identity or holding period is unknown, defer or split rather than realize at worst-case rates |
-| Human-in-the-loop by default | Agent proposes; user approves via Execute / Defer / Skip — no silent mainnet txs in MVP |
-| Frictionless onboarding | Register once (wallet + history + prefs); heartbeat runs forever without re-setup |
+| User chooses approval mode | **Manual** — approve each action (Execute / Defer / Skip). **Delegated** — agent acts autonomously within policy guardrails |
+| Frictionless onboarding | Register once (wallet + history + prefs + approval mode); heartbeat runs forever without re-setup |
 
 ---
 
@@ -90,10 +90,10 @@ taxee is an **always-on agent** attached to a registered wallet (or wallet set).
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  PHASE 3 — ACTION LOOP (Human approves)                                     │
 │                                                                             │
-│   Notification card  →  [ Execute ]  [ Defer ]  [ Skip ]                  │
-│         ↓ Execute                                                           │
+│   Manual: [ Execute ] [ Defer ] [ Skip ]   —or—   Delegated: auto-execute │
+│         ↓                                                                   │
 │   Circle Wallets  →  Arc records  →  USYC parks if needed  →  Confirmed     │
-│   "$600 loss booked" + LLM explanation                                      │
+│   notify user (always) + LLM explanation                                    │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -101,7 +101,7 @@ taxee is an **always-on agent** attached to a registered wallet (or wallet set).
 |-------|-------------|-----------------|
 | **Once** | ~2 minutes | Bind identity, import lots, set policy — then never repeat |
 | **Always on** | Zero | Heartbeat scans portfolio; LLM reasons; surfaces opportunities only |
-| **Action loop** | One tap | User chooses Execute / Defer / Skip; execution only after approval |
+| **Action loop** | Optional | **Manual:** Execute / Defer / Skip per opportunity. **Delegated:** agent executes when LLM + policy clear; user notified (can override/veto in UI) |
 
 ---
 
@@ -153,14 +153,22 @@ Bot:  Agent active. Heartbeat every hour. I'll message you when there's somethin
 ```typescript
 Agent {
   id: string
-  userId: string                    // TG user id, email, or SIWE address hash
+  userId: string
   status: "pending" | "active" | "paused"
-  wallets: WalletBinding[]        // one or more watch addresses
-  policy: UserPolicy                // from Goal Parser / onboarding
+  wallets: WalletBinding[]
+  policy: UserPolicy
+  approval: ApprovalSettings        // manual vs delegated — user choice at onboarding
   deploymentMode: "hosted" | "mcp"
-  notificationChannels: Channel[]   // telegram, email, webhook, mcp
+  notificationChannels: Channel[]
   heartbeatIntervalMinutes: 60
   createdAt: timestamp
+}
+
+ApprovalSettings {
+  mode: "manual" | "delegated"
+  autoApproveTypes?: ("HARVEST" | "REBALANCE" | "PARK")[]  // delegated: default all in policy
+  notifyOnExecute: boolean          // default true — post-action receipt even when autonomous
+  vetoWindowSeconds?: number        // optional: notify-first, auto-execute after N sec unless Skip
 }
 
 WalletBinding {
@@ -247,52 +255,80 @@ taxee does not need to own the notification channel in this mode — the parent 
 
 ## 6. Notifications & Action Loop
 
-### 6.1 Notification payload
+Approval is **user-configurable**. The same opportunity flows through either path depending on `ApprovalSettings.mode`.
 
-When heartbeat finds an opportunity, emit a structured card (all channels render the same data):
+### 6.1 Approval modes
+
+| Mode | Behavior | Best for |
+|------|----------|----------|
+| **Manual** | Agent proposes → user must Execute / Defer / Skip before any tx | First-time users, large tax impact, learning the agent |
+| **Delegated** | Agent executes autonomously when Decision Engine + LLM Reasoner agree and policy guardrails pass | Set-and-forget, OpenClaw-style always-on, power users |
+
+Delegated does not mean reckless: code still enforces `UserPolicy`, maturation parking, max tax per action, and allowed action types. The LLM cannot bypass guardrails.
+
+Optional hybrid: **notify-first delegated** — emit notification with `vetoWindowSeconds` (e.g. 300); auto-execute unless user taps Skip within window.
+
+### 6.2 Notification payload
 
 ```typescript
 OpportunityNotification {
   agentId: string
   actionId: string
   type: "HARVEST" | "REBALANCE" | "PARK"
-  headline: "Harvest opportunity — wETH down $600"
-  taxSavingEstimate: 180
-  llmReasoning: string              // plain English, 2–3 sentences
-  buttons: ["execute", "defer", "skip"]
-  deferOptions?: { days: 12, reason: "wash sale window" }
+  headline: string
+  taxSavingEstimate: number
+  llmReasoning: string
+  approvalMode: "manual" | "delegated"
+  buttons?: ["execute", "defer", "skip"]     // manual only
+  autoExecuteAt?: timestamp                // delegated + veto window
+  deferOptions?: { days: 12, reason: string }
   dashboardUrl: string
 }
 ```
 
-**Example (matches product narrative):**
+**Manual example:**
 
-> Harvest opportunity found. wETH down $600 — saving ~$180 tax. Rebuy immediately after — no wait.  
+> Harvest opportunity — wETH down $600, save ~$180 tax.  
 > [Execute] [Defer 12d] [Skip]
 
-### 6.2 Channel matrix
+**Delegated example:**
 
-| Channel | Onboarding | Notify | Approve action |
-|---------|------------|--------|----------------|
-| **Web dashboard** | ✓ | ✓ | ✓ (primary for demo) |
-| **Telegram** | ✓ bot | ✓ inline buttons | ✓ callback → API |
-| **Email** | ✓ magic link | ✓ | ✓ link back to web |
-| **Push** | ✓ PWA | ✓ | Deep link to web |
-| **MCP** | via tool | user's agent | `taxee_approve_action` |
+> Executed autonomously — parked wETH in USYC while wash sale window closes. Harvest scheduled Jun 1. Est. saving $180.  
+> [View in dashboard] [Undo not supported — Defer future actions in settings]
 
-### 6.3 Action loop state machine
+### 6.3 Channel matrix
+
+| Channel | Onboarding | Notify | Manual approve | Delegated execute |
+|---------|------------|--------|----------------|-------------------|
+| **Web dashboard** | ✓ | ✓ | ✓ | ✓ + mode toggle |
+| **Telegram** | ✓ bot | ✓ | inline buttons | post-action receipt |
+| **MCP** | via tool | user's agent | `taxee_approve_action` | `taxee_scan` auto-runs pipeline |
+
+### 6.4 Action loop state machine
+
+**Manual path:**
+
+```
+OPPORTUNITY_DETECTED → notify → await_user_decision
+  EXECUTE → execution → Arc → confirmation notify
+  DEFER   → schedule re-check
+  SKIP    → dismiss, cooldown 7d
+```
+
+**Delegated path:**
 
 ```
 OPPORTUNITY_DETECTED
-    → notify user
-    → await_user_decision (timeout: 24h default → auto-defer or skip per policy)
+  → LLM Action Reasoner → decision EXECUTE | DEFER | SKIP
+  → if EXECUTE and policy OK → execution layer → Arc → notify (receipt + reasoning)
+  → if DEFER → schedule (no user tap required)
+  → if SKIP → dismiss
 
-EXECUTE  → execution layer → Arc write → confirmation notify
-DEFER    → schedule re-check (e.g. 12d) → heartbeat skips until due
-SKIP     → log dismissed → no re-notify for same lot 7d
+optional veto window:
+  → notify first → wait vetoWindowSeconds → auto-execute unless SKIP
 ```
 
-Execution **never** fires without explicit approval in MVP (hosted or MCP).
+User can switch `approval.mode` anytime in dashboard or TG `/mode manual|delegated`.
 
 ---
 
@@ -651,7 +687,7 @@ ApprovedAction → LotManifest → Simulate (tax + slippage) → Sign → Broadc
 
 ## 9. Agent Orchestrator & Heartbeat
 
-The **heartbeat** is Phase 2 of the user lifecycle — a scheduled worker per active `Agent`, OpenClaw-style always-on but human-gated on execution.
+The **heartbeat** is Phase 2 — OpenClaw-style always-on. Phase 3 is manual approval **or** delegated autonomous execution, per user settings.
 
 ### 9.1 Heartbeat worker
 
@@ -665,15 +701,20 @@ every agent.heartbeatIntervalMinutes (default 60):
   3. Decision Engine        → CandidateAction[]
   4. if no candidates: log "nothing found" → wait, rescan
   5. for each candidate:
-       LLM Action Reasoner   → proposal (not execution)
-  6. emit OpportunityNotification → TG / email / push / MCP webhook
-  7. await user decision (Phase 3 — Action Loop)
+       LLM Action Reasoner   → { decision, reasoning, scheduledAction? }
 
-on user taps Execute:
-  8. validate approval token (agentId + actionId + channel auth)
-  9. Execution Layer → Circle Wallets (if execute tier) or return tx for BYO
-  10. Arc Ledger Write
-  11. LLM Explanation → confirmation notify
+  if agent.approval.mode == "delegated":
+  6a. validate against policy guardrails
+  7a. if decision == EXECUTE → Execution Layer → Arc → notify (receipt)
+  8a. if DEFER/SKIP → schedule or dismiss without user tap
+
+  if agent.approval.mode == "manual":
+  6b. emit OpportunityNotification with buttons
+  7b. await user Execute / Defer / Skip
+  8b. on Execute → validate token → Execution Layer → Arc → notify
+
+  (optional veto window on delegated: notify → sleep → auto-execute)
+  9. LLM Explanation → dashboard + channels
 ```
 
 **Deployment:**
@@ -685,7 +726,8 @@ on user taps Execute:
 - Maturation parking (`PARK_IN_USYC`) overrides discretionary rebalances for lots within 30 days of long-term threshold
 - LLM cannot approve actions outside `UserPolicy.allowedActions`
 - If LLM API fails → fall back to deterministic recommendation; log and surface in dashboard
-- Execution **never** without user Execute (hosted or MCP) in MVP
+- **Manual mode:** execution only after user Execute (or MCP `taxee_approve_action`)
+- **Delegated mode:** execution after LLM + guardrails; user always gets post-action notify
 
 ---
 
@@ -702,16 +744,18 @@ on user taps Execute:
 4. **LLM Action Reasoner** → proposes **DEFER 12 days** + park in USYC meanwhile
 5. **Telegram notify** → "Harvest opportunity — wETH down $600, save ~$180. Defer 12d for wash sale? [Execute] [Defer 12d] [Skip]"
 
-**Phase 3 — User taps Defer 12d:**
-6. Scheduled re-check queued; optional **park** if user also approves interim USYC move
-7. **Arc** → parking event logged; harvest scheduled
-8. **TG + dashboard** → LLM explanation card; tax cost avoided +$180 shown when harvest completes later
+**Phase 3a — Manual:** User taps Defer 12d → scheduled re-check; optional park approved separately.
+
+**Phase 3b — Delegated:** Action Reasoner returns DEFER + park → agent parks in USYC without user tap → TG receipt: "Parked wETH; harvest scheduled Jun 1."
+
+7. **Arc** → events logged  
+8. **TG + dashboard** → explanation card; tax cost avoided +$180 tracked
 
 ---
 
 ## 11. Hackathon MVP Scope (6 days)
 
-Build the **full user loop**: register → heartbeat finds opportunity → notify → user approves → record — plus LLM reasoning as the demo moment.
+Build the **full user loop**: register (pick manual or delegated) → heartbeat → notify → approve or autonomous execute → record. Demo both modes if time allows.
 
 | Day | Deliverable |
 |-----|-------------|
@@ -734,7 +778,9 @@ Build the **full user loop**: register → heartbeat finds opportunity → notif
 - [ ] Auto-import stub on registration (fixture lots marked `provisional`)
 - [ ] Heartbeat runs hourly per agent; logs "nothing found" or creates opportunity
 - [ ] Notify via TG (primary) + web dashboard
-- [ ] Execute / Defer / Skip from TG inline buttons and web UI
+- [ ] Approval mode at onboarding (manual vs delegated)
+- [ ] Manual: Execute / Defer / Skip from TG + web
+- [ ] Delegated: auto-execute path + post-action notify
 
 **Agent brain**
 - [ ] Loss harvest scanner — flags positions below threshold
@@ -750,7 +796,7 @@ Build the **full user loop**: register → heartbeat finds opportunity → notif
 
 - Full onchain lot reconstruction (fixture + provisional flag OK)
 - Full cross-chain CCTP
-- Silent auto-execution without user tap
+- Delegated mode without policy guardrails or post-action notify
 - Email/push (TG + web sufficient)
 - Production key custody — watch tier default; Circle execute optional demo
 
@@ -867,11 +913,13 @@ The architecture is working when:
 1. User registers via **TG or web in under 2 minutes** — address only, no seed phrase — and agent status is `active`
 2. Heartbeat runs hourly; when nothing to do, system waits and rescans without bothering user
 3. When opportunity found, user gets **TG (or web) notification** with Execute / Defer / Skip and LLM reasoning visible
-4. **No transaction broadcasts** until user taps Execute (hosted Circle or BYO via MCP)
-5. Defer schedules re-check; Skip suppresses re-notify for cooldown period
-6. LLM Action Reasoner defers harvest when wash sale + regime + gas don't justify — reasoning shown in notification
-7. Arc record written on approved action; dashboard shows after-tax vs gross divergence
-8. MCP `taxee_scan` returns same opportunities as hosted heartbeat for OpenClaw demo
+4. **Manual mode:** no broadcast until user taps Execute
+5. **Delegated mode:** autonomous execute when LLM + policy agree; user receives receipt notify
+6. Defer schedules re-check; Skip suppresses re-notify for cooldown period
+7. LLM Action Reasoner defers harvest when wash sale + regime + gas don't justify — reasoning shown in notification
+8. User can switch manual ↔ delegated without re-registering
+9. Arc record written on every executed action; dashboard shows after-tax vs gross divergence
+10. MCP `taxee_scan` respects agent approval mode for OpenClaw demo
 
 ---
 

@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { UserPolicy } from "@/lib/types";
-import { defaultPolicy, DEMO_WALLET } from "@/lib/mock-data";
+import type { ApprovalSettings, UserPolicy } from "@/lib/types";
+import { defaultApproval, defaultPolicy, DEMO_WALLET } from "@/lib/mock-data";
+import { ApprovalModePicker } from "@/components/onboarding/approval-mode-picker";
 import { registerAgent } from "@/lib/agent-store";
 import { Button } from "@/components/ui/button";
 import { truncateAddress } from "@/lib/utils";
@@ -16,6 +17,9 @@ export function OnboardingForm() {
   const [wallet, setWallet] = useState("");
   const [importing, setImporting] = useState(false);
   const [policy, setPolicy] = useState<UserPolicy>({ ...defaultPolicy });
+  const [approval, setApproval] = useState<ApprovalSettings>({
+    ...defaultApproval,
+  });
   const [agentId, setAgentId] = useState<string | null>(null);
 
   const walletValid = /^0x[a-fA-F0-9]{40}$/.test(wallet.trim());
@@ -29,7 +33,7 @@ export function OnboardingForm() {
   }
 
   function finishOnboarding() {
-    const agent = registerAgent(wallet.trim(), policy);
+    const agent = registerAgent(wallet.trim(), policy, approval);
     setAgentId(agent.id);
     setStep("done");
   }
@@ -147,6 +151,7 @@ export function OnboardingForm() {
               <option value={10}>10%</option>
             </select>
           </label>
+          <ApprovalModePicker value={approval} onChange={setApproval} />
           <label className="block text-sm text-zinc-400">
             Goal (natural language → policy)
             <textarea
@@ -170,8 +175,10 @@ export function OnboardingForm() {
           <div className="rounded-xl border border-accent/30 bg-emerald-950/20 p-6">
             <p className="text-lg font-medium text-accent">Agent active</p>
             <p className="mt-2 text-sm text-zinc-400">
-              Heartbeat every 60 minutes. We&apos;ll notify you when there&apos;s
-              an opportunity.
+              Heartbeat every 60 minutes ·{" "}
+              {approval.mode === "delegated"
+                ? "delegated (autonomous within policy)"
+                : "manual (you approve each action)"}
             </p>
             <p className="mt-4 font-mono text-xs text-zinc-500">{agentId}</p>
           </div>

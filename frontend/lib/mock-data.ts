@@ -1,5 +1,6 @@
 import type {
   Agent,
+  ApprovalSettings,
   Opportunity,
   PortfolioMetrics,
   Position,
@@ -14,6 +15,19 @@ export const defaultPolicy: UserPolicy = {
   harvestThresholdPct: 8,
   maturationBufferDays: 30,
   primaryObjective: "minimize_tax",
+};
+
+export const defaultApproval: ApprovalSettings = {
+  mode: "manual",
+  notifyOnExecute: true,
+  autoApproveTypes: ["HARVEST", "REBALANCE", "PARK"],
+};
+
+export const delegatedApproval: ApprovalSettings = {
+  mode: "delegated",
+  notifyOnExecute: true,
+  autoApproveTypes: ["HARVEST", "PARK"],
+  vetoWindowSeconds: 0,
 };
 
 export const demoMetrics: PortfolioMetrics = {
@@ -90,6 +104,7 @@ export const demoOpportunity: Opportunity = {
 export function createDemoAgent(
   walletAddress: string,
   policy: UserPolicy = defaultPolicy,
+  approval: ApprovalSettings = defaultApproval,
 ): Agent {
   return {
     id: `agent-${walletAddress.slice(2, 10)}`,
@@ -102,6 +117,7 @@ export function createDemoAgent(
       },
     ],
     policy,
+    approval,
     executionTier: "watch",
     heartbeatIntervalMinutes: 60,
     createdAt: new Date().toISOString(),
@@ -109,3 +125,9 @@ export function createDemoAgent(
 }
 
 export const demoAgent = createDemoAgent(DEMO_WALLET);
+
+export const demoAgentDelegated = createDemoAgent(
+  DEMO_WALLET,
+  defaultPolicy,
+  delegatedApproval,
+);

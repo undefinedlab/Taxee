@@ -12,7 +12,7 @@ DeFi portfolio agents are blind to taxes. They rebalance when drift exceeds a th
 - Every rebalance has a **tax cost**
 - Every win held one day short of long-term treatment is **money left on the table**
 
-Across a $50k portfolio, the difference between gross-optimized and after-tax-optimized management is typically **2–4% annually** — compounding, permanently, in the wrong direction.
+The difference between gross-optimized and after-tax-optimized management is compounding, permanently, in the wrong direction.
 
 Institutional desks have solved this for decades with direct indexing and tax-managed funds. **DeFi users have nothing.**
 
@@ -32,6 +32,8 @@ It runs continuously across your portfolio, layering tax awareness into every de
 | Harvest | Book losses automatically when thresholds are hit |
 
 The tax engine doesn't sit on top of portfolio management. **It's embedded inside it.**
+
+You choose how hands-on to be: **approve each move** (manual), or **delegate approval** so the agent runs autonomously within your policy — always with notifications and a full audit trail on Arc.
 
 ---
 

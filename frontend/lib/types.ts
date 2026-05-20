@@ -1,7 +1,23 @@
 export type AgentStatus = "pending" | "active" | "paused";
 export type OpportunityType = "HARVEST" | "REBALANCE" | "PARK";
-export type OpportunityStatus = "pending" | "executed" | "deferred" | "skipped";
+export type OpportunityStatus =
+  | "pending"
+  | "executed"
+  | "deferred"
+  | "skipped"
+  | "auto_executed";
 export type ExecutionTier = "watch" | "execute";
+export type ApprovalMode = "manual" | "delegated";
+
+export interface ApprovalSettings {
+  mode: ApprovalMode;
+  /** When delegated: which types the agent may execute without asking */
+  autoApproveTypes?: OpportunityType[];
+  /** Notify after autonomous execution (default true) */
+  notifyOnExecute: boolean;
+  /** Optional: notify first, auto-execute after N seconds unless user skips */
+  vetoWindowSeconds?: number;
+}
 
 export interface UserPolicy {
   jurisdiction: "US" | "OTHER";
@@ -21,6 +37,7 @@ export interface Agent {
   status: AgentStatus;
   wallets: WalletBinding[];
   policy: UserPolicy;
+  approval: ApprovalSettings;
   executionTier: ExecutionTier;
   heartbeatIntervalMinutes: number;
   createdAt: string;
@@ -58,6 +75,7 @@ export interface Opportunity {
   deferDays?: number;
   deferReason?: string;
   createdAt: string;
+  executedAutonomously?: boolean;
 }
 
 export interface RegimeState {

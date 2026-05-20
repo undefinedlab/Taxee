@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Opportunity } from "@/lib/types";
+import type { ApprovalMode, Opportunity } from "@/lib/types";
 import { updateOpportunityStatus } from "@/lib/agent-store";
 import { formatUsd } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 
 interface OpportunityCardProps {
   opportunity: Opportunity;
+  approvalMode: ApprovalMode;
   onUpdate?: (opportunities: Opportunity[]) => void;
 }
 
@@ -18,18 +19,29 @@ const typeLabels: Record<Opportunity["type"], string> = {
   PARK: "Maturation park",
 };
 
-export function OpportunityCard({ opportunity, onUpdate }: OpportunityCardProps) {
+export function OpportunityCard({
+  opportunity,
+  approvalMode,
+  onUpdate,
+}: OpportunityCardProps) {
   const [status, setStatus] = useState(opportunity.status);
   const [busy, setBusy] = useState(false);
 
   const resolved = status !== "pending";
+  const isDelegated = approvalMode === "delegated";
 
-  async function handleAction(action: "executed" | "deferred" | "skipped") {
+  async function handleAction(
+    action: "executed" | "deferred" | "skipped" | "auto_executed",
+  ) {
     setBusy(true);
     const updated = updateOpportunityStatus(opportunity.id, action);
     setStatus(action);
     onUpdate?.(updated);
     setBusy(false);
+  }
+
+  async function simulateAutonomousDefer() {
+    await handleAction("deferred");
   }
 
   return (
@@ -42,9 +54,14 @@ export function OpportunityCard({ opportunity, onUpdate }: OpportunityCardProps)
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <Badge variant={resolved ? "muted" : "warn"}>
-            {typeLabels[opportunity.type]}
-          </Badge>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant={resolved ? "muted" : "warn"}>
+              {typeLabels[opportunity.type]}
+            </Badge>
+            {isDelegated && !resolved && (
+              <Badge variant="success">Will act autonomously</Badge>
+            )}
+          </div>
           <h3 className="mt-2 text-lg font-medium text-zinc-100">
             {opportunity.headline}
           </h3>
@@ -54,7 +71,7 @@ export function OpportunityCard({ opportunity, onUpdate }: OpportunityCardProps)
         </div>
         {resolved && (
           <Badge variant="muted" className="capitalize">
-            {status}
+            {status === "auto_executed" ? "auto" : status}
           </Badge>
         )}
       </div>
@@ -68,7 +85,28 @@ export function OpportunityCard({ opportunity, onUpdate }: OpportunityCardProps)
         </p>
       </div>
 
-      {!resolved && (
+      {!resolved && isDelegated && (
+        <div className="mt-4 space-y-3">
+          <p className="text-sm text-zinc-400">
+            Delegated mode — agent will defer + park in USYC per reasoning above.
+            You&apos;ll get a receipt when done.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button disabled={busy} onClick={simulateAutonomousDefer}>
+              Simulate autonomous action
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={busy}
+              onClick={() => handleAction("skipped")}
+            >
+              Veto (skip)
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {!resolved && !isDelegated && (
         <div className="mt-4 flex flex-wrap gap-2">
           <Button disabled={busy} onClick={() => handleAction("executed")}>
             Execute
@@ -92,12 +130,15 @@ export function OpportunityCard({ opportunity, onUpdate }: OpportunityCardProps)
 
       {status === "deferred" && opportunity.deferReason && (
         <p className="mt-3 text-xs text-zinc-500">
+          {isDelegated ? "Autonomous: " : ""}
           Re-check scheduled — {opportunity.deferReason}
         </p>
       )}
-      {status === "executed" && (
+      {(status === "executed" || status === "auto_executed") && (
         <p className="mt-3 text-sm text-accent">
-          Confirmed — loss booked to Arc ledger (demo)
+          {status === "auto_executed"
+            ? "Executed autonomously — logged to Arc (demo)"
+            : "Confirmed — loss booked to Arc ledger (demo)"}
         </p>
       )}
     </article>

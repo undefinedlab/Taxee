@@ -1,5 +1,5 @@
-import type { Agent, Opportunity, UserPolicy } from "./types";
-import { createDemoAgent, demoOpportunity } from "./mock-data";
+import type { Agent, ApprovalSettings, Opportunity, UserPolicy } from "./types";
+import { createDemoAgent, defaultApproval, demoOpportunity } from "./mock-data";
 
 const AGENT_KEY = "taxee_agent";
 const OPPORTUNITIES_KEY = "taxee_opportunities";
@@ -20,11 +20,23 @@ export function loadAgent(): Agent | null {
   }
 }
 
-export function registerAgent(walletAddress: string, policy: UserPolicy): Agent {
-  const agent = createDemoAgent(walletAddress, policy);
+export function registerAgent(
+  walletAddress: string,
+  policy: UserPolicy,
+  approval: ApprovalSettings = defaultApproval,
+): Agent {
+  const agent = createDemoAgent(walletAddress, policy, approval);
   saveAgent(agent);
   saveOpportunities([{ ...demoOpportunity, agentId: agent.id }]);
   return agent;
+}
+
+export function updateAgentApproval(approval: ApprovalSettings): Agent | null {
+  const agent = loadAgent();
+  if (!agent) return null;
+  const updated = { ...agent, approval };
+  saveAgent(updated);
+  return updated;
 }
 
 export function saveOpportunities(opportunities: Opportunity[]): void {

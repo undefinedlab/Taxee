@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Agent, Opportunity } from "@/lib/types";
 import {
+  defaultApproval,
   demoAgent,
   demoMetrics,
   demoOpportunity,
@@ -11,6 +12,8 @@ import {
   demoRegime,
 } from "@/lib/mock-data";
 import { loadAgent, loadOpportunities } from "@/lib/agent-store";
+import { ApprovalModeToggle } from "@/components/dashboard/approval-mode-toggle";
+import type { ApprovalSettings } from "@/lib/types";
 import { Header } from "@/components/layout/header";
 import { MetricsGrid } from "@/components/dashboard/metrics-grid";
 import { OpportunityCard } from "@/components/dashboard/opportunity-card";
@@ -25,23 +28,32 @@ interface DashboardClientProps {
 
 export function DashboardClient({ agentId }: DashboardClientProps) {
   const [agent, setAgent] = useState<Agent | null>(null);
+  const [approval, setApproval] = useState<ApprovalSettings | null>(null);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
 
   useEffect(() => {
     const stored = loadAgent();
     if (stored && (stored.id === agentId || agentId === "demo")) {
-      setAgent(stored);
+      const withApproval = {
+        ...stored,
+        approval: stored.approval ?? defaultApproval,
+      };
+      setAgent(withApproval);
+      setApproval(withApproval.approval);
       setOpportunities(loadOpportunities());
     } else if (agentId === "demo") {
       setAgent(demoAgent);
+      setApproval(demoAgent.approval);
       setOpportunities([demoOpportunity]);
     } else {
       setAgent(demoAgent);
+      setApproval(demoAgent.approval);
       setOpportunities([{ ...demoOpportunity, agentId }]);
     }
   }, [agentId]);
 
   const displayAgent = agent ?? demoAgent;
+  const displayApproval = approval ?? displayAgent.approval;
   const wallet = displayAgent.wallets[0]?.address ?? "—";
   const pending = opportunities.filter((o) => o.status === "pending");
 
@@ -61,6 +73,15 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
               <Badge variant="success">Heartbeat · hourly</Badge>
               <Badge variant="muted">
                 {displayAgent.executionTier} tier
+              </Badge>
+              <Badge
+                variant={
+                  displayApproval.mode === "delegated" ? "success" : "default"
+                }
+              >
+                {displayApproval.mode === "delegated"
+                  ? "Delegated · autonomous"
+                  : "Manual approval"}
               </Badge>
               <Badge variant="muted">
                 Harvest −{displayAgent.policy.harvestThresholdPct}%
@@ -95,6 +116,7 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
                 <OpportunityCard
                   key={o.id}
                   opportunity={o}
+                  approvalMode={displayApproval.mode}
                   onUpdate={setOpportunities}
                 />
               ))}
@@ -106,7 +128,11 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
               {opportunities
                 .filter((o) => o.status !== "pending")
                 .map((o) => (
-                  <OpportunityCard key={o.id} opportunity={o} />
+                  <OpportunityCard
+                    key={o.id}
+                    opportunity={o}
+                    approvalMode={displayApproval.mode}
+                  />
                 ))}
             </div>
           )}
@@ -119,7 +145,16 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
             </h2>
             <PositionsTable positions={demoPositions} />
           </div>
-          <RegimePanel regime={demoRegime} />
+          <div className="space-y-4">
+            <ApprovalModeToggle
+              approval={displayApproval}
+              onChange={(next) => {
+                setApproval(next);
+                setAgent((a) => (a ? { ...a, approval: next } : a));
+              }}
+            />
+            <RegimePanel regime={demoRegime} />
+          </div>
         </div>
 
         <section className="mt-10 rounded-xl border border-surface-border bg-surface-raised p-4">
@@ -130,8 +165,9 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
               prices, lots, regime → reason
             </li>
             <li>
-              <span className="text-zinc-400">Phase 3</span> — You approve:
-              Execute / Defer / Skip above
+              <span className="text-zinc-400">Phase 3</span> — Manual: you
+              approve each action. Delegated: agent acts autonomously; you get
+              receipts (toggle above).
             </li>
             <li>
               <span className="text-zinc-400">Execute tier</span> — Connect Circle

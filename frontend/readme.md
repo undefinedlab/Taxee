@@ -1,15 +1,24 @@
 # taxee frontend
 
-Next.js 15 app for the taxee DeFi tax-optimization agent — onboarding, after-tax dashboard, and the Execute / Defer / Skip action loop.
+Next.js 15 app for the taxee DeFi tax-optimization agent — onboarding, after-tax dashboard, and the action loop (manual or delegated).
 
 ## Routes
 
 | Path | Description |
 |------|-------------|
 | `/` | Landing — product pitch and three-phase lifecycle |
-| `/onboarding` | Phase 1 — wallet (watch tier), import stub, preferences, activate agent |
+| `/onboarding` | Phase 1 — wallet, import, preferences, **approval mode**, activate agent |
 | `/dashboard/demo` | Demo dashboard with fixture portfolio |
 | `/dashboard/[agentId]` | Dashboard for a registered agent (localStorage) |
+
+## Approval modes
+
+| Mode | Behavior |
+|------|----------|
+| **Manual** | Agent proposes → you Execute / Defer / Skip before anything runs |
+| **Delegated** | Agent acts autonomously when LLM + policy agree → you get a receipt; optional veto (Skip) |
+
+Switch modes anytime on the dashboard. Matches `ApprovalSettings` in `architecture.md`.
 
 ## Run locally
 
@@ -23,15 +32,15 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Architecture alignment
 
-- **Phase 1 (Once):** `OnboardingForm` — address-only registration, onchain import stub, policy prefs, spawns agent in `localStorage`
-- **Phase 2 (Always on):** Dashboard shows heartbeat status; mock regime + pending opportunities
-- **Phase 3 (Action loop):** `OpportunityCard` — Execute / Defer / Skip with LLM reasoning display
+- **Phase 1 (Once):** `OnboardingForm` + `ApprovalModePicker`
+- **Phase 2 (Always on):** Heartbeat status badge; mock regime + opportunities
+- **Phase 3 (Action loop):** `OpportunityCard` — manual buttons or delegated simulate/veto
 
-Data is mock/fixture (`lib/mock-data.ts`) until the backend API exists. Types in `lib/types.ts` mirror `architecture.md` entities (`Agent`, `Opportunity`, `UserPolicy`, etc.).
+Data is mock/fixture until the backend API exists. Types in `lib/types.ts` mirror architecture entities.
 
 ## Next integration points
 
-- `POST /api/agents` — replace `registerAgent` in `lib/agent-store.ts`
-- `GET /api/agents/:id/opportunities` — poll pending actions
-- `POST /api/actions/:id/execute|defer|skip` — wire opportunity buttons
-- SIWE / WalletConnect for wallet connect (beyond paste-address watch tier)
+- `POST /api/agents` — include `approval` in payload
+- Heartbeat worker branches on `agent.approval.mode`
+- Delegated path: auto-execute + `notifyOnExecute` webhook/TG receipt
+- `PATCH /api/agents/:id/approval` — dashboard mode toggle

@@ -17,8 +17,8 @@ export default function HomePage() {
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-relaxed text-zinc-400">
             taxee runs continuously across your cross-chain portfolio. It scans
-            hourly, reasons about tax cost vs benefit, and notifies you when
-            there&apos;s something to do. You approve every move.
+            hourly, reasons about tax cost vs benefit, and acts or notifies
+            based on your choice: manual approval or delegated autonomy.
           </p>
           <div className="mt-10 flex flex-wrap gap-3">
             <Link href="/onboarding">
@@ -45,7 +45,7 @@ export default function HomePage() {
             <PhaseCard
               phase="3 — Your call"
               title="Action loop"
-              description="Execute, Defer, or Skip every proposal. Circle executes only after you approve."
+              description="Approve each move yourself, or delegate — the agent runs autonomously within your policy and notifies you either way."
             />
           </div>
         </section>
