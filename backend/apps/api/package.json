@@ -1,0 +1,40 @@
+{
+  "name": "@taxee/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "clean": "rm -rf dist",
+    "lint": "tsc --noEmit",
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "tsx src/db/seed.ts",
+    "db:seed:demo": "tsx src/db/seed.demo.ts"
+  },
+  "dependencies": {
+    "@taxee/shared": "workspace:*",
+    "@taxee/tax-engine": "workspace:*",
+    "@taxee/aggregator": "workspace:*",
+    "@taxee/llm": "workspace:*",
+    "@taxee/execution": "workspace:*",
+    "@taxee/compliance": "workspace:*",
+    "@taxee/notifications": "workspace:*",
+    "@taxee/db": "workspace:*",
+    "fastify": "^4.26.2",
+    "@fastify/cors": "^9.0.1",
+    "@fastify/jwt": "^8.0.1",
+    "drizzle-orm": "^0.30.7",
+    "postgres": "^3.4.3",
+    "zod": "^3.22.4",
+    "siwe": "^2.3.2",
+    "ethers": "^6.11.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "tsx": "^4.7.3",
+    "@types/node": "^20.12.7",
+    "drizzle-kit": "^0.20.14"
+  }
+}

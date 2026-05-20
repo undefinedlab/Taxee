@@ -1,5 +1,5 @@
 {
-  "name": "@taxee/shared",
+  "name": "@taxee/notifications",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,7 +8,6 @@
   "exports": {
     ".": {
       "import": "./dist/index.js",
-      "require": "./dist/index.js",
       "types": "./dist/index.d.ts"
     }
   },
@@ -19,7 +18,9 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "zod": "^3.22.4"
+    "@taxee/shared": "workspace:*",
+    "grammy": "^1.21.0",
+    "axios": "^1.6.8"
   },
   "devDependencies": {
     "typescript": "^5.4.5"

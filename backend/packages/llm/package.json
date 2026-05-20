@@ -1,5 +1,5 @@
 {
-  "name": "@taxee/shared",
+  "name": "@taxee/llm",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,7 +8,6 @@
   "exports": {
     ".": {
       "import": "./dist/index.js",
-      "require": "./dist/index.js",
       "types": "./dist/index.d.ts"
     }
   },
@@ -19,6 +18,8 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@taxee/shared": "workspace:*",
+    "@anthropic-ai/sdk": "^0.24.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {

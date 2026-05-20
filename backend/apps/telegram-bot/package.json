@@ -1,0 +1,26 @@
+{
+  "name": "@taxee/telegram-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "clean": "rm -rf dist",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@taxee/shared": "workspace:*",
+    "@taxee/db": "workspace:*",
+    "@taxee/notifications": "workspace:*",
+    "grammy": "^1.21.0",
+    "drizzle-orm": "^0.30.7",
+    "axios": "^1.6.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "tsx": "^4.7.3",
+    "@types/node": "^20.12.7"
+  }
+}

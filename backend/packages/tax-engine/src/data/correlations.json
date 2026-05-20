@@ -1,0 +1,17 @@
+{
+  "pairs": {
+    "wETH":    { "replacement": "stETH",   "correlation": 0.97 },
+    "ETH":     { "replacement": "stETH",   "correlation": 0.97 },
+    "wBTC":    { "replacement": "TBTC",    "correlation": 0.95 },
+    "BTC":     { "replacement": "TBTC",    "correlation": 0.95 },
+    "SOL":     { "replacement": "mSOL",    "correlation": 0.94 },
+    "MATIC":   { "replacement": "stMATIC", "correlation": 0.93 },
+    "AVAX":    { "replacement": "sAVAX",   "correlation": 0.92 },
+    "LINK":    { "replacement": "wLINK",   "correlation": 0.90 },
+    "UNI":     { "replacement": "SUSHI",   "correlation": 0.82 },
+    "ARB":     { "replacement": "OP",      "correlation": 0.80 },
+    "OP":      { "replacement": "ARB",     "correlation": 0.80 }
+  },
+  "minCorrelationThreshold": 0.80,
+  "note": "Correlation pairs are maintained conservatively. Wash sale treatment for crypto is unsettled; document substitute logic and advise users to consult tax counsel."
+}
