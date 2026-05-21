@@ -65,6 +65,32 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
+  app.post<{ Body: { address: string } }>(
+    "/dev-token",
+    async (request, reply) => {
+      if (process.env["NODE_ENV"] === "production") {
+        return reply.code(403).send({ error: "Not available in production" });
+      }
+      const { address } = request.body;
+      if (!address) return reply.code(400).send({ error: "address required" });
+
+      const normalized = address.toLowerCase();
+      const [existing] = await db.select().from(users).where(eq(users.address, normalized));
+
+      let userId: string;
+      if (existing) {
+        userId = existing.id;
+      } else {
+        const [created] = await db.insert(users).values({ address: normalized }).returning({ id: users.id });
+        if (!created) return reply.code(500).send({ error: "Failed to create user" });
+        userId = created.id;
+      }
+
+      const token = await reply.jwtSign({ sub: userId, address: normalized }, { expiresIn: "7d" });
+      return { token, userId };
+    }
+  );
+
   app.post<{ Body: { telegramChatId: string; telegramUserId: string } }>(
     "/telegram/link",
     { preHandler: [(app as any).authenticate] },

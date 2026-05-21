@@ -9,7 +9,9 @@
     "start": "node dist/index.js",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "db:migrate": "drizzle-kit migrate",
+    "db:generate": "drizzle-kit generate",
+    "db:import-lots": "tsx src/db/import-lots.ts",
+    "db:migrate": "drizzle-kit push",
     "db:seed": "tsx src/db/seed.ts",
     "db:seed:demo": "tsx src/db/seed.demo.ts"
   },
@@ -35,6 +37,6 @@
     "typescript": "^5.4.5",
     "tsx": "^4.7.3",
     "@types/node": "^20.12.7",
-    "drizzle-kit": "^0.20.14"
+    "drizzle-kit": "^0.21.4"
   }
 }

@@ -1,10 +1,11 @@
 import { eq } from "drizzle-orm";
-import { db, agents, lots, opportunities } from "@taxee/db";
+import { db, agents, users, lots, opportunities } from "@taxee/db";
 import {
   CircleClient,
   ArcClient,
   fetchPrices,
   collectRegimeSignals,
+  importLotsForWallet,
 } from "@taxee/aggregator";
 import {
   scanForHarvestOpportunities,
@@ -66,7 +67,51 @@ export async function runHeartbeat(agentId: string): Promise<{
     return { opportunitiesFound: 0, actionsExecuted: 0 };
   }
 
-  const policy = agent.policy as unknown as UserPolicy;
+  const [user] = await db.select().from(users).where(eq(users.id, agent.userId));
+  const walletAddress = user?.address;
+
+  if (walletAddress && process.env["ALCHEMY_API_KEY"]) {
+    const existing = await db
+      .select({ txHash: lots.txHash })
+      .from(lots)
+      .where(eq(lots.agentId, agentId));
+    const existingHashes = new Set(
+      existing.map((l) => l.txHash).filter(Boolean) as string[]
+    );
+    const imported = await importLotsForWallet(
+      walletAddress,
+      process.env["ALCHEMY_API_KEY"],
+      process.env["COINGECKO_API_KEY"],
+      existingHashes,
+    );
+    if (imported.length > 0) {
+      await db.insert(lots).values(
+        imported.map((l) => ({
+          agentId,
+          assetId:      l.assetId,
+          chainId:      l.chainId,
+          quantity:     l.quantity,
+          costBasisUsd: l.costBasisUsd,
+          acquiredAt:   l.acquiredAt,
+          status:       "open" as const,
+          txHash:       l.txHash,
+        }))
+      );
+      console.log(`[heartbeat] Synced ${imported.length} new lots for agent ${agentId}`);
+    }
+  } else if (!process.env["ALCHEMY_API_KEY"]) {
+    console.log(`[heartbeat] ALCHEMY_API_KEY not set — using existing lots from DB`);
+  }
+
+  const DEFAULT_POLICY: UserPolicy = {
+    primaryObjective:        "minimize_tax",
+    harvestThresholdPct:     -8,
+    maturationBufferDays:    30,
+    rebalanceAggressiveness: "moderate",
+    allowedActions:          ["HARVEST", "PARK", "REBALANCE"],
+    jurisdiction:            "US",
+  };
+  const policy: UserPolicy = { ...DEFAULT_POLICY, ...(agent.policy as Partial<UserPolicy>) };
 
   const openLots = await db
     .select()
@@ -181,7 +226,7 @@ export async function runHeartbeat(agentId: string): Promise<{
       if (agent.approvalMode === "delegated" && decision.decision === "EXECUTE") {
         const approved = validateForExecution(candidate, policy, prices);
         const receipt  = await executeApprovedAction(approved, circle, arc, {
-          walletId:           agent.circleWalletId,
+          walletId:           agent.circleWalletId ?? "",
           lotRegistryAddress: process.env["LOT_REGISTRY_ADDRESS"] ?? "",
           chainId:            8453,
         });
@@ -211,7 +256,7 @@ export async function runHeartbeat(agentId: string): Promise<{
             arcRecordId:     receipt.arcRecordId,
             executedAt:      new Date(),
             llmReasoning:    decision.reasoning,
-            dashboardUrl:    `${process.env["APP_URL"]}/dashboard`,
+            dashboardUrl:    "",
             ...(receipt.txHash !== undefined ? { txHash: receipt.txHash } : {}),
           },
           channels
@@ -236,17 +281,39 @@ export async function runHeartbeat(agentId: string): Promise<{
         }).returning();
 
         if (opp && agent.approvalMode === "manual") {
+          const lot0       = candidate.lots[0];
+          const assetId    = lot0?.assetId ?? candidate.type;
+          const price      = prices[assetId] ?? 0;
+          const totalQty   = candidate.lots.reduce((s, l) => s + parseFloat(l.quantity), 0);
+          const totalCost  = candidate.lots.reduce((s, l) => s + parseFloat(l.costBasisUsd), 0);
+          const currentVal = totalQty * price;
+          const unrealizedPct = totalCost > 0
+            ? ((currentVal - totalCost) / totalCost) * 100
+            : 0;
+          const avgDaysHeld = candidate.lots.length > 0
+            ? Math.round(candidate.lots.reduce((s, l) => s + (l.holdingPeriodDays ?? 0), 0) / candidate.lots.length)
+            : 0;
+
           await sendOpportunityNotification(
             {
-              actionId:          opp.id,
+              actionId:             opp.id,
               agentId,
-              type:              candidate.type,
-              headline:          explanation.headline,
-              taxSavingEstimate: explanation.taxSavingEstimate,
-              llmReasoning:      decision.reasoning,
-              approvalMode:      "manual",
-              buttons:           ["execute", "defer", "skip"],
-              dashboardUrl:      `${process.env["APP_URL"]}/dashboard`,
+              type:                 candidate.type,
+              headline:             explanation.headline,
+              explanationBody:      explanation.body,
+              taxSavingEstimate:    explanation.taxSavingEstimate,
+              llmReasoning:         decision.reasoning,
+              approvalMode:         "manual",
+              buttons:              ["execute", "defer", "skip"],
+              assetSymbol:          assetId,
+              quantity:             totalQty,
+              costBasisUsd:         totalCost,
+              currentValueUsd:      currentVal,
+              unrealizedPct,
+              daysHeld:             avgDaysHeld,
+              replacementAsset:     candidate.replacementAsset,
+              washSaleDaysRemaining: candidate.washSaleDaysRemaining,
+              regime:               regime.regime.label,
             },
             channels
           );

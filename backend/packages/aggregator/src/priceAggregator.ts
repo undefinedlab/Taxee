@@ -42,7 +42,8 @@ export async function fetchPrices(
 
   const headers: Record<string, string> = {};
   if (apiKey) {
-    headers["x-cg-pro-api-key"] = apiKey;
+    const headerName = apiKey.startsWith("CG-") ? "x-cg-demo-api-key" : "x-cg-pro-api-key";
+    headers[headerName] = apiKey;
   }
 
   const res = await axios.get<Record<string, { usd: number }>>(

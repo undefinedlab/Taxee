@@ -1,4 +1,4 @@
-import { RegimeClassifierOutputSchema } from "@taxee/shared";
+import { RegimeClassifierLLMOutputSchema } from "@taxee/shared";
 import type { RegimeSignals, RegimeClassifierOutput } from "@taxee/shared";
 import { callLLM } from "./llmClient.js";
 import {
@@ -21,16 +21,20 @@ export async function classifyRegime(
   const result = await callLLM({
     systemPrompt: REGIME_CLASSIFIER_SYSTEM,
     userPrompt:   REGIME_CLASSIFIER_USER(signals),
-    outputSchema: RegimeClassifierOutputSchema,
+    outputSchema: RegimeClassifierLLMOutputSchema,
     maxTokens:    768,
   });
 
+  const llm = result.output;
   return {
     regime: {
-      ...result.output.regime,
-      cachedAt: new Date(),
+      label:                 llm.label,
+      confidence:            llm.confidence,
+      reasoning:             llm.reasoning,
+      targetAllocationDelta: llm.targetAllocationDelta,
+      cachedAt:              new Date(),
     },
-    promptVersion: result.output.promptVersion,
+    promptVersion: llm.promptVersion,
     latencyMs:     result.meta.latencyMs,
   };
 }

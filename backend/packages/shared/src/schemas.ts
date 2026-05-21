@@ -64,6 +64,14 @@ export const RegimeStateSchema = z.object({
   targetAllocationDelta: z.record(z.string(), z.number()),
 });
 
+export const RegimeClassifierLLMOutputSchema = z.object({
+  label: RegimeLabelSchema,
+  confidence: z.number().min(0).max(1),
+  reasoning: z.string().min(10),
+  targetAllocationDelta: z.record(z.string(), z.number()),
+  promptVersion: z.string(),
+});
+
 export const RegimeClassifierOutputSchema = z.object({
   regime: RegimeStateSchema,
   promptVersion: z.string(),
@@ -80,12 +88,11 @@ export const ScheduledActionSchema = z.object({
 export const ActionReasonerOutputSchema = z.object({
   decision: LLMDecisionSchema,
   reasoning: z.string().min(10),
-  deferDays: z.number().int().positive().optional(),
-  interimAction: z.enum(["PARK_IN_USYC"]).optional(),
-  scheduledAction: ScheduledActionSchema.optional(),
-  estimatedTaxImpact: z.number().optional(),
+  deferDays: z.number().int().min(0).nullish(),
+  interimAction: z.enum(["PARK_IN_USYC"]).nullish(),
+  scheduledAction: ScheduledActionSchema.nullish(),
+  estimatedTaxImpact: z.number().nullish(),
   promptVersion: z.string(),
-  latencyMs: z.number(),
 });
 
 export const ExplanationOutputSchema = z.object({

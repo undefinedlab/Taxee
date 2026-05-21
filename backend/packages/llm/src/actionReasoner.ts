@@ -28,5 +28,8 @@ export async function reasonAboutAction(
     maxTokens:    1024,
   });
 
-  return result.output as unknown as ActionReasonerOutput;
+  return {
+    ...(result.output as unknown as ActionReasonerOutput),
+    latencyMs: result.meta.latencyMs,
+  };
 }

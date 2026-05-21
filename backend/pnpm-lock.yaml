@@ -125,8 +125,8 @@ importers:
         specifier: ^20.12.7
         version: 20.19.41
       drizzle-kit:
-        specifier: ^0.20.14
-        version: 0.20.18
+        specifier: ^0.21.4
+        version: 0.21.4
       tsx:
         specifier: ^4.7.3
         version: 4.22.3
@@ -173,6 +173,9 @@ importers:
 
   apps/telegram-bot:
     dependencies:
+      '@taxee/aggregator':
+        specifier: workspace:*
+        version: link:../../packages/aggregator
       '@taxee/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -1492,6 +1495,10 @@ packages:
 
   drizzle-kit@0.20.18:
     resolution: {integrity: sha512-fLTwcnLqtBxGd+51H/dEm9TC0FW6+cIX/RVPyNcitBO77X9+nkogEfMAJebpd/8Yl4KucmePHRYRWWvUlW0rqg==}
+    hasBin: true
+
+  drizzle-kit@0.21.4:
+    resolution: {integrity: sha512-Nxcc1ONJLRgbhmR+azxjNF9Ly9privNLEIgW53c92whb4xp8jZLH1kMCh/54ci1mTMuYxPdOukqLwJ8wRudNwA==}
     hasBin: true
 
   drizzle-orm@0.30.10:
@@ -3879,6 +3886,20 @@ snapshots:
       minimatch: 7.4.9
       semver: 7.8.0
       superjson: 2.2.6
+      zod: 3.25.76
+    transitivePeerDependencies:
+      - supports-color
+
+  drizzle-kit@0.21.4:
+    dependencies:
+      '@esbuild-kit/esm-loader': 2.6.5
+      commander: 9.5.0
+      env-paths: 3.0.0
+      esbuild: 0.19.12
+      esbuild-register: 3.6.0(esbuild@0.19.12)
+      glob: 8.1.0
+      hanji: 0.0.5
+      json-diff: 0.9.0
       zod: 3.25.76
     transitivePeerDependencies:
       - supports-color

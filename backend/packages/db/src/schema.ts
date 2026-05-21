@@ -23,7 +23,7 @@ export const users = pgTable("users", {
 export const agents = pgTable("agents", {
   id:             uuid("id").primaryKey().defaultRandom(),
   userId:         uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  circleWalletId: text("circle_wallet_id").notNull(),
+  circleWalletId: text("circle_wallet_id"),
   name:           text("name").notNull().default("My taxee Agent"),
   status:         agentStatusEnum("status").notNull().default("setup"),
   approvalMode:   approvalModeEnum("approval_mode").notNull().default("manual"),

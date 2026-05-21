@@ -238,13 +238,25 @@ export interface OpportunityNotification {
   actionId: string;
   type: ActionType;
   headline: string;
+  explanationBody: string;
   taxSavingEstimate: number;
   llmReasoning: string;
   approvalMode: ApprovalMode;
   buttons?: ("execute" | "defer" | "skip")[];
   autoExecuteAt?: Date;
   deferOptions?: { days: number; reason: string };
-  dashboardUrl: string;
+  assetSymbol?: string;
+  quantity?: number;
+  costBasisUsd?: number;
+  currentValueUsd?: number;
+  unrealizedPct?: number;
+  daysHeld?: number;
+  replacementAsset?: string;
+  washSaleDaysRemaining?: number;
+  daysToLongTerm?: number;
+  currentAllocationPct?: number;
+  targetAllocationPct?: number;
+  regime?: string;
 }
 
 export interface ActionReceipt {
