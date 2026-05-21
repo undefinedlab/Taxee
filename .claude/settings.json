@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm install *)",
+      "Bash(pnpm --filter @taxee/db build)",
+      "Bash(pnpm --filter @taxee/aggregator build)",
+      "Bash(pnpm --filter @taxee/execution build)",
+      "Bash(pnpm --filter @taxee/api exec tsc --noEmit)",
+      "Bash(pnpm --filter @taxee/telegram-bot exec tsc --noEmit)",
+      "Bash(pnpm --filter @taxee/agent exec tsc --noEmit)",
+      "Bash(git stash *)",
+      "Bash(pnpm --filter @taxee/db generate)",
+      "Bash(pnpm --filter @taxee/api db:migrate)"
+    ]
+  }
+}
