@@ -16,7 +16,7 @@ export function ApprovalModeToggle({
   function setMode(mode: ApprovalSettings["mode"]) {
     const next = { ...approval, mode };
     const saved = updateAgentApproval(next);
-    onChange(saved ?? next);
+    onChange(saved?.approval ?? next);
   }
 
   return (
