@@ -7,22 +7,38 @@ import "../src/TaxeeExecutor.sol";
 
 /**
  * @notice Deployment script for taxee contracts on Base / Base Sepolia.
+ *         All deployments are routed through the Arc immutable ledger for
+ *         non-repudiable, auditable deployment receipts.
  *
- * Usage:
- *   # Dry run (no broadcast):
- *   forge script script/Deploy.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL
+ * ── Setup Arc CLI ─────────────────────────────────────────────────────────────
+ *   uv tool install git+https://github.com/the-canteen-dev/ARC-cli
+ *   arc-canteen rpc eth_chainId          # verify Arc node is reachable
  *
- *   # Broadcast + verify:
+ * ── Dry run (no broadcast, via Arc node) ─────────────────────────────────────
  *   forge script script/Deploy.s.sol \
- *     --rpc-url $BASE_SEPOLIA_RPC_URL \
+ *     --rpc-url $ARC_RPC_URL
+ *
+ * ── Deploy to Base Sepolia via Arc ───────────────────────────────────────────
+ *   forge script script/Deploy.s.sol \
+ *     --rpc-url $ARC_RPC_URL \
+ *     --broadcast \
+ *     --verify \
+ *     --etherscan-api-key $BASESCAN_API_KEY
+ *
+ * ── Deploy to Base Mainnet via Arc ───────────────────────────────────────────
+ *   forge script script/Deploy.s.sol \
+ *     --rpc-url $ARC_RPC_URL \
  *     --broadcast \
  *     --verify \
  *     --etherscan-api-key $BASESCAN_API_KEY
  *
  * Required env vars:
  *   DEPLOYER_PRIVATE_KEY     Private key of the deployer EOA
+ *   ARC_RPC_URL              Arc node RPC endpoint (https://arc-node.thecanteenapp.com/)
+ *   ARC_API_KEY              Arc API key for authenticated writes
  *   USYC_ADDRESS             USYC token address on target chain
  *   USDC_ADDRESS             USDC token address on target chain
+ *                              Base Mainnet: 0x833589fCD6eDb6E08f4cEAA5e9087D3Ef0E2B5B
  *   AUTHORIZED_CALLER        Circle Programmable Wallet address for this executor instance
  */
 contract DeployTaxee is Script {
