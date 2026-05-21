@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { db, agents, users, lots, opportunities } from "@taxee/db";
+import { db, agents, lots, opportunities } from "@taxee/db";
 import {
   CircleClient,
   ArcClient,
@@ -67,8 +67,7 @@ export async function runHeartbeat(agentId: string): Promise<{
     return { opportunitiesFound: 0, actionsExecuted: 0 };
   }
 
-  const [user] = await db.select().from(users).where(eq(users.id, agent.userId));
-  const walletAddress = user?.address;
+  const walletAddress = agent.walletAddress;
 
   if (walletAddress && process.env["ALCHEMY_API_KEY"]) {
     const existing = await db

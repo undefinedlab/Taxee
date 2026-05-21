@@ -12,7 +12,7 @@ export const decisionEnum    = pgEnum("llm_decision", ["EXECUTE", "DEFER", "SKIP
 
 export const users = pgTable("users", {
   id:         uuid("id").primaryKey().defaultRandom(),
-  address:    text("address").notNull().unique(),
+  address:    text("address").unique(),
   telegramId: text("telegram_id").unique(),
   createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:  timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -20,9 +20,20 @@ export const users = pgTable("users", {
   addressIdx: uniqueIndex("users_address_idx").on(t.address),
 }));
 
+export const wallets = pgTable("wallets", {
+  id:        uuid("id").primaryKey().defaultRandom(),
+  userId:    uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  address:   text("address").notNull(),
+  label:     text("label").notNull().default("Wallet"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  uniqueUserAddress: uniqueIndex("wallets_user_address_idx").on(t.userId, t.address),
+}));
+
 export const agents = pgTable("agents", {
   id:             uuid("id").primaryKey().defaultRandom(),
   userId:         uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  walletAddress:  text("wallet_address"),
   circleWalletId: text("circle_wallet_id"),
   name:           text("name").notNull().default("My taxee Agent"),
   status:         agentStatusEnum("status").notNull().default("setup"),
@@ -31,7 +42,8 @@ export const agents = pgTable("agents", {
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
-  userIdx: index("agents_user_id_idx").on(t.userId),
+  userIdx:       index("agents_user_id_idx").on(t.userId),
+  walletAddrIdx: index("agents_wallet_address_idx").on(t.walletAddress),
 }));
 
 export const lots = pgTable("lots", {

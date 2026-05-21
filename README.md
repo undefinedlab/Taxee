@@ -292,12 +292,14 @@ apps/agent/
 Telegram bot handles frictionless onboarding and is the primary notification channel.
 
 **Responsibilities:**
-- `/start` command → guided onboarding flow
-- Accept wallet address → trigger `aggregator` onchain history import
-- Collect jurisdiction + harvest threshold preferences → call `Goal Parser`
-- Notify on opportunities → inline **[Execute] [Defer] [Skip]** buttons
-- Post-action receipts (delegated mode)
-- `/mode manual|delegated` command to switch approval mode
+- `/start` → welcome + command overview
+- Accept wallet address → live balance scan + lot import + heartbeat trigger
+- **Multi-wallet:** each address sent creates a new independent agent
+- `/wallets` → list all linked wallets with pending opportunity counts
+- `/status` → per-wallet agent status
+- `/opportunities` → pending actions across all wallets, labeled per wallet
+- `/mode manual|delegated` → updates all wallets simultaneously
+- Rich opportunity notifications → inline **[✅ Approve] [⏰ Defer] [❌ Skip]** buttons
 
 **Folder layout:**
 ```
@@ -318,18 +320,21 @@ apps/telegram-bot/
 └── tsconfig.json
 ```
 
-**Onboarding flow:**
+**Wallet flow (triggered by any 0x address message):**
 ```
-/start
-  → "Send your wallet address (or WalletConnect link)"
-  → [address received] → trigger onchain import stub
-  → "Found N positions, M lots. Jurisdiction? [US] [Other]"
-  → "Harvest when loss exceeds? [5%] [8%] [10%]"
-  → "Approval mode? [Manual – I approve each move] [Delegated – agent runs autonomously]"
-  → Agent spawned → "Agent active. Dashboard: https://taxee.app/a/{agentId}"
+User sends: 0xabc...
+  → Create user (telegramId) + wallet record + agent for that wallet
+  → 🔍 Scan live balances across 4 chains (Alchemy)
+  → 💼 Display: asset · quantity · price · USD value per chain
+  → 📚 Import transfer history → tax lots with cost basis (Alchemy + CoinGecko)
+  → 🧠 Trigger heartbeat (background) → Claude analysis → push notification
+
+User sends another address:
+  → Second wallet + independent agent created
+  → Same scan pipeline runs for the new wallet
 ```
 
-**Security:** Never request seed phrases. Execute tier upgrade via WalletConnect deep-link only. TG user `chat_id` bound to `agentId` in DB after wallet ownership verification.
+**Security:** Never requests seed phrases. `telegramId` bound to `userId` in DB. Each wallet address is checksummed and lowercased before storage.
 
 ---
 
@@ -572,10 +577,12 @@ Pulls live portfolio data from all sources and assembles `PortfolioSnapshot`.
 
 | Source            | Data                                            | Implementation         |
 |-------------------|-------------------------------------------------|------------------------|
-| Circle Wallets    | Balances per chain, per asset                   | Circle Wallets REST API |
-| Arc Ledger        | Cost basis per lot, YTD realized G/L            | Arc REST API            |
-| Price Oracles     | Current USD mark-to-market                      | CoinGecko / Chainlink   |
+| Alchemy RPC       | Live ETH + ERC-20 balances, transfer history    | `balanceReader.ts` + `lotImporter.ts` |
+| CoinGecko         | Current prices + historical prices at lot acquisition | `priceAggregator.ts` |
+| Arc Ledger        | Cost basis per lot, YTD realized G/L (execution path) | Arc REST API |
 | Onchain Signals   | Funding rates, vol, stablecoin flows, ETH/BTC   | Defillama + Glassnode stubs |
+
+**Chains supported:** Ethereum mainnet (1), Ethereum Sepolia (11155111), Base mainnet (8453), Base Sepolia (84532)
 
 **Folder layout:**
 ```
@@ -738,15 +745,28 @@ packages/notifications/
 OpportunityNotification {
   agentId: string
   actionId: string
-  type: "HARVEST" | "REBALANCE" | "PARK"
-  headline: string
+  type: "HARVEST" | "REBALANCE" | "PARK" | "HOLD"
+  headline: string                       // Claude-generated, leads with $ saving
+  explanationBody: string                // Claude 2-4 sentence plain-English explanation
   taxSavingEstimate: number
-  llmReasoning: string
+  llmReasoning: string                   // Full action reasoner reasoning chain
   approvalMode: "manual" | "delegated"
-  buttons?: ["execute", "defer", "skip"]      // manual mode only
-  autoExecuteAt?: Date                         // delegated + veto window
-  deferOptions?: { days: number; reason: string }
-  dashboardUrl: string
+  buttons?: ["execute", "defer", "skip"]  // manual mode only
+  autoExecuteAt?: Date                   // delegated + veto window
+  // Position context (populated from real lot data)
+  assetSymbol?: string
+  quantity?: number
+  costBasisUsd?: number
+  currentValueUsd?: number
+  unrealizedPct?: number
+  daysHeld?: number
+  // Strategy-specific
+  replacementAsset?: string              // HARVEST: correlated replacement
+  washSaleDaysRemaining?: number         // HARVEST: 0 = clear
+  daysToLongTerm?: number                // PARK: days until LT threshold
+  currentAllocationPct?: number          // REBALANCE: current weight
+  targetAllocationPct?: number           // REBALANCE: target weight
+  regime?: string                        // REBALANCE: market regime label
 }
 ```
 
@@ -933,15 +953,13 @@ base = { key = "${BASESCAN_API_KEY}" }
 ### Database tables (Drizzle + PostgreSQL)
 
 ```
-agents                    Core Agent entity
-wallet_bindings           WalletBinding[] per agent
-lots                      Tax lots (provisional + confirmed)
-portfolio_snapshots       Point-in-time snapshots (cached)
-opportunities             CandidateAction + LLM output + approval state
-arc_records               Immutable disposal records (mirrors Arc API)
-scheduled_actions         Deferred PARK/HARVEST jobs
-llm_call_log              Every LLM call: prompt version, input, output, latency
-regime_cache              RegimeState cache (4h TTL)
+users             Telegram identity (telegramId, address nullable)
+wallets           Per-user wallet addresses with labels (Wallet 1, 2, ...)
+agents            One per wallet — walletAddress, policy JSONB, approvalMode
+lots              Tax lots — assetId, chainId, quantity, costBasisUsd, acquiredAt, txHash
+opportunities     LLM decision + reasoning + headline + body + taxSavingEstimate
+llm_logs          Every Claude call — promptVersion, model, tokens, latency, raw output
+heartbeats        Per-agent scan history — triggeredAt, opportunitiesFound, actionsExecuted
 ```
 
 ---
@@ -1079,88 +1097,94 @@ Guardrails applied in code **after** LLM response before any execution fires.
 ## 10. Database Schema
 
 ```sql
--- Core tables (Drizzle ORM, PostgreSQL)
+-- Actual Drizzle ORM schema (packages/db/src/schema.ts)
 
-CREATE TABLE agents (
-  id            TEXT PRIMARY KEY,
-  user_id       TEXT NOT NULL,
-  status        TEXT NOT NULL DEFAULT 'pending',  -- pending|active|paused
-  policy        JSONB NOT NULL,
-  approval      JSONB NOT NULL,
-  deployment    TEXT NOT NULL DEFAULT 'hosted',   -- hosted|mcp
-  channels      JSONB NOT NULL DEFAULT '[]',
-  heartbeat_min INTEGER NOT NULL DEFAULT 60,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE users (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  address     TEXT UNIQUE,                          -- nullable (multi-wallet users may have none)
+  telegram_id TEXT UNIQUE,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE wallet_bindings (
-  id                TEXT PRIMARY KEY,
-  agent_id          TEXT NOT NULL REFERENCES agents(id),
-  address           TEXT NOT NULL,
-  chains            INTEGER[] NOT NULL,
-  circle_wallet_id  TEXT,
-  import_source     TEXT NOT NULL DEFAULT 'onchain'
+CREATE TABLE wallets (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  address    TEXT NOT NULL,
+  label      TEXT NOT NULL DEFAULT 'Wallet',        -- Wallet 1, Wallet 2, ...
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, address)
+);
+
+CREATE TABLE agents (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id          UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  wallet_address   TEXT,                             -- the wallet this agent watches
+  circle_wallet_id TEXT,
+  name             TEXT NOT NULL DEFAULT 'My taxee Agent',
+  status           agent_status NOT NULL DEFAULT 'setup',  -- active|paused|setup
+  approval_mode    approval_mode NOT NULL DEFAULT 'manual', -- manual|delegated
+  policy           JSONB NOT NULL DEFAULT '{}',      -- UserPolicy JSON
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE lots (
-  id               TEXT PRIMARY KEY,
-  agent_id         TEXT NOT NULL REFERENCES agents(id),
-  asset_id         TEXT NOT NULL,
-  chain_id         INTEGER NOT NULL,
-  acquired_at      TIMESTAMPTZ NOT NULL,
-  cost_basis_usd   NUMERIC(20, 8) NOT NULL,
-  quantity         NUMERIC(30, 18) NOT NULL,
-  source_tx        TEXT NOT NULL,
-  status           TEXT NOT NULL DEFAULT 'open',  -- open|partial|closed
-  provisional      BOOLEAN NOT NULL DEFAULT false,
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id       UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  asset_id       TEXT NOT NULL,
+  chain_id       INTEGER NOT NULL,
+  quantity       NUMERIC(36, 18) NOT NULL,
+  cost_basis_usd NUMERIC(20, 4) NOT NULL,
+  acquired_at    TIMESTAMPTZ NOT NULL,
+  status         lot_status NOT NULL DEFAULT 'open',  -- open|partial|closed
+  tx_hash        TEXT,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE opportunities (
-  id                    TEXT PRIMARY KEY,
-  agent_id              TEXT NOT NULL REFERENCES agents(id),
-  candidate_action      JSONB NOT NULL,
-  llm_decision          TEXT,          -- EXECUTE|DEFER|SKIP
-  llm_reasoning         TEXT,
-  scheduled_action      JSONB,
-  interim_action        TEXT,
-  status                TEXT NOT NULL DEFAULT 'pending',
-  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  decided_at            TIMESTAMPTZ
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id             UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  type                 action_type NOT NULL,          -- HARVEST|REBALANCE|PARK|HOLD
+  llm_decision         llm_decision NOT NULL,         -- EXECUTE|DEFER|SKIP
+  llm_reasoning        TEXT NOT NULL,
+  estimated_tax_impact NUMERIC(20, 4) NOT NULL,
+  headline             TEXT NOT NULL,                 -- Claude-generated
+  body                 TEXT NOT NULL,                 -- Claude-generated explanation
+  tax_saving_estimate  NUMERIC(20, 4) NOT NULL DEFAULT 0,
+  defer_days           INTEGER,
+  interim_action       TEXT,
+  arc_record_id        TEXT,
+  tx_hash              TEXT,
+  prompt_version       TEXT NOT NULL,
+  executed_at          TIMESTAMPTZ,
+  approved_at          TIMESTAMPTZ,
+  deferred_until       TIMESTAMPTZ,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE arc_records (
-  id            TEXT PRIMARY KEY,
-  agent_id      TEXT NOT NULL REFERENCES agents(id),
-  lot_id        TEXT NOT NULL,
-  description   TEXT NOT NULL,
-  date_acquired DATE NOT NULL,
-  date_sold     DATE NOT NULL,
-  proceeds      NUMERIC(20, 8) NOT NULL,
-  cost_basis    NUMERIC(20, 8) NOT NULL,
-  gain_loss     NUMERIC(20, 8) NOT NULL,
-  term          TEXT NOT NULL,           -- short|long
-  tx_hash       TEXT NOT NULL,
-  chain_id      INTEGER NOT NULL,
-  rationale     TEXT,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE llm_call_log (
-  id              TEXT PRIMARY KEY,
-  agent_id        TEXT,
-  call_type       TEXT NOT NULL,        -- goal_parser|regime|action_reasoner|explanation
+CREATE TABLE llm_logs (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id        UUID REFERENCES agents(id) ON DELETE SET NULL,
+  opportunity_id  UUID REFERENCES opportunities(id) ON DELETE SET NULL,
   prompt_version  TEXT NOT NULL,
-  input           JSONB NOT NULL,
-  output          JSONB NOT NULL,
-  latency_ms      INTEGER,
+  model           TEXT NOT NULL,
+  input_tokens    INTEGER NOT NULL,
+  output_tokens   INTEGER NOT NULL,
+  latency_ms      INTEGER NOT NULL,
+  input_hash      TEXT NOT NULL,
+  output_raw      TEXT NOT NULL,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE regime_cache (
-  agent_id    TEXT PRIMARY KEY,
-  regime      JSONB NOT NULL,
-  cached_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE heartbeats (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id            UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  triggered_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at        TIMESTAMPTZ,
+  opportunities_found INTEGER NOT NULL DEFAULT 0,
+  actions_executed    INTEGER NOT NULL DEFAULT 0,
+  error_message       TEXT
 );
 ```
 
@@ -1171,7 +1195,6 @@ CREATE TABLE regime_cache (
 ```bash
 # ── API ──────────────────────────────────────────────────────────────────
 DATABASE_URL=postgresql://user:pass@localhost:5432/taxee
-REDIS_URL=redis://localhost:6379
 PORT=3001
 
 # ── LLM ──────────────────────────────────────────────────────────────────
@@ -1199,6 +1222,9 @@ USDC_ADDRESS=0x833589fCD6eDb6E08f4cEAA5e9...  # Base USDC
 # ── Arc ───────────────────────────────────────────────────────────────────
 ARC_API_KEY=...
 ARC_API_URL=https://api.arc.io
+
+# ── On-chain data ────────────────────────────────────────────────────────
+ALCHEMY_API_KEY=...                 # Required for live balance + lot import
 
 # ── Prices ────────────────────────────────────────────────────────────────
 COINGECKO_API_KEY=...               # Optional — free tier works for hackathon
@@ -1241,7 +1267,8 @@ docker compose up -d   # PostgreSQL + Redis
 
 ```bash
 pnpm --filter @taxee/api db:migrate
-pnpm --filter @taxee/api db:seed       # loads fixture portfolio
+# No seed needed — real data is imported live from Alchemy when wallet is linked
+# To reset all data: npx tsx apps/api/src/db/reset.ts
 ```
 
 ### Run backend (all apps in parallel)
@@ -1267,12 +1294,11 @@ forge test -vvv
 forge script script/Deploy.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL --broadcast
 ```
 
-### Load demo fixture
+### Trigger a manual heartbeat scan
 
 ```bash
-pnpm --filter @taxee/api seed:demo
-# Registers a demo agent with fixture portfolio (3 positions, varied holding periods)
-# Agent ID printed to console — use in web dashboard or Telegram /start
+# Runs one full pipeline cycle for all active agents and sends Telegram notifications
+export $(grep -v '^#' .env | xargs) && pnpm --filter @taxee/agent dev:trigger
 ```
 
 ---
