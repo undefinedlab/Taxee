@@ -1,9 +1,19 @@
-# taxee — Backend & Smart Contract Architecture
+# taxee
 
 > **The first DeFi portfolio agent that optimizes after-tax return, not gross performance.**  
-> Built for Circle Hackathon 2026.
+> Built for the Circle Hackathon 2026 · Deployed on Arc (chain 5042002)
 
 ---
+
+## Deployed Contracts
+
+| Contract | Address | Chain |
+|---|---|---|
+| `TaxeeLotRegistry` | [`0x9a16c3d45A3e8Ad23152372405bf1F0dd58496ad`](https://sourcify.dev/#/lookup/0x9a16c3d45A3e8Ad23152372405bf1F0dd58496ad) | Arc testnet (5042002) |
+| `TaxeeExecutor` | [`0x7fD85458A0958C5EB52234f3FF4f0C6bf7cC999c`](https://sourcify.dev/#/lookup/0x7fD85458A0958C5EB52234f3FF4f0C6bf7cC999c) | Arc testnet (5042002) |
+| `USDC` (testnet) | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` | Arc testnet |
+
+> Both contracts verified on Sourcify. USYC = USDC on testnet (pass-through, 1:1). Swap `USYC_ADDRESS` for real Hashnote USYC on mainnet.
 
 ## Table of Contents
 
