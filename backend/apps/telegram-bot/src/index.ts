@@ -5,6 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { db, users, wallets, agents, opportunities, lots } from "@taxee/db";
 import { importLotsForWallet, fetchWalletPositions } from "@taxee/aggregator";
+import { executeOpportunity } from "@taxee/execution";
 
 const __dirname  = path.dirname(fileURLToPath(import.meta.url));
 const BACKEND_DIR = path.resolve(__dirname, "../../..");
@@ -368,6 +369,13 @@ bot.on("callback_query:data", async (ctx) => {
 
     if (action === "approve") {
       await db.update(opportunities).set({ approvedAt: new Date() }).where(eq(opportunities.id, oppId));
+
+      const [agent] = await db.select().from(agents).where(eq(agents.id, opp.agentId));
+      if (agent?.circleWalletId && (opp as any).candidateAction) {
+        executeOpportunity(oppId).catch((err: unknown) =>
+          console.error(`[bot] Execution failed for opportunity ${oppId}:`, err)
+        );
+      }
     } else if (action === "defer") {
       const deferredUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
       await db.update(opportunities).set({ deferDays: 30, deferredUntil }).where(eq(opportunities.id, oppId));

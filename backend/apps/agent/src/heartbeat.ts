@@ -28,10 +28,12 @@ import type {
   NotificationChannel,
 } from "@taxee/shared";
 
-const circle = new CircleClient(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const circle = new (CircleClient as any)(
   process.env["CIRCLE_API_KEY"] ?? "",
-  (process.env["CIRCLE_ENV"] ?? "sandbox") as "sandbox" | "production"
-);
+  (process.env["CIRCLE_ENVIRONMENT"] ?? "sandbox") as "sandbox" | "production",
+  process.env["CIRCLE_ENTITY_SECRET"]
+) as CircleClient;
 
 const arc = new ArcClient(
   process.env["ARC_API_KEY"] ?? "",
@@ -226,8 +228,11 @@ export async function runHeartbeat(agentId: string): Promise<{
         const approved = validateForExecution(candidate, policy, prices);
         const receipt  = await executeApprovedAction(approved, circle, arc, {
           walletId:           agent.circleWalletId ?? "",
-          lotRegistryAddress: process.env["LOT_REGISTRY_ADDRESS"] ?? "",
-          chainId:            8453,
+          lotRegistryAddress: process.env["TAXEE_LOT_REGISTRY_ADDRESS"] ?? "",
+          chainId:            candidate.lots[0]?.chainId ?? 8453,
+          ...(process.env["TAXEE_EXECUTOR_ADDRESS"] ? { executorAddress: process.env["TAXEE_EXECUTOR_ADDRESS"] } : {}),
+          ...(process.env["USDC_ADDRESS"]           ? { usdcAddress: process.env["USDC_ADDRESS"] }             : {}),
+          ...(process.env["CIRCLE_PAYMASTER_WALLET_ID"] ? { paymasterWalletId: process.env["CIRCLE_PAYMASTER_WALLET_ID"] } : {}),
         });
 
         await db.insert(opportunities).values({
@@ -239,11 +244,12 @@ export async function runHeartbeat(agentId: string): Promise<{
           headline:           explanation.headline,
           body:               explanation.body,
           taxSavingEstimate:  String(explanation.taxSavingEstimate),
+          candidateAction:    candidate as any,
           arcRecordId:        receipt.arcRecordId,
           ...(receipt.txHash !== undefined ? { txHash: receipt.txHash } : {}),
           promptVersion:      decision.promptVersion,
           executedAt:         new Date(),
-        });
+        } as any);
 
         await sendActionReceipt(
           {
@@ -272,12 +278,13 @@ export async function runHeartbeat(agentId: string): Promise<{
           headline:           explanation.headline,
           body:               explanation.body,
           taxSavingEstimate:  String(explanation.taxSavingEstimate),
+          candidateAction:    candidate as any,
           ...(decision.deferDays !== undefined ? { deferDays: decision.deferDays } : {}),
           promptVersion:      decision.promptVersion,
           ...(decision.deferDays
             ? { deferredUntil: new Date(Date.now() + decision.deferDays * 86400000) }
             : {}),
-        }).returning();
+        } as any).returning();
 
         if (opp && agent.approvalMode === "manual") {
           const lot0       = candidate.lots[0];

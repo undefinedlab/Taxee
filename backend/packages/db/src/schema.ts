@@ -75,6 +75,7 @@ export const opportunities = pgTable("opportunities", {
   taxSavingEstimate:   numeric("tax_saving_estimate", { precision: 20, scale: 4 }).notNull().default("0"),
   deferDays:           integer("defer_days"),
   interimAction:       text("interim_action"),
+  candidateAction:     jsonb("candidate_action"),
   arcRecordId:         text("arc_record_id"),
   txHash:              text("tx_hash"),
   promptVersion:       text("prompt_version").notNull(),

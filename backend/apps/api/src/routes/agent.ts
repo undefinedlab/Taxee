@@ -3,6 +3,7 @@ import { db } from "../db/client.js";
 import { agents } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { parseGoal } from "@taxee/llm";
+import { CircleClient } from "@taxee/aggregator";
 
 export const agentRoutes: FastifyPluginAsync = async (app) => {
   const auth = { preHandler: [(app as any).authenticate] };
@@ -24,18 +25,45 @@ export const agentRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post<{
-    Body: { circleWalletId: string; name?: string; goalStatement: string };
+    Body: { name?: string; goalStatement: string; walletAddress?: string };
   }>("/", auth, async (request, reply) => {
     const userId = (request.user as any).sub as string;
-    const { circleWalletId, name, goalStatement } = request.body;
+    const { name, goalStatement, walletAddress } = request.body;
 
     const policy = await parseGoal(goalStatement);
+
+    let circleWalletId: string | undefined;
+    const apiKey      = process.env["CIRCLE_API_KEY"];
+    const entitySecret = process.env["CIRCLE_ENTITY_SECRET"];
+    const walletSetId  = process.env["CIRCLE_WALLET_SET_ID"];
+
+    if (apiKey && entitySecret && walletSetId) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const circle = new (CircleClient as any)(
+          apiKey,
+          (process.env["CIRCLE_ENVIRONMENT"] ?? "sandbox") as "sandbox" | "production",
+          entitySecret
+        ) as CircleClient;
+
+        const wallet = await (circle as any).createDeveloperWallet({
+          idempotencyKey: `agent-${userId}-${Date.now()}`,
+          walletSetId,
+          blockchain: "BASE",
+        });
+        circleWalletId = wallet.id;
+        console.log(`[agent] Created Circle wallet ${circleWalletId} for user ${userId}`);
+      } catch (err: unknown) {
+        console.error("[agent] Circle wallet creation failed (non-fatal):", err);
+      }
+    }
 
     const [agent] = await db
       .insert(agents)
       .values({
         userId,
-        circleWalletId,
+        ...(circleWalletId !== undefined ? { circleWalletId } : {}),
+        ...(walletAddress  !== undefined ? { walletAddress  } : {}),
         name:   name ?? "My taxee Agent",
         policy: policy as any,
         status: "active",

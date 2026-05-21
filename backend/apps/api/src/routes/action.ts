@@ -2,6 +2,7 @@ import { type FastifyPluginAsync } from "fastify";
 import { db } from "../db/client.js";
 import { opportunities, agents } from "../db/schema.js";
 import { eq, and, desc } from "drizzle-orm";
+import { executeOpportunity } from "@taxee/execution";
 
 /**
  * /actions routes — manage tax opportunity decisions.
@@ -52,6 +53,12 @@ export const actionRoutes: FastifyPluginAsync = async (app) => {
       .set({ approvedAt: new Date() })
       .where(eq(opportunities.id, request.params.id))
       .returning();
+
+    if (agent.circleWalletId && (opp as any).candidateAction) {
+      executeOpportunity(opp.id).catch((err: unknown) =>
+        console.error(`[action] Execution failed for opportunity ${opp.id}:`, err)
+      );
+    }
 
     return updated;
   });

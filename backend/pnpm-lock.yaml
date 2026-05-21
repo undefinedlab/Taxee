@@ -179,6 +179,9 @@ importers:
       '@taxee/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@taxee/execution':
+        specifier: workspace:*
+        version: link:../../packages/execution
       '@taxee/notifications':
         specifier: workspace:*
         version: link:../../packages/notifications
@@ -258,9 +261,18 @@ importers:
       '@taxee/aggregator':
         specifier: workspace:*
         version: link:../aggregator
+      '@taxee/compliance':
+        specifier: workspace:*
+        version: link:../compliance
+      '@taxee/db':
+        specifier: workspace:*
+        version: link:../db
       '@taxee/shared':
         specifier: workspace:*
         version: link:../shared
+      drizzle-orm:
+        specifier: ^0.30.7
+        version: 0.30.10(postgres@3.4.9)
       viem:
         specifier: ^2.10.0
         version: 2.50.4(typescript@5.9.3)(zod@3.25.76)

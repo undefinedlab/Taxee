@@ -20,6 +20,9 @@
   "dependencies": {
     "@taxee/shared": "workspace:*",
     "@taxee/aggregator": "workspace:*",
+    "@taxee/db": "workspace:*",
+    "@taxee/compliance": "workspace:*",
+    "drizzle-orm": "^0.30.7",
     "viem": "^2.10.0"
   },
   "devDependencies": {
