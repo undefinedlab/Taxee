@@ -3,8 +3,11 @@
  *
  * Supports:
  *   - Ethereum mainnet  (chainId 1)
+ *   - Ethereum Sepolia  (chainId 11155111)
  *   - Base mainnet      (chainId 8453)
  *   - Base Sepolia      (chainId 84532)
+ *   - Optimism          (chainId 10)
+ *   - Arbitrum One      (chainId 42161)
  *
  * Flow per chain:
  *   1. Alchemy `alchemy_getAssetTransfers` → inbound transfers (acquisitions)
@@ -21,6 +24,8 @@ const NETWORKS: Array<{ alchemyNetwork: string; chainId: number }> = [
   { alchemyNetwork: "eth-sepolia",  chainId: 11155111 },
   { alchemyNetwork: "base-mainnet", chainId: 8453     },
   { alchemyNetwork: "base-sepolia", chainId: 84532    },
+  { alchemyNetwork: "opt-mainnet",  chainId: 10       },
+  { alchemyNetwork: "arb-mainnet",  chainId: 42161    },
 ];
 
 // ─── Token address → taxee asset symbol ──────────────────────────────────────
@@ -34,16 +39,30 @@ const TOKEN_MAP: Record<string, string> = {
   "0x4d224452801aced8b2f0aebe155379bb5d594381": "APE",
   "0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9": "AAVE",
   "0x6b175474e89094c44da98b954eedeac495271d0f": "DAI",
-  // Base mainnet
+  // Base mainnet (wETH 0x4200… is shared with Optimism — both are OP-stack)
   "0x4200000000000000000000000000000000000006": "wETH",
   "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf": "wBTC",
   "0x50c5725949a6f0c72e6c4a641f24049a917db0cb": "DAI",
   "0x940181a94a35a4569e4529a3cdfb74e38fd98631": "AERO",
-  // Stablecoins — will be skipped
+  // Optimism
+  "0x68f180fcce6836688e9084f035309e29bf0a2095": "wBTC",
+  "0x4200000000000000000000000000000000000042": "OP",
+  // Arbitrum One
+  "0x82af49447d8a07e3bd95bd0d56f35241523fbab1": "wETH",
+  "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f": "wBTC",
+  "0x912ce59144191c1204e64559fe8253a0e49e6548": "ARB",
+  // Stablecoins — will be skipped via SKIP_ASSETS
   "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48": "USDC",
   "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": "USDC",
   "0xdac17f958d2ee523a2206206994597c13d831ec7": "USDT",
   "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca": "USDbC",
+  "0x0b2c639c533813f4aa9d7837caf62653d097ff85": "USDC",      // Optimism
+  "0x7f5c764cbc14f9669b88837ca1490cca17c31607": "USDC.e",    // Optimism bridged
+  "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58": "USDT",      // Optimism
+  "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1": "DAI",       // Optimism (same addr on Arbitrum)
+  "0xaf88d065e77c8cc2239327c5edb3a432268e5831": "USDC",      // Arbitrum
+  "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8": "USDC.e",    // Arbitrum bridged
+  "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9": "USDT",      // Arbitrum
 };
 
 // Skip stablecoins — no capital gain/loss

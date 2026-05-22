@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db, agents, lots, opportunities } from "@taxee/db";
 import {
   CircleClient,
@@ -207,8 +207,45 @@ export async function runHeartbeat(agentId: string): Promise<{
     channels.push({ type: "telegram", chatId: (agent.policy as any).telegramChatId });
   }
 
+  // ── Dedup setup: collect signatures of pending (un-actioned, not in defer cooldown)
+  // opportunities so we don't spam the same lots on every heartbeat tick.
+  const pendingOpps = await db
+    .select()
+    .from(opportunities)
+    .where(
+      and(
+        eq(opportunities.agentId, agentId),
+        isNull(opportunities.approvedAt),
+        isNull(opportunities.executedAt),
+      ),
+    );
+
+  const NOW_MS = Date.now();
+  const activeSigs = new Set<string>();
+  for (const o of pendingOpps) {
+    if (o.deferredUntil && o.deferredUntil.getTime() < NOW_MS) continue;
+    const ca = o.candidateAction as { lots?: Array<{ id?: string }> } | null;
+    const lotIds = (ca?.lots ?? []).map((l) => l.id).filter(Boolean) as string[];
+    if (lotIds.length === 0) continue;
+    activeSigs.add(`${o.type}:${lotIds.slice().sort().join(",")}`);
+  }
+
+  const candidateSig = (c: CandidateAction): string | null => {
+    const ids = c.lots.map((l) => l.id).filter(Boolean) as string[];
+    if (ids.length === 0) return null;
+    return `${c.type}:${ids.slice().sort().join(",")}`;
+  };
+
   for (const candidate of allCandidates) {
     try {
+      const sig = candidateSig(candidate);
+      if (sig && activeSigs.has(sig)) {
+        console.log(
+          `[heartbeat] Skip duplicate ${candidate.type} for ${candidate.lots.length} lot(s) — already pending`,
+        );
+        continue;
+      }
+
       const decision = await reasonAboutAction(candidate, policy, realizedYtd);
 
       if (decision.decision === "SKIP") continue;
@@ -304,6 +341,8 @@ export async function runHeartbeat(agentId: string): Promise<{
             {
               actionId:             opp.id,
               agentId,
+              ...(agent.name           ? { walletLabel:   agent.name           } : {}),
+              ...(agent.walletAddress  ? { walletAddress: agent.walletAddress  } : {}),
               type:                 candidate.type,
               headline:             explanation.headline,
               explanationBody:      explanation.body,
@@ -325,6 +364,8 @@ export async function runHeartbeat(agentId: string): Promise<{
           );
         }
       }
+
+      if (sig) activeSigs.add(sig);
     } catch (err) {
       console.error(`[heartbeat] Error processing candidate ${candidate.id}:`, err);
     }

@@ -10,7 +10,19 @@
       "Bash(pnpm --filter @taxee/agent exec tsc --noEmit)",
       "Bash(git stash *)",
       "Bash(pnpm --filter @taxee/db generate)",
-      "Bash(pnpm --filter @taxee/api db:migrate)"
+      "Bash(pnpm --filter @taxee/api db:migrate)",
+      "Bash(kill 4960 3980 92859)",
+      "Bash(pnpm --filter @taxee/api dev)",
+      "Bash(pnpm --filter @taxee/agent dev)",
+      "Bash(pnpm --filter @taxee/telegram-bot dev)",
+      "Bash(lsof -iTCP:3001 -sTCP:LISTEN)",
+      "Bash(kill 77295 88454)",
+      "Bash(lsof -iTCP:3001 -sTCP:LISTEN -n -P)",
+      "Bash(ps -p 92706 -o pid,ppid,command)",
+      "Bash(kill 92706)",
+      "Bash(pnpm --filter @taxee/shared build)",
+      "Bash(pnpm --filter @taxee/notifications build)",
+      "Bash(awk '{print $2, $NF}')"
     ]
   }
 }

@@ -236,6 +236,8 @@ export interface ExplanationOutput {
 export interface OpportunityNotification {
   agentId: string;
   actionId: string;
+  walletLabel?: string;
+  walletAddress?: string;
   type: ActionType;
   headline: string;
   explanationBody: string;

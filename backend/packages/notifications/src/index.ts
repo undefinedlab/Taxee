@@ -55,7 +55,18 @@ function buildOpportunityText(n: OpportunityNotification): string {
     ROTATE:    "🔄",
   };
   const icon = icons[n.type] ?? "🔔";
-  lines.push(`${icon} *${n.headline}*`, ``);
+  lines.push(`${icon} *${n.headline}*`);
+
+  if (n.walletLabel || n.walletAddress) {
+    const short = n.walletAddress
+      ? `\`${n.walletAddress.slice(0, 6)}…${n.walletAddress.slice(-4)}\``
+      : "";
+    const label = n.walletLabel ? `*${n.walletLabel}*` : "";
+    const sep   = label && short ? " — " : "";
+    lines.push(`_Wallet: ${label}${sep}${short}_`);
+  }
+
+  lines.push(``);
 
   // ── Position snapshot ─────────────────────────────────────────────────────
   if (n.assetSymbol) {

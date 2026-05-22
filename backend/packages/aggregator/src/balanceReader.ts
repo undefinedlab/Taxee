@@ -15,6 +15,8 @@ const NETWORKS: Array<{ alchemyNetwork: string; chainId: number; label: string }
   { alchemyNetwork: "eth-sepolia",  chainId: 11155111, label: "Sepolia"      },
   { alchemyNetwork: "base-mainnet", chainId: 8453,     label: "Base"         },
   { alchemyNetwork: "base-sepolia", chainId: 84532,    label: "Base Sepolia" },
+  { alchemyNetwork: "opt-mainnet",  chainId: 10,       label: "Optimism"     },
+  { alchemyNetwork: "arb-mainnet",  chainId: 42161,    label: "Arbitrum"     },
 ];
 
 // ─── Known ERC-20 token address → symbol ─────────────────────────────────────
@@ -29,12 +31,26 @@ const KNOWN_TOKENS: Record<string, { symbol: string; decimals: number }> = {
   "0xdac17f958d2ee523a2206206994597c13d831ec7": { symbol: "USDT",  decimals: 6  },
   "0x6b175474e89094c44da98b954eedeac495271d0f": { symbol: "DAI",   decimals: 18 },
   "0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9": { symbol: "AAVE",  decimals: 18 },
-  // Base mainnet
+  // Base mainnet — wETH shares 0x4200… with Optimism (same address, both OP-stack)
   "0x4200000000000000000000000000000000000006": { symbol: "wETH",  decimals: 18 },
   "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": { symbol: "USDC",  decimals: 6  },
   "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf": { symbol: "wBTC",  decimals: 8  },
   "0x940181a94a35a4569e4529a3cdfb74e38fd98631": { symbol: "AERO",  decimals: 18 },
   "0x50c5725949a6f0c72e6c4a641f24049a917db0cb": { symbol: "DAI",   decimals: 18 },
+  // Optimism mainnet
+  "0x0b2c639c533813f4aa9d7837caf62653d097ff85": { symbol: "USDC",   decimals: 6  },
+  "0x7f5c764cbc14f9669b88837ca1490cca17c31607": { symbol: "USDC.e", decimals: 6  },
+  "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58": { symbol: "USDT",   decimals: 6  },
+  "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1": { symbol: "DAI",    decimals: 18 },
+  "0x68f180fcce6836688e9084f035309e29bf0a2095": { symbol: "wBTC",   decimals: 8  },
+  "0x4200000000000000000000000000000000000042": { symbol: "OP",     decimals: 18 },
+  // Arbitrum One
+  "0xaf88d065e77c8cc2239327c5edb3a432268e5831": { symbol: "USDC",   decimals: 6  },
+  "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8": { symbol: "USDC.e", decimals: 6  },
+  "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9": { symbol: "USDT",   decimals: 6  },
+  "0x82af49447d8a07e3bd95bd0d56f35241523fbab1": { symbol: "wETH",   decimals: 18 },
+  "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f": { symbol: "wBTC",   decimals: 8  },
+  "0x912ce59144191c1204e64559fe8253a0e49e6548": { symbol: "ARB",    decimals: 18 },
 };
 
 // Stablecoins — tracked for balances but not for tax lots
@@ -43,17 +59,20 @@ const STABLES = new Set(["USDC", "USDT", "DAI", "USDbC", "USDC.e"]);
 // ─── CoinGecko symbol → gecko id ─────────────────────────────────────────────
 
 const GECKO_ID: Record<string, string> = {
-  ETH:  "ethereum",
-  wETH: "weth",
-  BTC:  "bitcoin",
-  wBTC: "wrapped-bitcoin",
-  LINK: "chainlink",
-  UNI:  "uniswap",
-  AAVE: "aave",
-  AERO: "aerodrome-finance",
-  USDC: "usd-coin",
-  USDT: "tether",
-  DAI:  "dai",
+  ETH:     "ethereum",
+  wETH:    "weth",
+  BTC:     "bitcoin",
+  wBTC:    "wrapped-bitcoin",
+  LINK:    "chainlink",
+  UNI:     "uniswap",
+  AAVE:    "aave",
+  AERO:    "aerodrome-finance",
+  OP:      "optimism",
+  ARB:     "arbitrum",
+  USDC:    "usd-coin",
+  "USDC.e":"usd-coin",
+  USDT:    "tether",
+  DAI:     "dai",
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
