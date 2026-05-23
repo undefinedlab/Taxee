@@ -22,7 +22,9 @@
       "Bash(kill 92706)",
       "Bash(pnpm --filter @taxee/shared build)",
       "Bash(pnpm --filter @taxee/notifications build)",
-      "Bash(awk '{print $2, $NF}')"
+      "Bash(awk '{print $2, $NF}')",
+      "Bash(grep -rnE \"jurisdiction|US|365|wash.?sale|3000|3,000|\\\\\\\\\\\\$3000\" backend/packages/tax-engine/src backend/packages/compliance/src backend/packages/shared/src/types.ts)",
+      "Bash(pnpm --filter @taxee/tax-engine build)"
     ]
   }
 }

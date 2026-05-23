@@ -62,7 +62,12 @@ export function scanForHarvestOpportunities(
 
     const washSaleDaysRemaining = computeWashSaleDaysRemaining(openLots, now);
     const replacementAsset      = getReplacementAsset(position.assetId);
-    const estimatedTaxSaving    = Math.abs(unrealizedGainLoss) * 0.37;
+
+    // Tax-saving estimate by jurisdiction:
+    //   US — assume short-term ordinary income rate (37% top bracket; conservative upper bound)
+    //   UK — Capital Gains Tax higher rate (20% on crypto/shares above the £3K allowance)
+    const harvestRate           = policy.jurisdiction === "UK" ? 0.20 : 0.37;
+    const estimatedTaxSaving    = Math.abs(unrealizedGainLoss) * harvestRate;
 
     candidates.push({
       id: generateCandidateId("HARVEST", position.assetId, position.chainId),

@@ -42,7 +42,7 @@ export interface UserPolicy {
   rebalanceAggressiveness: RebalanceAggressiveness;
   allowedActions: ActionType[];
   maxTaxPerAction?: number;
-  jurisdiction: "US" | "OTHER";
+  jurisdiction: "US" | "UK";
 }
 
 export interface WalletBinding {
@@ -238,6 +238,7 @@ export interface OpportunityNotification {
   actionId: string;
   walletLabel?: string;
   walletAddress?: string;
+  jurisdiction?: "US" | "UK";
   type: ActionType;
   headline: string;
   explanationBody: string;
@@ -279,7 +280,7 @@ export interface ActionReceipt {
 export interface RegisterAgentRequest {
   walletAddress: string;
   chains: number[];
-  jurisdiction: "US" | "OTHER";
+  jurisdiction: "US" | "UK";
   harvestThresholdPct: number;
   maturationBufferDays?: number;
   approvalMode: ApprovalMode;

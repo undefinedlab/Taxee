@@ -270,6 +270,9 @@ importers:
       '@taxee/shared':
         specifier: workspace:*
         version: link:../shared
+      axios:
+        specifier: ^1.6.8
+        version: 1.16.1
       drizzle-orm:
         specifier: ^0.30.7
         version: 0.30.10(postgres@3.4.9)

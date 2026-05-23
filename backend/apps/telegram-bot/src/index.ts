@@ -4,7 +4,7 @@ import { spawn } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
 import { db, users, wallets, agents, opportunities, lots } from "@taxee/db";
-import { importLotsForWallet, fetchWalletPositions } from "@taxee/aggregator";
+import { importLotsForWallet, fetchWalletPositions, provisionCircleWallet, CircleClient } from "@taxee/aggregator";
 import { executeOpportunity } from "@taxee/execution";
 
 const __dirname  = path.dirname(fileURLToPath(import.meta.url));
@@ -59,6 +59,17 @@ async function getOrCreateAgentForWallet(
     jurisdiction:            "US",
     telegramChatId,
   };
+
+  const provision = await provisionCircleWallet({
+    idempotencyKey: `agent-${userId}-${normalized}`,
+    blockchain:     "BASE",
+  });
+  if (provision.status === "provisioned" && provision.wallet) {
+    console.log(`[bot] Created Circle wallet ${provision.wallet.id} for user ${userId}`);
+  } else if (provision.status === "failed") {
+    console.error(`[bot] Circle wallet provisioning failed for user ${userId}: ${provision.reason}`);
+  }
+
   const [created] = await db
     .insert(agents)
     .values({
@@ -68,22 +79,58 @@ async function getOrCreateAgentForWallet(
       status:        "active",
       approvalMode:  "manual",
       policy:        defaultPolicy,
+      ...(provision.wallet ? { circleWalletId: provision.wallet.id } : {}),
     })
     .returning();
   return created!;
 }
 
+const regionKeyboard = () =>
+  new InlineKeyboard()
+    .text("🇺🇸 United States", "region:US")
+    .text("🇬🇧 United Kingdom", "region:UK");
+
+async function jurisdictionLabel(j: string | null | undefined): Promise<string> {
+  if (j === "UK") return "🇬🇧 United Kingdom";
+  if (j === "US") return "🇺🇸 United States";
+  return "_not set_";
+}
+
 bot.command("start", async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  const user   = await getOrCreateUser(chatId);
+
+  if (!user.jurisdiction) {
+    await ctx.reply(
+      "👋 Welcome to *taxee* — your AI tax-routing agent.\n\n" +
+      "First, which tax regime should I use for your portfolio? " +
+      "This affects what counts as a taxable event, the holding-period rules, and the savings math.",
+      { parse_mode: "Markdown", reply_markup: regionKeyboard() }
+    );
+    return;
+  }
+
   await ctx.reply(
-    "👋 Welcome to *taxee* — your AI tax-routing agent.\n\n" +
+    `👋 Welcome back to *taxee*.\n\n` +
+    `🌍 Tax regime: ${await jurisdictionLabel(user.jurisdiction)} _(change with /region)_\n\n` +
     "I watch your DeFi portfolio for tax-smart opportunities: loss harvesting, maturation parking, rebalancing.\n\n" +
     "Send me a wallet address (0x...) to start — you can add multiple wallets.\n\n" +
     "Commands:\n" +
     "/wallets — list all linked wallets\n" +
     "/opportunities — pending actions across all wallets\n" +
     "/status — agent overview\n" +
-    "/mode manual|delegated — approval mode",
+    "/mode manual|delegated — approval mode\n" +
+    "/region — change tax regime (US / UK)",
     { parse_mode: "Markdown" }
+  );
+});
+
+bot.command("region", async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  const user   = await getOrCreateUser(chatId);
+  await ctx.reply(
+    `Current tax regime: ${await jurisdictionLabel(user.jurisdiction)}\n\nChoose a new one:`,
+    { parse_mode: "Markdown", reply_markup: regionKeyboard() }
   );
 });
 
@@ -243,16 +290,87 @@ bot.command("mode", async (ctx) => {
   );
 });
 
+bot.command("wallet", async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  const [user] = await db.select().from(users).where(eq(users.telegramId, chatId));
+  if (!user) { await ctx.reply("No account. Send /start first."); return; }
+
+  const agentList = await db.select().from(agents).where(eq(agents.userId, user.id));
+  const provisioned = agentList.filter((a) => a.circleWalletId);
+
+  if (provisioned.length === 0) {
+    await ctx.reply(
+      "No Circle wallets provisioned yet.\n\n" +
+      "Each linked DeFi wallet gets a Circle developer wallet on Base for autonomous execution. " +
+      "Send a 0x... address to provision one, or check that CIRCLE_API_KEY / CIRCLE_ENTITY_SECRET / CIRCLE_WALLET_SET_ID are set on the backend."
+    );
+    return;
+  }
+
+  const apiKey       = process.env["CIRCLE_API_KEY"];
+  const entitySecret = process.env["CIRCLE_ENTITY_SECRET"];
+  if (!apiKey || !entitySecret) {
+    await ctx.reply("Circle credentials missing on the backend — can't fetch balances.");
+    return;
+  }
+  const circle = new CircleClient(
+    apiKey,
+    (process.env["CIRCLE_ENVIRONMENT"] ?? "sandbox") as "sandbox" | "production",
+    entitySecret,
+  );
+
+  const blocks: string[] = [];
+  for (const a of provisioned) {
+    try {
+      const wallet   = await circle.getWallet(a.circleWalletId!);
+      const balances = await circle.getBalances(a.circleWalletId!);
+
+      const lines = [
+        `*${a.name}* _(${a.walletAddress?.slice(0, 6)}…${a.walletAddress?.slice(-4)})_`,
+        `🔐 Circle wallet: \`${wallet.address}\` on ${wallet.blockchain}`,
+      ];
+
+      if (balances.length === 0) {
+        lines.push(`💤 _Empty — no tokens held yet._`);
+      } else {
+        for (const b of balances) {
+          const amt = parseFloat(b.amount);
+          if (amt < 0.0001) continue;
+          lines.push(`  • ${b.token.symbol}: ${amt.toFixed(b.token.symbol === "USDC" || b.token.symbol === "USYC" ? 2 : 6)}`);
+        }
+      }
+      blocks.push(lines.join("\n"));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      blocks.push(`*${a.name}* — ⚠️ failed to fetch: ${msg}`);
+    }
+  }
+
+  await ctx.reply(
+    `💼 *Your Circle Wallets (${provisioned.length})*\n\n${blocks.join("\n\n")}`,
+    { parse_mode: "Markdown" },
+  );
+});
+
 bot.on("message:text", async (ctx) => {
   const text = ctx.message.text.trim();
   if (!ETH_ADDRESS.test(text)) return;
 
   const chatId    = String(ctx.chat.id);
   const normalized = text.toLowerCase();
+
+  const user = await getOrCreateUser(chatId);
+  if (!user.jurisdiction) {
+    await ctx.reply(
+      "Before linking a wallet, please choose your tax regime — it changes which opportunities I'll surface:",
+      { reply_markup: regionKeyboard() }
+    );
+    return;
+  }
+
   await ctx.reply("⏳ Linking wallet and setting up your agent...");
 
   try {
-    const user = await getOrCreateUser(chatId);
 
     const existingWallets = await db.select().from(wallets).where(eq(wallets.userId, user.id));
     const alreadyLinked   = existingWallets.find((w) => w.address === normalized);
@@ -356,8 +474,33 @@ bot.on("message:text", async (ctx) => {
 
 bot.on("callback_query:data", async (ctx) => {
   const data = ctx.callbackQuery.data;
-  const [, oppId, action] = data.split(":");
   const chatId = String(ctx.chat?.id ?? "");
+
+  // ── Region picker ────────────────────────────────────────────────────────
+  if (data.startsWith("region:")) {
+    const region = data.split(":")[1];
+    if (region !== "US" && region !== "UK") {
+      await ctx.answerCallbackQuery({ text: "Unknown region." });
+      return;
+    }
+    const user = await getOrCreateUser(chatId);
+    await db.update(users).set({ jurisdiction: region }).where(eq(users.id, user.id));
+    await ctx.editMessageReplyMarkup(undefined);
+    await ctx.answerCallbackQuery({ text: `Set to ${region === "UK" ? "🇬🇧 UK" : "🇺🇸 US"}` });
+    await ctx.reply(
+      region === "UK"
+        ? "🇬🇧 *UK tax regime selected.*\n\nI'll surface loss-harvesting opportunities and respect the 30-day matching rule. " +
+          "Note: PARK strategies (waiting for long-term threshold) don't apply under UK CGT — those will be skipped.\n\n" +
+          "Send a wallet address (0x...) when you're ready."
+        : "🇺🇸 *US tax regime selected.*\n\nI'll surface loss harvesting, maturation parking, and rebalancing opportunities " +
+          "following US capital-gains rules (365-day long-term threshold, 30-day wash-sale window).\n\n" +
+          "Send a wallet address (0x...) when you're ready.",
+      { parse_mode: "Markdown" }
+    );
+    return;
+  }
+
+  const [, oppId, action] = data.split(":");
 
   const [user] = await db.select().from(users).where(eq(users.telegramId, chatId));
   if (!user) { await ctx.answerCallbackQuery({ text: "Account not linked." }); return; }
@@ -368,14 +511,27 @@ bot.on("callback_query:data", async (ctx) => {
     if (!opp) { await ctx.answerCallbackQuery({ text: "Opportunity not found." }); return; }
 
     if (action === "approve") {
-      await db.update(opportunities).set({ approvedAt: new Date() }).where(eq(opportunities.id, oppId));
-
       const [agent] = await db.select().from(agents).where(eq(agents.id, opp.agentId));
-      if (agent?.circleWalletId && (opp as any).candidateAction) {
-        executeOpportunity(oppId).catch((err: unknown) =>
-          console.error(`[bot] Execution failed for opportunity ${oppId}:`, err)
+
+      if (!agent?.circleWalletId) {
+        await ctx.answerCallbackQuery({ text: "⚠️ No Circle wallet — can't execute" });
+        await ctx.reply(
+          "⚠️ This agent has no Circle wallet provisioned yet, so I can't execute on-chain.\n\n" +
+          "Re-link the wallet (send the 0x... address again) and I'll create the Circle wallet during setup. " +
+          "If that still fails, check the backend logs for the provisioning error.",
         );
+        return;
       }
+      if (!(opp as any).candidateAction) {
+        await ctx.answerCallbackQuery({ text: "⚠️ Missing candidate snapshot — can't execute" });
+        await ctx.reply("⚠️ This opportunity was created before execution snapshots existed. Skip or wait for a fresh one.");
+        return;
+      }
+
+      await db.update(opportunities).set({ approvedAt: new Date() }).where(eq(opportunities.id, oppId));
+      executeOpportunity(oppId).catch((err: unknown) =>
+        console.error(`[bot] Execution failed for opportunity ${oppId}:`, err)
+      );
     } else if (action === "defer") {
       const deferredUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
       await db.update(opportunities).set({ deferDays: 30, deferredUntil }).where(eq(opportunities.id, oppId));

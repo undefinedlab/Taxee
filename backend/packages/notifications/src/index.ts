@@ -121,7 +121,16 @@ function buildOpportunityText(n: OpportunityNotification): string {
 
   // ── Tax saving ────────────────────────────────────────────────────────────
   if (n.taxSavingEstimate > 0) {
-    lines.push(`💰 *Est. tax saving: $${n.taxSavingEstimate.toFixed(0)}*`);
+    const isUK   = n.jurisdiction === "UK";
+    const symbol = isUK ? "£" : "$";
+    // Values are computed from USD price feeds; UK display approximates GBP 1:1.
+    // Users see the symbol matching their regime so the regime feels native.
+    const suffix = isUK ? " _(approx — exchange-rate-adjusted at execution)_" : "";
+    lines.push(`💰 *Est. tax saving: ${symbol}${n.taxSavingEstimate.toFixed(0)}*${suffix}`);
+  }
+
+  if (n.jurisdiction === "UK") {
+    lines.push(``, `_🇬🇧 Regime: UK CGT (20% higher rate) — 30-day matching rule applied._`);
   }
 
   if (n.approvalMode === "delegated" && n.autoExecuteAt) {

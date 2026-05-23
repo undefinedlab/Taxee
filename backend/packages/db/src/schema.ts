@@ -11,11 +11,12 @@ export const approvalModeEnum = pgEnum("approval_mode", ["manual", "delegated"])
 export const decisionEnum    = pgEnum("llm_decision", ["EXECUTE", "DEFER", "SKIP"]);
 
 export const users = pgTable("users", {
-  id:         uuid("id").primaryKey().defaultRandom(),
-  address:    text("address").unique(),
-  telegramId: text("telegram_id").unique(),
-  createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt:  timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  id:           uuid("id").primaryKey().defaultRandom(),
+  address:      text("address").unique(),
+  telegramId:   text("telegram_id").unique(),
+  jurisdiction: text("jurisdiction"),
+  createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
   addressIdx: uniqueIndex("users_address_idx").on(t.address),
 }));
@@ -78,6 +79,11 @@ export const opportunities = pgTable("opportunities", {
   candidateAction:     jsonb("candidate_action"),
   arcRecordId:         text("arc_record_id"),
   txHash:              text("tx_hash"),
+  parkTxHash:          text("park_tx_hash"),
+  bridgeTxHash:        text("bridge_tx_hash"),
+  executionStatus:     text("execution_status"),
+  executionError:      text("execution_error"),
+  failedAt:            timestamp("failed_at", { withTimezone: true }),
   promptVersion:       text("prompt_version").notNull(),
   executedAt:          timestamp("executed_at", { withTimezone: true }),
   approvedAt:          timestamp("approved_at", { withTimezone: true }),

@@ -1,5 +1,5 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { db, agents, lots, opportunities } from "@taxee/db";
+import { db, agents, lots, opportunities, users } from "@taxee/db";
 import {
   CircleClient,
   ArcClient,
@@ -104,15 +104,24 @@ export async function runHeartbeat(agentId: string): Promise<{
     console.log(`[heartbeat] ALCHEMY_API_KEY not set — using existing lots from DB`);
   }
 
+  const [agentOwner] = await db.select().from(users).where(eq(users.id, agent.userId));
+  const userJurisdiction = (agentOwner?.jurisdiction === "UK" ? "UK" : "US") as "US" | "UK";
+
   const DEFAULT_POLICY: UserPolicy = {
     primaryObjective:        "minimize_tax",
     harvestThresholdPct:     -8,
     maturationBufferDays:    30,
     rebalanceAggressiveness: "moderate",
-    allowedActions:          ["HARVEST", "PARK", "REBALANCE"],
-    jurisdiction:            "US",
+    allowedActions:          userJurisdiction === "UK"
+      ? ["HARVEST", "REBALANCE"]      // UK: no long-term threshold, PARK is meaningless
+      : ["HARVEST", "PARK", "REBALANCE"],
+    jurisdiction:            userJurisdiction,
   };
-  const policy: UserPolicy = { ...DEFAULT_POLICY, ...(agent.policy as Partial<UserPolicy>) };
+  const policy: UserPolicy = {
+    ...DEFAULT_POLICY,
+    ...(agent.policy as Partial<UserPolicy>),
+    jurisdiction: userJurisdiction,     // user setting always wins over agent.policy default
+  };
 
   const openLots = await db
     .select()
@@ -295,7 +304,7 @@ export async function runHeartbeat(agentId: string): Promise<{
             type:            candidate.type,
             headline:        explanation.headline,
             taxSavingActual: explanation.taxSavingEstimate,
-            arcRecordId:     receipt.arcRecordId,
+            arcRecordId:     receipt.arcRecordId ?? "n/a",
             executedAt:      new Date(),
             llmReasoning:    decision.reasoning,
             dashboardUrl:    "",
@@ -341,6 +350,7 @@ export async function runHeartbeat(agentId: string): Promise<{
             {
               actionId:             opp.id,
               agentId,
+              jurisdiction:         userJurisdiction,
               ...(agent.name           ? { walletLabel:   agent.name           } : {}),
               ...(agent.walletAddress  ? { walletAddress: agent.walletAddress  } : {}),
               type:                 candidate.type,
@@ -356,8 +366,8 @@ export async function runHeartbeat(agentId: string): Promise<{
               currentValueUsd:      currentVal,
               unrealizedPct,
               daysHeld:             avgDaysHeld,
-              replacementAsset:     candidate.replacementAsset,
-              washSaleDaysRemaining: candidate.washSaleDaysRemaining,
+              ...(candidate.replacementAsset ? { replacementAsset: candidate.replacementAsset } : {}),
+              ...(candidate.washSaleDaysRemaining !== undefined ? { washSaleDaysRemaining: candidate.washSaleDaysRemaining } : {}),
               regime:               regime.regime.label,
             },
             channels

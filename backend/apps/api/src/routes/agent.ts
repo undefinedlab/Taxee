@@ -3,7 +3,7 @@ import { db } from "../db/client.js";
 import { agents } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { parseGoal } from "@taxee/llm";
-import { CircleClient } from "@taxee/aggregator";
+import { provisionCircleWallet } from "@taxee/aggregator";
 
 export const agentRoutes: FastifyPluginAsync = async (app) => {
   const auth = { preHandler: [(app as any).authenticate] };
@@ -32,38 +32,22 @@ export const agentRoutes: FastifyPluginAsync = async (app) => {
 
     const policy = await parseGoal(goalStatement);
 
-    let circleWalletId: string | undefined;
-    const apiKey      = process.env["CIRCLE_API_KEY"];
-    const entitySecret = process.env["CIRCLE_ENTITY_SECRET"];
-    const walletSetId  = process.env["CIRCLE_WALLET_SET_ID"];
-
-    if (apiKey && entitySecret && walletSetId) {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const circle = new (CircleClient as any)(
-          apiKey,
-          (process.env["CIRCLE_ENVIRONMENT"] ?? "sandbox") as "sandbox" | "production",
-          entitySecret
-        ) as CircleClient;
-
-        const wallet = await (circle as any).createDeveloperWallet({
-          idempotencyKey: `agent-${userId}-${Date.now()}`,
-          walletSetId,
-          blockchain: "BASE",
-        });
-        circleWalletId = wallet.id;
-        console.log(`[agent] Created Circle wallet ${circleWalletId} for user ${userId}`);
-      } catch (err: unknown) {
-        console.error("[agent] Circle wallet creation failed (non-fatal):", err);
-      }
+    const provision = await provisionCircleWallet({
+      idempotencyKey: `agent-${userId}-${walletAddress ?? Date.now()}`,
+      blockchain:     "BASE",
+    });
+    if (provision.status === "provisioned" && provision.wallet) {
+      console.log(`[agent] Created Circle wallet ${provision.wallet.id} for user ${userId}`);
+    } else if (provision.status === "failed") {
+      console.error(`[agent] Circle wallet provisioning failed: ${provision.reason}`);
     }
 
     const [agent] = await db
       .insert(agents)
       .values({
         userId,
-        ...(circleWalletId !== undefined ? { circleWalletId } : {}),
-        ...(walletAddress  !== undefined ? { walletAddress  } : {}),
+        ...(provision.wallet ? { circleWalletId: provision.wallet.id } : {}),
+        ...(walletAddress    !== undefined ? { walletAddress } : {}),
         name:   name ?? "My taxee Agent",
         policy: policy as any,
         status: "active",

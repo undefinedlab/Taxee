@@ -23,7 +23,8 @@
     "@taxee/db": "workspace:*",
     "@taxee/compliance": "workspace:*",
     "drizzle-orm": "^0.30.7",
-    "viem": "^2.10.0"
+    "viem": "^2.10.0",
+    "axios": "^1.6.8"
   },
   "devDependencies": {
     "typescript": "^5.4.5"

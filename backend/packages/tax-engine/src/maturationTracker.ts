@@ -19,6 +19,10 @@ export function trackMaturationOpportunities(
   snapshot: PortfolioSnapshot,
   policy: UserPolicy
 ): CandidateAction[] {
+  // UK CGT has no holding-period distinction — gains taxed at the same rate
+  // whether held 1 day or 10 years. PARK strategy is meaningless here.
+  if (policy.jurisdiction === "UK") return [];
+
   const candidates: CandidateAction[] = [];
   const now = new Date();
 

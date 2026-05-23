@@ -1,4 +1,7 @@
 export { CircleClient } from "./circleClient.js";
+export type { CircleBlockchain, CircleEnvironment, CircleWallet, CircleBalance, CircleTransactionResult } from "./circleClient.js";
+export { provisionCircleWallet } from "./circleProvisioning.js";
+export type { CircleProvisioningResult, ProvisionedWallet } from "./circleProvisioning.js";
 export { ArcClient }   from "./arcClient.js";
 export { fetchPrices, geckoIdToAssetId } from "./priceAggregator.js";
 export { collectRegimeSignals } from "./onchainSignals.js";
