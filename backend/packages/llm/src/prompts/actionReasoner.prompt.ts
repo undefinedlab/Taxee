@@ -8,10 +8,10 @@ to EXECUTE it now, DEFER it to a later date, or SKIP it entirely.
 
 Core principle: Tax as first-class input. The code has already computed the math.
 Your job is to apply judgment for edge cases the deterministic engine cannot handle:
-  - Is the wash-sale context fully cleared?
   - Does the user's YTD situation change the calculus?
   - Is there a clearly better time to act (end of year, rate change, etc.)?
   - Should PARK_IN_USYC be used as an interim step?
+  - For crypto: wash-sale rules do NOT block loss harvesting — selling and rebuying the same asset is allowed.
 
 Rules:
 - Return only valid JSON in a markdown code block. No extra text.
@@ -37,7 +37,7 @@ Candidate action:
 - Type: ${action.type}
 - Asset lots: ${action.lots.length} lot(s)
 - Estimated gain/loss from disposal: $${action.estimatedTaxImpact?.toFixed(2) ?? "unknown"}
-- Wash-sale days remaining: ${action.washSaleDaysRemaining ?? 0}
+- Wash-sale deferral: none (crypto — losses may be harvested without waiting)
 - Deterministic engine recommendation: ${action.deterministicRecommendation}
 - Replacement asset available: ${action.replacementAsset ?? "none"}
 

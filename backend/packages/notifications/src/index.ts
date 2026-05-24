@@ -92,10 +92,7 @@ function buildOpportunityText(n: OpportunityNotification): string {
     if (n.replacementAsset) {
       lines.push(`🔄 *Replacement asset:* ${n.replacementAsset} _(maintains market exposure)_`);
     }
-    if (n.washSaleDaysRemaining !== undefined) {
-      const washOk = n.washSaleDaysRemaining === 0;
-      lines.push(`${washOk ? "✅" : "⚠️"} *Wash-sale window:* ${washOk ? "clear" : `${n.washSaleDaysRemaining}d remaining — loss may be disallowed`}`);
-    }
+    // Wash-sale timing not applied for crypto portfolios
     lines.push(``);
   }
 

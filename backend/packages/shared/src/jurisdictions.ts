@@ -14,7 +14,7 @@ export interface JurisdictionProfile {
   code: JurisdictionCode;
   label: string;
   flag: string;
-  /** Long-term holding threshold strategies (PARK) */
+  /** Long-term holding threshold strategies (PARK) — enabled for all jurisdictions */
   supportsLongTermParking: boolean;
   /** Estimated marginal rate for harvest savings math */
   harvestTaxRate: number;
@@ -38,61 +38,61 @@ export const JURISDICTION_PROFILES: Record<JurisdictionCode, JurisdictionProfile
     code: "UK",
     label: "United Kingdom",
     flag: "🇬🇧",
-    supportsLongTermParking: false,
+    supportsLongTermParking: true,
     harvestTaxRate: 0.2,
     defaultHarvestThresholdPct: -8,
     defaultMaturationBufferDays: 30,
-    defaultAllowedActions: ["HARVEST", "REBALANCE"],
+    defaultAllowedActions: ["HARVEST", "PARK", "REBALANCE"],
   },
   EU: {
     code: "EU",
     label: "Europe",
     flag: "🇪🇺",
-    supportsLongTermParking: false,
+    supportsLongTermParking: true,
     harvestTaxRate: 0.25,
     defaultHarvestThresholdPct: -8,
     defaultMaturationBufferDays: 30,
-    defaultAllowedActions: ["HARVEST", "REBALANCE"],
+    defaultAllowedActions: ["HARVEST", "PARK", "REBALANCE"],
   },
   BR: {
     code: "BR",
     label: "Brasil",
     flag: "🇧🇷",
-    supportsLongTermParking: false,
+    supportsLongTermParking: true,
     harvestTaxRate: 0.225,
     defaultHarvestThresholdPct: -10,
     defaultMaturationBufferDays: 30,
-    defaultAllowedActions: ["HARVEST", "REBALANCE"],
+    defaultAllowedActions: ["HARVEST", "PARK", "REBALANCE"],
   },
   MX: {
     code: "MX",
     label: "Mexico",
     flag: "🇲🇽",
-    supportsLongTermParking: false,
+    supportsLongTermParking: true,
     harvestTaxRate: 0.35,
     defaultHarvestThresholdPct: -8,
     defaultMaturationBufferDays: 30,
-    defaultAllowedActions: ["HARVEST", "REBALANCE"],
+    defaultAllowedActions: ["HARVEST", "PARK", "REBALANCE"],
   },
   IN: {
     code: "IN",
     label: "India",
     flag: "🇮🇳",
-    supportsLongTermParking: false,
+    supportsLongTermParking: true,
     harvestTaxRate: 0.3,
     defaultHarvestThresholdPct: -10,
     defaultMaturationBufferDays: 30,
-    defaultAllowedActions: ["HARVEST", "REBALANCE"],
+    defaultAllowedActions: ["HARVEST", "PARK", "REBALANCE"],
   },
   OTHER: {
     code: "OTHER",
     label: "Other / multi-country",
     flag: "🌍",
-    supportsLongTermParking: false,
+    supportsLongTermParking: true,
     harvestTaxRate: 0.25,
     defaultHarvestThresholdPct: -8,
     defaultMaturationBufferDays: 30,
-    defaultAllowedActions: ["HARVEST", "REBALANCE"],
+    defaultAllowedActions: ["HARVEST", "PARK", "REBALANCE"],
   },
 };
 
@@ -141,16 +141,13 @@ export function buildAgentPolicy(
   overrides: AgentPolicyOverrides = {},
 ): UserPolicy {
   const profile = getJurisdictionProfile(jurisdiction);
-  const allowedActions = profile.supportsLongTermParking
-    ? profile.defaultAllowedActions
-    : profile.defaultAllowedActions.filter((a) => a !== "PARK");
 
   return {
     primaryObjective:        overrides.primaryObjective ?? "minimize_tax",
     harvestThresholdPct:     overrides.harvestThresholdPct ?? profile.defaultHarvestThresholdPct,
     maturationBufferDays:    overrides.maturationBufferDays ?? profile.defaultMaturationBufferDays,
     rebalanceAggressiveness: overrides.rebalanceAggressiveness ?? "moderate",
-    allowedActions,
+    allowedActions: profile.defaultAllowedActions,
     jurisdiction:            profile.code,
     minHarvestLossUsd:       overrides.minHarvestLossUsd ?? 0,
     heartbeatIntervalMinutes: overrides.heartbeatIntervalMinutes ?? 30,

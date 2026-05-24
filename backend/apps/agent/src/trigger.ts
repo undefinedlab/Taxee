@@ -25,7 +25,7 @@ async function main() {
     console.log(`\n── Agent ${id} ─────────────────────────`);
     try {
       const result = await runHeartbeat(id);
-      console.log(`✅ Done: ${result.opportunitiesFound} opportunities found, ${result.actionsExecuted} executed`);
+      console.log(`✅ Done: ${result.candidatesFound} candidates, ${result.opportunitiesSaved} saved, ${result.actionsExecuted} executed`);
     } catch (err) {
       console.error(`❌ Error:`, err);
     }

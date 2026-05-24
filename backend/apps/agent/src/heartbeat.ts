@@ -56,7 +56,10 @@ const arc = new ArcClient(
  *   8. LLM: generate explanation → send notification
  */
 export async function runHeartbeat(agentId: string): Promise<{
-  opportunitiesFound: number;
+  /** Raw tax-engine matches before LLM */
+  candidatesFound: number;
+  /** Rows inserted into opportunities (pending notify) */
+  opportunitiesSaved: number;
   actionsExecuted: number;
 }> {
   console.log(`[heartbeat] Starting for agent ${agentId}`);
@@ -68,7 +71,7 @@ export async function runHeartbeat(agentId: string): Promise<{
 
   if (!agent || agent.status !== "active") {
     console.log(`[heartbeat] Agent ${agentId} is not active, skipping`);
-    return { opportunitiesFound: 0, actionsExecuted: 0 };
+    return { candidatesFound: 0, opportunitiesSaved: 0, actionsExecuted: 0 };
   }
 
   const walletAddress = agent.walletAddress;
@@ -219,6 +222,7 @@ export async function runHeartbeat(agentId: string): Promise<{
   );
 
   let actionsExecuted = 0;
+  let opportunitiesSaved = 0;
 
   const channels: NotificationChannel[] = [];
   if (agent.policy && (agent.policy as any).telegramChatId) {
@@ -266,7 +270,10 @@ export async function runHeartbeat(agentId: string): Promise<{
 
       const decision = await reasonAboutAction(candidate, policy, realizedYtd);
 
-      if (decision.decision === "SKIP") continue;
+      if (decision.decision === "SKIP") {
+        console.log(`[heartbeat] LLM SKIP ${candidate.type}: ${decision.reasoning.slice(0, 120)}`);
+        continue;
+      }
 
       const explanation = await generateExplanation({
         actionType:         candidate.type,
@@ -323,6 +330,7 @@ export async function runHeartbeat(agentId: string): Promise<{
         );
 
         actionsExecuted++;
+        opportunitiesSaved++;
       } else {
         const [opp] = await db.insert(opportunities).values({
           agentId,
@@ -382,6 +390,7 @@ export async function runHeartbeat(agentId: string): Promise<{
             channels
           );
         }
+        if (opp) opportunitiesSaved++;
       }
 
       if (sig) activeSigs.add(sig);
@@ -391,8 +400,12 @@ export async function runHeartbeat(agentId: string): Promise<{
   }
 
   console.log(
-    `[heartbeat] Done for agent ${agentId}: ${allCandidates.length} found, ${actionsExecuted} executed`
+    `[heartbeat] Done for agent ${agentId}: ${allCandidates.length} candidates, ${opportunitiesSaved} saved, ${actionsExecuted} executed`,
   );
 
-  return { opportunitiesFound: allCandidates.length, actionsExecuted };
+  return {
+    candidatesFound: allCandidates.length,
+    opportunitiesSaved,
+    actionsExecuted,
+  };
 }

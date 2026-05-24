@@ -29,7 +29,7 @@ const correlationData = JSON.parse(
  *   1. Compute unrealized loss percentage vs cost basis
  *   2. If loss exceeds policy.harvestThresholdPct → flag HARVEST
  *   3. Attach a correlated replacement asset (to maintain exposure post-harvest)
- *   4. Check wash-sale window (30 days since last purchase of the same asset)
+ *   4. Crypto: no wash-sale deferral — losses may be harvested and exposure re-established
  *
  * Pure function — no side effects, no API calls.
  */
@@ -71,8 +71,7 @@ export function scanForHarvestOpportunities(
 
     if (openLots.length === 0) continue;
 
-    const washSaleDaysRemaining = computeWashSaleDaysRemaining(openLots, now);
-    const replacementAsset      = getReplacementAsset(position.assetId);
+    const replacementAsset = getReplacementAsset(position.assetId);
 
     const harvestRate = getHarvestTaxRate(policy);
     const estimatedTaxSaving    = Math.abs(unrealizedGainLoss) * harvestRate;
@@ -86,42 +85,13 @@ export function scanForHarvestOpportunities(
       estimatedTaxImpact: -estimatedTaxSaving,
       estimatedGas: estimateGasCost(position.chainId),
       ...(replacementAsset !== undefined ? { replacementAsset } : {}),
-      washSaleDaysRemaining,
-      deterministicRecommendation: washSaleDaysRemaining > 0 ? "DEFER" : "EXECUTE",
+      washSaleDaysRemaining: 0,
+      deterministicRecommendation: "EXECUTE",
       createdAt: now,
     });
   }
 
   return candidates.sort((a, b) => b.priority - a.priority);
-}
-
-/**
- * Compute how many days remain in the wash-sale window.
- *
- * Wash sale rule (US): if the same or substantially identical asset was purchased
- * within 30 days before or after a sale, the loss is disallowed.
- *
- * Here we check: was the most recent lot acquired within the last 30 days?
- * If so, we must wait before harvesting to avoid triggering wash sale.
- *
- * NOTE: Crypto wash sale rules are unsettled under current US law (as of 2026).
- * taxee applies them conservatively by default.
- */
-function computeWashSaleDaysRemaining(lots: Lot[], now: Date): number {
-  const WASH_SALE_DAYS = 30;
-  let maxDaysRemaining = 0;
-
-  for (const lot of lots) {
-    const daysSinceAcquisition = Math.floor(
-      (now.getTime() - new Date(lot.acquiredAt).getTime()) / (1000 * 60 * 60 * 24)
-    );
-    const daysRemaining = WASH_SALE_DAYS - daysSinceAcquisition;
-    if (daysRemaining > 0) {
-      maxDaysRemaining = Math.max(maxDaysRemaining, daysRemaining);
-    }
-  }
-
-  return maxDaysRemaining;
 }
 
 /**

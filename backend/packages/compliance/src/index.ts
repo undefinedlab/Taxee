@@ -6,7 +6,7 @@ import { selectLots } from "@taxee/tax-engine";
  *
  * These are deterministic checks that can never be overridden:
  *   1. Action type allowed by user policy
- *   2. Wash-sale window fully closed (if enforcement enabled)
+ *   2. Wash-sale (disabled for crypto — not enforced)
  *   3. Lot manifest valid (quantities balance, no closed lots)
  *   4. Tax impact within per-action cap (if set by user)
  *
@@ -64,12 +64,9 @@ export function validateForExecution(
   };
 }
 
-/**
- * Check that a lot is not in a wash-sale period.
- * Returns true if the lot is safe to harvest.
- */
-export function isWashSaleSafe(action: CandidateAction): boolean {
-  return (action.washSaleDaysRemaining ?? 0) === 0;
+/** Crypto: wash-sale timing is not enforced — sell and rebuy to harvest losses. */
+export function isWashSaleSafe(_action: CandidateAction): boolean {
+  return true;
 }
 
 /**

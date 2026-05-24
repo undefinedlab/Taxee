@@ -1,5 +1,4 @@
 import type { PortfolioSnapshot, UserPolicy, CandidateAction, Lot } from "@taxee/shared";
-import { supportsLongTermParking } from "@taxee/shared";
 
 const LONG_TERM_THRESHOLD_DAYS = 365;
 
@@ -20,8 +19,6 @@ export function trackMaturationOpportunities(
   snapshot: PortfolioSnapshot,
   policy: UserPolicy
 ): CandidateAction[] {
-  if (!supportsLongTermParking(policy)) return [];
-
   const candidates: CandidateAction[] = [];
   const now = new Date();
 

@@ -40,7 +40,7 @@ cron.schedule("* * * * *", async () => {
           .where(eq(agents.id, agent.id));
 
         console.log(
-          `[agent] agent=${agent.id} interval=${intervalMin}m found=${result.opportunitiesFound} executed=${result.actionsExecuted}`,
+          `[agent] agent=${agent.id} interval=${intervalMin}m saved=${result.opportunitiesSaved} candidates=${result.candidatesFound} executed=${result.actionsExecuted}`,
         );
       } catch (err) {
         console.error(`[agent] Heartbeat error for agent ${agent.id}:`, err);

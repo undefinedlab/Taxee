@@ -568,12 +568,26 @@ bot.on("message:text", async (ctx) => {
 
     // ── Step 3: run tax scan (harvest / park / rebalance) + notify via Telegram ─
     void runHeartbeat(agent.id)
-      .then((result) => {
+      .then(async (result) => {
         console.log(
-          `[bot] heartbeat agent=${agent.id} opportunities=${result.opportunitiesFound} executed=${result.actionsExecuted}`,
+          `[bot] heartbeat agent=${agent.id} saved=${result.opportunitiesSaved} candidates=${result.candidatesFound} executed=${result.actionsExecuted}`,
         );
+        if (result.opportunitiesSaved === 0) {
+          await ctx.reply(
+            "✅ *Tax analysis complete.*\n\n" +
+              "No actionable opportunities right now — positions are roughly flat vs cost basis " +
+              `(harvest needs ≥${Math.abs((agent.policy as { harvestThresholdPct?: number })?.harvestThresholdPct ?? 5)}% loss). ` +
+              "I'll notify you on the next scan or try `/opportunities`.",
+            { parse_mode: "Markdown" },
+          );
+        }
       })
-      .catch((err) => console.error("[bot] heartbeat failed:", err));
+      .catch(async (err) => {
+        console.error("[bot] heartbeat failed:", err);
+        await ctx.reply(
+          "⚠️ Tax analysis failed. Check bot logs (`ANTHROPIC_API_KEY`, `COINGECKO_API_KEY`). Try sending your wallet again.",
+        );
+      });
   } catch (err) {
     console.error("[bot] wallet handler error:", err);
     await ctx.reply("❌ Failed to set up agent. Please try again.");
