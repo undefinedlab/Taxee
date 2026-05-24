@@ -25,19 +25,19 @@ function NewsItem({
   text: string;
 }) {
   return (
-    <span className="mx-5 inline-flex items-center gap-2 sm:mx-6">
-      <span className="inline-flex shrink-0 items-center gap-1.5 bg-[#ecfdf3] px-2 py-0.5 font-landing text-[10px] font-bold uppercase tracking-wide text-[#166534] dark:bg-[#14532d]/40 dark:text-[#86efac]">
-        <span className="h-1.5 w-1.5 animate-pulse bg-[#3dcc4e]" />
+    <span className="mx-5 inline-flex items-center gap-2.5 sm:mx-7">
+      <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-black/10 bg-black/[0.04] px-2.5 py-0.5 font-landing text-[10px] font-semibold uppercase tracking-wide text-black/50 dark:border-white/10 dark:bg-white/[0.06] dark:text-white/50">
+        <span className="h-1.5 w-1.5 rounded-full bg-[#3dcc4e]/70" />
         {badge}
       </span>
-      <span className="whitespace-nowrap font-landing text-[12px] text-[#374151] dark:text-[#d1d5db] sm:text-[13px]">
+      <span className="whitespace-nowrap font-landing text-[12px] text-black/40 dark:text-white/40 sm:text-[13px]">
         {text}
       </span>
     </span>
   );
 }
 
-/** Inline ticker for hero header — between logo and profile menu */
+/** Inline ticker — CSS scroll with soft edge mask (no solid fade panels) */
 export function NewsMarquee() {
   const track = (
     <>
@@ -50,12 +50,10 @@ export function NewsMarquee() {
   return (
     <div
       id="news"
-      className="relative hidden min-w-0 flex-1 items-center overflow-hidden md:flex"
+      className="landing-marquee-mask relative hidden min-w-0 flex-1 overflow-hidden md:flex"
       aria-label="Product news"
     >
-      <div className="pointer-events-none absolute left-0 z-10 h-full w-12 bg-gradient-to-r from-[#f8f7f5]/95 via-[#f8f7f5]/40 to-transparent dark:from-[#0c0e12]/95 dark:via-[#0c0e12]/40" />
-      <div className="pointer-events-none absolute right-0 z-10 h-full w-12 bg-gradient-to-l from-[#f8f7f5]/95 via-[#f8f7f5]/40 to-transparent dark:from-[#0c0e12]/95 dark:via-[#0c0e12]/40" />
-      <div className="landing-marquee-track flex w-max items-center py-1">
+      <div className="landing-marquee-track flex w-max items-center py-1 opacity-90">
         {track}
         {track}
       </div>

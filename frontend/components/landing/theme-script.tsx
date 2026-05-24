@@ -1,6 +1,6 @@
-/** Runs before paint to avoid theme flash on landing */
+/** Runs before paint — default dark unless user chose light */
 export function ThemeScript() {
-  const script = `(function(){try{var k='taxee-theme',t=localStorage.getItem(k);if(t==='dark')document.documentElement.classList.add('dark');else if(t==='light')document.documentElement.classList.remove('dark');}catch(e){}})();`;
+  const script = `(function(){try{var k='taxee-theme',t=localStorage.getItem(k);if(t==='light')document.documentElement.classList.remove('dark');else document.documentElement.classList.add('dark');}catch(e){document.documentElement.classList.add('dark');}})();`;
   return (
     <script
       dangerouslySetInnerHTML={{ __html: script }}

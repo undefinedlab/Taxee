@@ -23,7 +23,7 @@ export function LandingPage() {
                     <a
                       key={link.href}
                       href={link.href}
-                      className="landing-animate-in font-landing text-[15px] leading-relaxed text-black transition-colors hover:text-[#6b7280] dark:text-[#f3f4f6] dark:hover:text-[#9ca3af]"
+                      className="landing-animate-in font-landing text-[15px] leading-relaxed text-black/40 transition-colors hover:text-black/75 dark:text-[#f3f4f6]/40 dark:hover:text-[#f3f4f6]/85"
                       style={{ animationDelay: `${0.1 + i * 0.04}s` }}
                     >
                       {link.label}
@@ -90,11 +90,8 @@ export function LandingPage() {
 
               <div className="landing-area-photo landing-glass-cell landing-grid-line relative hidden min-h-[200px] overflow-hidden border-b lg:block lg:min-h-[140px] lg:border-b-0 lg:border-r">
                 <div className="relative flex h-full min-h-[140px] flex-col justify-end p-6 lg:p-8">
-                  <p className="font-landing text-[10px] font-bold uppercase tracking-[0.12em] text-[#6b7280] dark:text-[#9ca3af]">
-                    Why it matters
-                  </p>
-                  <p className="mt-2 max-w-[200px] font-serif text-lg font-semibold leading-snug text-black dark:text-[#f9fafb]">
-                    Gross-optimized ≠ after-tax-optimized
+                  <p className="max-w-[200px] font-serif text-lg font-semibold leading-snug text-black dark:text-[#f9fafb]">
+                    Keep more of what you earn
                   </p>
                 </div>
               </div>

@@ -20,6 +20,15 @@ const config: Config = {
           muted: "#10b981",
         },
         warn: "#fbbf24",
+        // New institutional palette
+        navy: {
+          deep: "#0a1628",
+          light: "#0f172a",
+        },
+        charcoal: "#1e293b",
+        gold: "#d4af37",
+        "warm-white": "#fafaf9",
+        // Keep existing landing colors for backward compatibility
         landing: {
           grid: "#e8eaed",
           green: "#3dcc4e",

@@ -1,66 +1,83 @@
-/** Landing copy aligned with doc.md product vision */
+/** Landing copy — sourced from doc.md product spec */
 
 export const hero = {
-  eyebrow: "DeFi portfolio agent",
-  title: "Optimize after-tax return — not gross performance",
+  eyebrow: "DeFi Portfolio Agent",
+  title: "Maximise your after tax alpha.",
   subtitle:
-    "taxee is a cross-chain agent that embeds tax awareness into every rebalance, rotation, hold, and harvest — so compounding works in your favor, not against it.",
+    "AI portfolio agent that optimizes after-tax return — not just the gross performance. Tax-loss harvesting, lot optimization, and long-term holding embedded into every rebalance.",
   ctaPrimary: "Register your agent",
-  ctaSecondary: "Open demo dashboard",
+  ctaSecondary: "See demo dashboard",
 } as const;
 
 export const heroStats = [
-  { value: "+2.8%", label: "After-tax alpha vs gross-only" },
-  { value: "3", label: "Chains — Ethereum, Base, Arbitrum" },
-  { value: "$12.4k", label: "Tax cost avoided (demo YTD)" },
+  { value: "+3%", label: "After-tax alpha vs gross-only" },
+  { value: "+8%", label: "Saved in tax drag" },
+  { value: "F8949", label: "Auto-generated, audit-ready" },
 ] as const;
 
 export const problem = {
-  label: "The problem",
-  title: "DeFi agents are blind to taxes",
-  lead: "They rebalance on drift, rotate on regime, and harvest gains across chains — while silently destroying after-tax returns.",
+  label: "Problem",
+  title: "Today's agents are blind to taxes",
+  lead: "DeFi portfolio agents rebalance when drift exceeds a threshold, rotate into yield when regimes shift, and harvest gains across chains — all while silently destroying after-tax returns in the process.",
   bullets: [
     {
-      title: "Every disposal",
-      body: "is a taxable event. Gross-optimized sells don't account for what you owe.",
+      icon: "chart-down" as const,
+      title: "Every disposal is a taxable event",
+      body: "Rotations and exits trigger gains without lot-level awareness. Each sale compounds at your highest marginal rate.",
     },
     {
-      title: "Every rebalance",
-      body: "has a tax cost. Drift correction can cost more than the drift itself.",
+      icon: "layers" as const,
+      title: "Every rebalance has a tax cost",
+      body: "Fixing portfolio drift can cost more in taxes than the drift itself. Gross-only agents never run that math.",
     },
     {
-      title: "Every mistimed hold",
-      body: "leaves long-term treatment on the table — one day short of 365 costs real money.",
+      icon: "clock" as const,
+      title: "Money left on the table",
+      body: "Every win held one day short of long-term treatment forfeits the lower rate. Precision lot tracking is required.",
     },
   ],
-  closing:
-    "Institutional desks solved this decades ago with tax-managed funds. DeFi users have had nothing — until now.",
 } as const;
 
 export const solution = {
-  label: "The solution",
-  title: "Tax engine inside every portfolio decision",
-  lead: "After-tax return is the primary optimization target. The tax layer doesn't sit on top of management — it's embedded inside it.",
-  decisions: [
+  label: "Solution",
+  title: "What taxee does for your portfolio",
+  lead: "taxee is a cross-chain portfolio agent that treats after-tax return as the primary optimization target — not gross performance, what you actually keep. It runs continuously across your portfolio, layering tax awareness into every rebalance, harvest, and hold.",
+  items: [
     {
-      decision: "Rebalance",
-      behavior: "Weigh disposal cost vs drift cost before acting",
+      icon: "trend-up" as const,
+      title: "Regime-aware, tax-adjusted rebalancing",
+      description:
+        "Detects risk-on/risk-off shifts via onchain signals. Before executing any rebalance, weighs the tax cost of disposal against the drift cost of inaction. Delays or splits rebalances when the math doesn't justify the tax hit.",
     },
     {
-      decision: "Rotate",
-      behavior: "Factor regime benefit against realized gains",
+      icon: "harvest" as const,
+      title: "Continuous cross-chain loss harvesting",
+      description:
+        "Scans all positions across chains in real time. When an asset crosses a configurable loss threshold, the agent harvests it, replaces it with a correlated asset to maintain exposure, and books the loss against realized gains — automatically.",
     },
     {
-      decision: "Hold",
-      behavior: "Protect lots approaching long-term treatment",
-    },
-    {
-      decision: "Harvest",
-      behavior: "Book losses automatically when thresholds are hit",
+      icon: "calendar" as const,
+      title: "Holding-period maturation engine",
+      description:
+        "Tracks the age of every lot. Capital approaching long-term threshold (365 days) is parked in USYC — earning yield while it ages — rather than disposed of prematurely at short-term rates.",
     },
   ],
-  control:
-    "Approve each move manually, or delegate within policy — always with notifications and a full audit trail on Arc.",
+  control: "",
+  configurator: {
+    title: "Policy Configurator",
+    subtitle: "Adjust settings to see projected impact",
+    defaults: {
+      harvestThreshold: 500,
+      aggressiveness: "conservative",
+      priority: "standard",
+    },
+    projections: {
+      annualSavings: 2840,
+      harvestsPerYear: 12,
+      avgHoldTime: 180,
+      longTermCapture: 94,
+    },
+  },
 } as const;
 
 export const howItWorks = {
@@ -68,132 +85,141 @@ export const howItWorks = {
   title: "Set up once. Run continuously.",
   phases: [
     {
-      tag: "Phase 1 — Once",
+      phase: 1,
+      icon: "wallet" as const,
       title: "Onboarding",
       description:
-        "Connect wallet, import onchain history, set jurisdiction and harvest threshold. Two minutes — never again.",
-      href: "/onboarding" as const,
+        "Connect wallet, import history, set jurisdiction. Your lot ledger — every cost basis and holding period — is built once.",
     },
     {
-      tag: "Phase 2 — Always on",
+      phase: 2,
+      icon: "pulse" as const,
       title: "Heartbeat",
       description:
-        "Hourly scan of prices, lots, and regime. The agent reasons; you only hear when there's an opportunity.",
-      metric: "60m",
-      metricLabel: "scan interval",
+        "Hourly scans of prices, lots, and regimes. The agent surfaces harvest, rebalance, and park opportunities — you hear about it only when it matters.",
     },
     {
-      tag: "Phase 3 — Your call",
+      phase: 3,
+      icon: "loop" as const,
       title: "Action loop",
       description:
-        "Execute, Defer, or Skip — or delegate so harvest, park, and rebalance run within guardrails. Receipt every time.",
-      href: "/dashboard/demo" as const,
-    },
-  ],
-} as const;
-
-export const features = {
-  label: "Features",
-  title: "What taxee does for your portfolio",
-  items: [
-    {
-      tag: "Rebalance",
-      title: "Regime-aware, tax-adjusted",
-      description:
-        "Detects risk-on/risk-off via onchain signals. Weighs tax cost of disposal against drift of inaction — delays or splits when the math doesn't justify the hit.",
-      metric: "−8%",
-      metricLabel: "typical tax drag avoided",
-      accent: "green" as const,
-    },
-    {
-      tag: "Harvest",
-      title: "Cross-chain loss harvesting",
-      description:
-        "Scans all positions in real time. When loss crosses your threshold, harvests, replaces with a correlated asset for exposure, and books the loss — automatically.",
-      accent: "blue" as const,
-    },
-    {
-      tag: "Maturation",
-      title: "Holding-period engine",
-      description:
-        "Tracks every lot. Capital near 365 days parks in USYC for yield while aging — not sold early at short-term rates. Actions scheduled for threshold day.",
-      metric: "365d",
-      metricLabel: "long-term threshold",
-      accent: "both" as const,
-    },
-    {
-      tag: "Dashboard",
-      title: "After-tax alpha",
-      description:
-        "After-tax return vs benchmark front and center — not gross. Plus harvested losses YTD, tax cost avoided, and estimated year-end liability.",
-      metric: "+2.8%",
-      metricLabel: "vs gross-only",
-      accent: "green" as const,
-      href: "/dashboard/demo" as const,
+        "Approve each move, or delegate inside policy. Every disposal is logged on Arc with lot ID, basis, and rationale.",
     },
   ],
 } as const;
 
 export const execution = {
   label: "Execution",
-  title: "Tax-cost-aware execution via Circle",
+  title: "Tax-cost-aware execution via Circle stack",
   items: [
     {
-      title: "Specific-ID lots",
+      icon: "fingerprint" as const,
+      title: "Specific-ID lot selection",
       description:
-        "IRS-compliant disposal targeting on every trade. Arc logs each event — Form 8949, pre-filled.",
+        "IRS-compliant disposal targeting on every trade. Sell highest-cost-basis lots first to minimize realized gains.",
       accent: "green" as const,
     },
     {
+      icon: "bridge" as const,
       title: "CCTP & Gateway",
       description:
-        "Cross-chain moves with consistent settlement across Ethereum, Base, and Arbitrum.",
+        "Cross-chain moves with consistent settlement across Ethereum, Base, and Arbitrum. No fragmented liquidity.",
       accent: "blue" as const,
     },
     {
-      title: "Paymaster gas",
-      description: "Gas paid in USDC. No ETH required in wallet for agent execution.",
+      icon: "zap" as const,
+      title: "Paymaster",
+      description: "Gas fees paid in USDC. No ETH required in wallet for agent execution.",
       accent: "both" as const,
     },
+    {
+      icon: "layers" as const,
+      title: "Arc ledger",
+      description:
+        "Immutable transaction record for every disposal — your Form 8949, pre-filled and audit-ready.",
+      accent: "green" as const,
+    },
   ],
+  modes: {
+    label: "Control",
+    title: "Manual approval or delegated execution",
+    manual: {
+      tag: "Manual",
+      title: "You approve every move",
+      description: "Execute, Defer, or Skip from Telegram or dashboard. Nothing runs until you confirm. Full reasoning chain visible.",
+      flow: ["Detect", "Notify", "Decide"],
+      timeline: [
+        { time: "Hour 0", action: "Detect", icon: "pulse" },
+        { time: "Hour 0", action: "You decide", icon: "user" },
+        { time: "Hour 0", action: "Confirm", icon: "check" },
+      ],
+      bestFor: ["Learning", "Large trades", "New users"],
+    },
+    delegated: {
+      tag: "Delegated",
+      title: "Agent runs within policy",
+      description: "Delegate approval inside guardrails. Harvest, park, and rebalance fire automatically when decision engine and LLM agree. You always get a receipt and Arc audit entry.",
+      flow: ["Detect", "Validate", "Execute"],
+      timeline: [
+        { time: "Hour 0", action: "Detect", icon: "pulse" },
+        { time: "Hour 0", action: "Executed", icon: "zap" },
+        { time: "Hour 0", action: "Receipt", icon: "receipt" },
+      ],
+      bestFor: ["Set-and-forget", "Active portfolios", "Tax-aware users"],
+      recommended: true,
+    },
+  },
 } as const;
 
 export const approvalModes = [
   {
+    icon: "hand" as const,
     tag: "Manual approval",
-    title: "You approve every move",
+    title: "Approve each move",
     description:
-      "Execute, Defer, or Skip from Telegram or the dashboard. Nothing runs until you confirm — full control, full reasoning chain visible.",
+      "The agent proposes — you Execute, Defer, or Skip before any transaction. Best for first-time users, large tax impact, or learning how the agent reasons.",
     variant: "neutral" as const,
   },
   {
+    icon: "bolt" as const,
     tag: "Delegated",
     title: "Agent runs within policy",
     description:
-      "Delegate approval inside guardrails. Harvest, park, and rebalance fire automatically — you always get a receipt and Arc audit entry.",
+      "Delegate approval inside guardrails. Harvest, park, and rebalance fire automatically when the decision engine and LLM agree — always with notifications and a full audit trail on Arc.",
     variant: "highlight" as const,
   },
 ] as const;
 
 export const channels = [
   {
+    icon: "monitor" as const,
     title: "Web dashboard",
-    desc: "Register, monitor positions, approve or review actions.",
+    desc: "Register, monitor positions, approve or review actions, toggle manual or delegated mode.",
   },
   {
+    icon: "message" as const,
     title: "Telegram bot",
-    desc: "Onboard, get notified, inline Execute / Defer / Skip.",
+    desc: "Onboard via /start, get notified, inline Execute / Defer / Skip, post-action receipts.",
   },
   {
+    icon: "plug" as const,
     title: "MCP / OpenClaw",
-    desc: "Bring your own agent — taxee_scan & approve tools.",
+    desc: "Bring your own agent — taxee_scan runs the pipeline, taxee_approve_action for manual flows.",
   },
 ] as const;
 
 export const cta = {
-  title: "Start optimizing what you keep",
+  eyebrow: "Ready when you are",
+  title: "Start maximising your after-tax alpha now.",
   subtitle:
-    "Register in two minutes. Open alpha — watch tier uses address only, no seed phrase.",
+    "",
   primary: "Register your agent",
+  primaryHint: "~2 min setup",
   secondary: "View demo dashboard",
+  ticker: [
+    { value: "2,847", label: "agents registered" },
+    { value: "$4.2M", label: "tax saved" },
+    { value: "12,493", label: "harvests executed" },
+    { value: "94%", label: "long-term rate capture" },
+  ],
 } as const;

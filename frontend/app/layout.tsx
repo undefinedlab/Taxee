@@ -28,6 +28,10 @@ export const metadata: Metadata = {
   title: "taxee — After-tax DeFi portfolio agent",
   description:
     "The first DeFi portfolio agent that optimizes after-tax return — not gross performance. Cross-chain rebalance, harvest, and hold with tax awareness embedded in every decision.",
+  icons: {
+    icon: "/logo-mark.png",
+    apple: "/logo-mark.png",
+  },
 };
 
 export default function RootLayout({
@@ -36,7 +40,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className="dark" suppressHydrationWarning>
       <head>
         <ThemeScript />
       </head>

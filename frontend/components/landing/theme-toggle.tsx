@@ -38,7 +38,7 @@ function MoonIcon({ className }: { className?: string }) {
 }
 
 export function ThemeToggle() {
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(true);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {

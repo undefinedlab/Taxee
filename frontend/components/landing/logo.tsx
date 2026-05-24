@@ -1,15 +1,19 @@
+import Image from "next/image";
 import Link from "next/link";
-import { TaxeeLogoMark } from "@/components/landing/taxee-logo-mark";
 
 export function TaxeeLogo({ showWordmark = false }: { showWordmark?: boolean }) {
   return (
-    <span className="flex items-center gap-2.5 text-[#111827] dark:text-[#f9fafb]">
-      <TaxeeLogoMark
-        className="h-8 w-[27px] sm:h-9 sm:w-[31px]"
-        title="taxee"
+    <span className="flex items-center gap-3 text-[#111827] dark:text-[#f9fafb]">
+      <Image
+        src="/logo-mark.png"
+        alt=""
+        width={36}
+        height={36}
+        className="h-8 w-auto sm:h-9 dark:invert"
+        priority
       />
       {showWordmark ? (
-        <span className="font-landing text-[15px] font-semibold tracking-tight">
+        <span className="font-serif text-[1.35rem] font-bold leading-none tracking-tight sm:text-2xl">
           taxee
         </span>
       ) : null}

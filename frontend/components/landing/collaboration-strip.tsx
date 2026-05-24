@@ -6,7 +6,7 @@ const partners = [
 
 export function CollaborationStrip() {
   return (
-    <div className="px-4 py-10 sm:px-6 sm:py-12 lg:py-14">
+    <div className="px-4 pb-6 pt-10 sm:px-6 sm:pb-8 sm:pt-12 lg:pb-10 lg:pt-14">
       <p className="text-center font-landing text-[11px] font-medium uppercase tracking-[0.2em] text-[#9ca3af] dark:text-[#6b7280]">
         In collaboration with
       </p>

@@ -1,11 +1,17 @@
 import Link from "next/link";
-import { FeatureCard } from "@/components/landing/feature-card";
+import { DashboardShowcase } from "@/components/landing/dashboard-showcase";
+import { TaxComparisonChart } from "@/components/landing/tax-comparison-chart";
+import { IconTile } from "@/components/landing/icon-tile";
+import { ApprovalModesPanel } from "@/components/landing/approval-modes-panel";
+import { SectionIcon } from "@/components/landing/section-icon";
+import { HowItWorksStep } from "@/components/landing/how-it-works-step";
+import { LandingBandSection } from "@/components/landing/landing-band-section";
+import { ValueCardsCarousel } from "@/components/landing/value-cards-carousel";
+import { ValueCard } from "@/components/landing/value-card";
 import {
-  approvalModes,
   channels,
   cta,
   execution,
-  features,
   howItWorks,
   problem,
   solution,
@@ -13,255 +19,206 @@ import {
 import { SectionHeader } from "@/components/landing/section-header";
 import { cn } from "@/lib/utils";
 
-const cardShell = "landing-card-sharp landing-glass";
-
 export function LandingScrollSections() {
   return (
-    <div className="mx-auto mt-10 max-w-[1320px] space-y-6 pb-16 sm:mt-12 sm:space-y-8 lg:space-y-10">
-      {/* Problem */}
-      <section id="problem" className={cardShell}>
-        <SectionHeader
-          label={problem.label}
-          title={problem.title}
-          description={problem.lead}
-        />
-        <div className="grid divide-y divide-white/40 dark:divide-white/10 md:grid-cols-3 md:divide-x md:divide-y-0">
-          {problem.bullets.map((item) => (
-            <div
+    <div className="mx-auto mt-10 max-w-[1320px] space-y-8 px-4 pb-24 sm:mt-12 sm:space-y-10 sm:px-5 lg:mt-14 lg:space-y-12 lg:px-8">
+      <LandingBandSection id="problem" className="landing-scroll-band-tight">
+        <div className="landing-scroll-hero-row landing-scroll-hero-row--tight !items-stretch">
+          <SectionHeader
+            layout="hero"
+            label={problem.label}
+            title={problem.title}
+            description={problem.lead}
+            className="order-1 lg:flex lg:flex-col lg:justify-center"
+          />
+          <div className="order-2 flex min-h-[300px] min-w-0 flex-col lg:min-h-0 lg:self-stretch">
+            <ValueCardsCarousel
+              items={problem.bullets.map((item) => ({
+                icon: item.icon,
+                title: item.title,
+                description: item.body,
+              }))}
+              ariaLabel="Problem points"
+              emphasis="large"
+            />
+          </div>
+        </div>
+      </LandingBandSection>
+
+      <LandingBandSection
+        id="solution"
+        className="landing-scroll-stack landing-scroll-band-tight !mt-16 sm:!mt-20 lg:!mt-24"
+      >
+        <div className="landing-scroll-hero-row landing-scroll-hero-row--tight">
+          <div className="order-2 min-w-0 lg:order-1">
+            <TaxComparisonChart />
+          </div>
+          <SectionHeader
+            layout="heroRight"
+            label={solution.label}
+            title={solution.title}
+            description={solution.lead}
+            className="order-1 lg:order-2 lg:flex lg:flex-col lg:justify-center"
+          />
+        </div>
+        <div className="grid gap-5 sm:grid-cols-3 sm:gap-6 lg:gap-7">
+          {solution.items.map((item) => (
+            <ValueCard
               key={item.title}
-              className="landing-glass-cell px-6 py-8 sm:px-10 sm:py-10 lg:px-12 lg:py-12"
-            >
-              <h3 className="font-landing text-lg font-semibold text-black dark:text-[#f9fafb]">
-                {item.title}
-              </h3>
-              <p className="mt-3 font-landing text-[14px] leading-relaxed text-[#4b5563] dark:text-[#9ca3af]">
-                {item.body}
-              </p>
-            </div>
+              icon={item.icon}
+              title={item.title}
+              description={item.description}
+              layout="stack"
+              size="lg"
+              titleSize="lg"
+              iconVariant="plain"
+            />
           ))}
         </div>
-        <p className="landing-grid-line border-t px-6 py-6 font-landing text-[14px] font-medium text-[#1f2937] dark:text-[#e5e7eb] sm:px-10 lg:px-12">
-          {problem.closing}
-        </p>
-      </section>
+        {solution.control ? (
+          <p className="mx-auto max-w-2xl text-center font-landing text-[14px] leading-[1.75] text-[#6b7280] dark:text-[#9ca3af]">
+            {solution.control}
+          </p>
+        ) : null}
+      </LandingBandSection>
 
-      {/* Solution — decision matrix */}
-      <section id="solution" className={cardShell}>
+      <LandingBandSection id="execution">
         <SectionHeader
-          label={solution.label}
-          title={solution.title}
-          description={solution.lead}
+          layout="centered"
+          label={execution.label}
+          title={execution.title}
+          className="!mx-auto !max-w-4xl sm:!max-w-5xl"
         />
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[520px] border-collapse font-landing text-left text-[14px]">
-            <thead>
-              <tr className="landing-grid-line border-b landing-glass-cell">
-                <th className="px-6 py-4 font-semibold text-black dark:text-[#f9fafb] sm:px-10 lg:px-12">
-                  Decision
-                </th>
-                <th className="px-6 py-4 font-semibold text-black dark:text-[#f9fafb] sm:pr-10 lg:pr-12">
-                  Tax-aware behavior
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {solution.decisions.map((row, i) => (
-                <tr
-                  key={row.decision}
-                  className={cn(
-                    "landing-grid-line border-b last:border-b-0",
-                    i % 2 === 1 && "landing-glass-cell",
-                  )}
-                >
-                  <td className="px-6 py-4 font-semibold text-black dark:text-[#f9fafb] sm:px-10 lg:px-12">
-                    <span className="mr-2 inline-block h-2 w-2 bg-[#3dcc4e]" />
-                    {row.decision}
-                  </td>
-                  <td className="px-6 py-4 text-[#4b5563] dark:text-[#9ca3af] sm:pr-10 lg:pr-12">
-                    {row.behavior}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="grid gap-6 sm:grid-cols-2 sm:gap-8 lg:grid-cols-4 lg:gap-10">
+          {execution.items.map((item) => (
+            <IconTile
+              key={item.title}
+              icon={item.icon}
+              title={item.title}
+              description={item.description}
+            />
+          ))}
         </div>
-        <p className="landing-grid-line border-t px-6 py-6 font-landing text-[13px] text-[#6b7280] dark:text-[#9ca3af] sm:px-10 lg:px-12">
-          {solution.control}
-        </p>
-      </section>
+      </LandingBandSection>
 
-      {/* How it works */}
-      <section id="how-it-works" className={cardShell}>
+      <LandingBandSection id="approval">
+        <ApprovalModesPanel
+          label={execution.modes.label}
+          title={execution.modes.title}
+          lead="Same opportunity flow — you choose whether to confirm each move or delegate within guardrails."
+          manual={{
+            icon: "hand",
+            tag: execution.modes.manual.tag,
+            title: execution.modes.manual.title,
+            description: execution.modes.manual.description,
+            flow: execution.modes.manual.flow,
+            bestFor: execution.modes.manual.bestFor,
+          }}
+          automatic={{
+            icon: "bolt",
+            tag: execution.modes.delegated.tag,
+            title: execution.modes.delegated.title,
+            description: execution.modes.delegated.description,
+            flow: execution.modes.delegated.flow,
+            bestFor: execution.modes.delegated.bestFor,
+          }}
+          defaultMode="automatic"
+        />
+      </LandingBandSection>
+
+      <LandingBandSection id="how-it-works">
         <SectionHeader
+          layout="centered"
           label={howItWorks.label}
           title={howItWorks.title}
         />
-        <div className="grid divide-y divide-white/40 dark:divide-white/10 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+        <div className="grid gap-10 sm:grid-cols-2 sm:gap-12 lg:grid-cols-3 lg:gap-14">
           {howItWorks.phases.map((phase) => (
-            <FeatureCard
+            <HowItWorksStep
               key={phase.title}
-              className="!border-0"
-              tag={phase.tag}
+              phase={phase.phase}
+              icon={phase.icon}
               title={phase.title}
               description={phase.description}
-              metric={"metric" in phase ? phase.metric : undefined}
-              metricLabel={"metricLabel" in phase ? phase.metricLabel : undefined}
-              accent={
-                phase.title === "Heartbeat"
-                  ? "blue"
-                  : phase.title === "Onboarding"
-                    ? "both"
-                    : "green"
-              }
-              href={"href" in phase ? phase.href : undefined}
             />
           ))}
         </div>
-      </section>
+      </LandingBandSection>
 
-      {/* Features */}
-      <section id="features" className={cardShell}>
-        <SectionHeader label={features.label} title={features.title} />
-        <div className="grid divide-y divide-white/40 dark:divide-white/10 md:grid-cols-2 md:divide-x md:divide-y-0">
-          {features.items.map((item, i) => (
-            <FeatureCard
-              key={item.title}
-              className={cn("!border-0", i >= 2 && "md:border-t")}
-              tag={item.tag}
-              title={item.title}
-              description={item.description}
-              metric={"metric" in item ? item.metric : undefined}
-              metricLabel={"metricLabel" in item ? item.metricLabel : undefined}
-              accent={item.accent}
-              href={"href" in item ? item.href : undefined}
-            />
-          ))}
-        </div>
-      </section>
-
-      {/* Circle execution */}
-      <section id="execution" className={cardShell}>
-        <SectionHeader label={execution.label} title={execution.title} />
-        <div className="grid divide-y divide-white/40 dark:divide-white/10 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
-          {execution.items.map((item) => (
-            <FeatureCard
-              key={item.title}
-              className="!border-0"
-              title={item.title}
-              description={item.description}
-              accent={item.accent}
-            />
-          ))}
-        </div>
-      </section>
-
-      {/* Approval modes */}
-      <section id="approval" className={cardShell}>
+      <LandingBandSection id="platforms">
         <SectionHeader
-          label="Control"
-          title="Manual approval or delegated — your choice"
-        />
-        <div className="grid md:grid-cols-2">
-          {approvalModes.map((mode) => (
-            <div
-              key={mode.tag}
-              className={cn(
-                "p-8 sm:p-10 lg:p-12",
-                mode.variant === "neutral"
-                  ? "landing-grid-line landing-glass-cell border-b md:border-b-0 md:border-r"
-                  : "landing-glass-accent",
-              )}
-            >
-              <span
-                className={cn(
-                  "inline-block px-3 py-1 font-landing text-[11px] font-semibold",
-                  mode.variant === "highlight"
-                    ? "bg-[#3dcc4e]/20 text-[#166534] dark:text-[#86efac]"
-                    : "bg-[#f3f4f6] text-black dark:bg-[#1f2937] dark:text-[#f9fafb]",
-                )}
-              >
-                {mode.tag}
-              </span>
-              <h3 className="mt-4 font-serif text-xl font-bold text-black dark:text-[#f9fafb]">
-                {mode.title}
-              </h3>
-              <p className="mt-3 font-landing text-[14px] leading-relaxed text-[#4b5563] dark:text-[#9ca3af]">
-                {mode.description}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Channels */}
-      <section className={cardShell}>
-        <SectionHeader
-          label="Access"
+          layout="centered"
+          label="Platforms"
           title="Reachable where you already work"
+          description="Web, Telegram, or your own agent via MCP — onboard, notify, approve, and audit from the surface you prefer."
         />
-        <div className="grid sm:grid-cols-3">
-          {channels.map((item, i) => (
-            <div
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
+          {channels.map((item) => (
+            <ValueCard
               key={item.title}
-              className={cn(
-                "landing-grid-line landing-glass-cell border-b p-7 sm:border-b-0 sm:p-8 lg:p-10",
-                i > 0 && "sm:border-l",
-              )}
-            >
-              <h3 className="font-landing text-[15px] font-semibold text-black dark:text-[#f9fafb]">
-                {item.title}
-              </h3>
-              <p className="mt-1.5 font-landing text-[13px] text-[#6b7280] dark:text-[#9ca3af]">
-                {item.desc}
-              </p>
-            </div>
+              icon={item.icon}
+              title={item.title}
+              description={item.desc}
+              layout="row"
+              size="lg"
+              iconVariant="plain"
+            />
           ))}
         </div>
-      </section>
+      </LandingBandSection>
 
-      {/* CTA */}
-      <section
-        id="contact"
-        className="landing-card-sharp landing-glass-cta"
-      >
-        <div className="flex flex-col items-start justify-between gap-8 px-8 py-12 sm:flex-row sm:items-center sm:px-10 lg:px-14 lg:py-16">
-          <div>
-            <h2 className="font-serif text-2xl font-bold text-white sm:text-3xl">
+      <LandingBandSection id="contact" className="!py-10 sm:!py-12 lg:!py-14">
+        <div className="landing-scroll-cta-grid">
+          <div className="max-w-xl">
+            <p className="font-landing text-[11px] font-bold uppercase tracking-[0.14em] text-[#6b7280] dark:text-[#9ca3af]">
+              {cta.eyebrow}
+            </p>
+            <h2 className="mt-3 font-serif text-[2rem] font-bold leading-[1.08] tracking-tight text-black dark:text-[#f9fafb] sm:text-[2.5rem] lg:text-[2.85rem] xl:text-[3.1rem]">
               {cta.title}
             </h2>
-            <p className="mt-2 max-w-md font-landing text-[14px] leading-relaxed text-[#9ca3af]">
+            <p className="mt-5 max-w-lg font-landing text-base leading-[1.75] text-[#4b5563] dark:text-[#9ca3af] sm:text-[17px]">
               {cta.subtitle}
             </p>
+            <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center">
+              <Link
+                href="/onboarding"
+                className="group inline-flex items-stretch overflow-hidden bg-black shadow-[0_6px_24px_rgba(0,0,0,0.14)] dark:bg-[#f9fafb] dark:shadow-none"
+              >
+                <span className="flex flex-col justify-center px-7 py-4 sm:px-8">
+                  <span className="font-landing text-[15px] font-semibold text-white dark:text-[#111827] sm:text-base">
+                    {cta.primary}
+                  </span>
+                  <span className="mt-0.5 font-landing text-[11px] font-medium text-white/70 dark:text-[#111827]/65">
+                    {cta.primaryHint}
+                  </span>
+                </span>
+                <span className="flex w-14 items-center justify-center bg-[#3dcc4e] transition-colors group-hover:bg-[#34b844] sm:w-16">
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    stroke="#111827"
+                    strokeWidth="2.2"
+                    aria-hidden
+                  >
+                    <path d="M5 10h10M11 6l4 4-4 4" />
+                  </svg>
+                </span>
+              </Link>
+              <Link
+                href="/dashboard/demo"
+                className="font-landing text-[15px] font-medium text-black underline-offset-4 hover:underline dark:text-[#f9fafb] sm:px-2"
+              >
+                {cta.secondary}
+              </Link>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-3">
-            <Link
-              href="/onboarding"
-              className="landing-glass-btn inline-flex items-stretch overflow-hidden rounded-lg font-landing text-[14px] font-medium text-[#111827]"
-            >
-              <span className="px-6 py-3">{cta.primary}</span>
-              <span className="flex w-12 items-center justify-center bg-[#3dcc4e]">
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 20 20"
-                  fill="none"
-                  stroke="#111827"
-                  strokeWidth="2.2"
-                  aria-hidden
-                >
-                  <path d="M5 10h10M11 6l4 4-4 4" />
-                </svg>
-              </span>
-            </Link>
-            <Link
-              href="/dashboard/demo"
-              className="border border-[#374151] px-6 py-3 font-landing text-[14px] font-medium text-white transition-colors hover:bg-[#1f2937]"
-            >
-              {cta.secondary}
-            </Link>
+          <div className="landing-scroll-cta-deco min-h-[12rem] sm:min-h-[14rem]" aria-hidden>
+            <DashboardShowcase />
           </div>
         </div>
-      </section>
+      </LandingBandSection>
     </div>
   );
 }
