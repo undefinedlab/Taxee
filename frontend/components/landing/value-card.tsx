@@ -12,7 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 
 interface ValueCardProps {
-  icon: SectionIconName;
+  icon?: SectionIconName;
   title: string;
   description: string;
   href?: string;
@@ -53,7 +53,7 @@ export function ValueCard({
   const plainGridCols =
     iconScale === "xl" ? PLAIN_ICON_XL_GRID_COLS : PLAIN_ICON_LG_GRID_COLS;
 
-  const iconEl = (
+  const iconEl = icon ? (
     <SectionIcon
       name={icon}
       variant={iconVariant}
@@ -69,7 +69,7 @@ export function ValueCard({
               : "mb-5",
       )}
     />
-  );
+  ) : null;
 
   const textBlock = (
     <>
@@ -129,19 +129,23 @@ export function ValueCard({
       <div
         className={cn(
           "grid h-full w-full min-h-0",
-          isLg
+          icon && isLg
             ? cn(plainGridCols, "items-center gap-x-4 sm:gap-x-5")
-            : "grid-cols-[auto_1fr] items-start gap-4",
+            : icon
+              ? "grid-cols-[auto_1fr] items-start gap-4"
+              : "grid-cols-1 items-center"
         )}
       >
-        <div
-          className={cn(
-            "flex",
-            isLg ? "items-center justify-center" : "items-start",
-          )}
-        >
-          {iconEl}
-        </div>
+        {iconEl ? (
+          <div
+            className={cn(
+              "flex",
+              isLg ? "items-center justify-center" : "items-start",
+            )}
+          >
+            {iconEl}
+          </div>
+        ) : null}
         <div
           className={cn(
             "flex min-h-0 min-w-0 flex-col",

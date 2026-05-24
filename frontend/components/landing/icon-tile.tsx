@@ -25,7 +25,7 @@ export function IconTile({
       <SectionIcon
         name={icon}
         variant="plain"
-        className="mb-5 h-12 w-12 [&_svg]:h-7 [&_svg]:w-7 sm:mb-6 sm:h-14 sm:w-14 sm:[&_svg]:h-8 sm:[&_svg]:w-8"
+        className="mb-6 h-16 w-16 [&_svg]:h-9 [&_svg]:w-9 sm:mb-7 sm:h-20 sm:w-20 sm:[&_svg]:h-11 sm:[&_svg]:w-11"
       />
       <h3 className="font-landing text-[15px] font-semibold leading-snug text-black dark:text-[#f9fafb] sm:text-base">
         {title}

@@ -86,11 +86,11 @@ export function TaxComparisonChart() {
       <div className="mt-8 flex flex-wrap items-center justify-center gap-5 sm:gap-8">
         <span className="inline-flex items-center gap-2 font-landing text-xs text-[#6b7280] dark:text-[#9ca3af]">
           <span className="h-3.5 w-3.5 rounded-sm bg-[#9ca3af]/55 dark:bg-[#6b7280]/65" />
-          Without tax awareness
+          Without Taxee
         </span>
         <span className="inline-flex items-center gap-2 font-landing text-xs text-[#6b7280] dark:text-[#9ca3af]">
           <span className="h-3.5 w-3.5 rounded-sm bg-[#4a9eed] dark:bg-[#5eb3f6]" />
-          With taxee (+{ANNUAL_SPREAD_PCT}%/yr)
+          With Taxee (+{ANNUAL_SPREAD_PCT}%/yr)
         </span>
       </div>
     </div>

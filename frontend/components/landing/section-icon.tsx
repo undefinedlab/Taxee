@@ -23,7 +23,9 @@ export type SectionIconName =
   | "bolt"
   | "monitor"
   | "message"
-  | "plug";
+  | "plug"
+  | "shield"
+  | "sync";
 
 const iconPaths: Record<SectionIconName, ReactNode> = {
   "chart-down": (
@@ -160,6 +162,20 @@ const iconPaths: Record<SectionIconName, ReactNode> = {
       <path d="M7 4v4M13 4v4" />
       <path d="M5 8h10v4a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3V8z" />
       <path d="M10 15v3" />
+    </>
+  ),
+  shield: (
+    <>
+      <path d="M10 2L4 5v5c0 5 2.5 8.5 6 10 3.5-1.5 6-5 6-10V5l-6-3z" />
+      <path d="M7 10l2 2 4-4" />
+    </>
+  ),
+  sync: (
+    <>
+      <path d="M4 9V5a5 5 0 0 1 5-5" />
+      <path d="M4 9h4" />
+      <path d="M16 11v4a5 5 0 0 1-5 5" />
+      <path d="M16 11h-4" />
     </>
   ),
 };

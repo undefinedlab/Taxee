@@ -5,7 +5,7 @@ import { SectionIcon, type SectionIconName } from "@/components/landing/section-
 import { cn } from "@/lib/utils";
 
 type ApprovalMode = {
-  icon: SectionIconName;
+  icon?: SectionIconName;
   tag: string;
   title: string;
   description: string;
@@ -33,12 +33,12 @@ export function ApprovalModesPanel({
 
   return (
     <div className="grid gap-8 lg:grid-cols-2 lg:items-start lg:gap-10 xl:gap-14">
-      <div className="max-w-xl">
+      <div className="max-w-xl lg:text-right">
         <header>
           <p className="font-landing text-[10px] font-bold uppercase tracking-[0.14em] text-[#6b7280] dark:text-[#9ca3af]">
             {label}
           </p>
-          <h2 className="mt-3 font-serif text-2xl font-bold leading-tight text-black dark:text-[#f9fafb] sm:text-3xl lg:text-4xl">
+          <h2 className="mt-3 font-serif text-3xl font-bold leading-tight text-black dark:text-[#f9fafb] sm:text-4xl lg:text-5xl">
             {title}
           </h2>
           <p className="mt-4 font-landing text-[15px] leading-[1.75] text-[#4b5563] dark:text-[#9ca3af]">
@@ -47,7 +47,7 @@ export function ApprovalModesPanel({
         </header>
 
         <div
-          className="mt-6 inline-flex w-fit rounded-xl border border-black/[0.08] bg-black/[0.04] p-1 dark:border-white/10 dark:bg-white/[0.06] sm:mt-8"
+          className="mt-6 inline-flex w-fit rounded-xl border border-black/[0.08] bg-black/[0.04] p-1 dark:border-white/10 dark:bg-white/[0.06] sm:mt-8 lg:ml-auto"
           role="tablist"
           aria-label="Approval mode"
         >
@@ -82,11 +82,13 @@ export function ApprovalModesPanel({
         role="tabpanel"
       >
         <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:gap-8">
-          <SectionIcon
-            name={active.icon}
-            variant="plain"
-            className="h-12 w-12 shrink-0 [&_svg]:h-7 [&_svg]:w-7 sm:h-14 sm:w-14 sm:[&_svg]:h-8 sm:[&_svg]:w-8"
-          />
+          {active.icon ? (
+            <SectionIcon
+              name={active.icon}
+              variant="plain"
+              className="h-12 w-12 shrink-0 [&_svg]:h-7 [&_svg]:w-7 sm:h-14 sm:w-14 sm:[&_svg]:h-8 sm:[&_svg]:w-8"
+            />
+          ) : null}
           <div className="min-w-0 flex-1">
             <span className="inline-block bg-[#f3f4f6] px-3 py-1 font-landing text-[11px] font-semibold text-black dark:bg-[#1f2937] dark:text-[#f9fafb]">
               {active.tag}

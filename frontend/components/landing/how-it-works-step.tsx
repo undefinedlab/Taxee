@@ -30,13 +30,13 @@ export function HowItWorksStep({
         variant="plain"
         className={cn("mb-6 sm:mb-7", PLAIN_ICON_LG_CLASS)}
       />
-      <p className="font-landing text-[10px] font-bold uppercase tracking-[0.14em] text-[#6b7280] dark:text-[#9ca3af]">
+      <p className="font-landing text-[11px] font-bold uppercase tracking-[0.14em] text-[#6b7280] dark:text-[#9ca3af]">
         Phase {phase}
       </p>
-      <h3 className="mt-2 font-landing text-lg font-semibold leading-snug text-black dark:text-[#f9fafb] sm:mt-2.5 sm:text-xl">
+      <h3 className="mt-2 font-landing text-xl font-semibold leading-snug text-black dark:text-[#f9fafb] sm:mt-3 sm:text-2xl">
         {title}
       </h3>
-      <p className="mt-3 max-w-[20rem] flex-1 font-landing text-[13px] leading-[1.65] text-[#4b5563] dark:text-[#9ca3af] sm:mt-3.5 sm:max-w-[22rem] sm:text-[14px]">
+      <p className="mt-3 max-w-[20rem] flex-1 font-landing text-[14px] leading-[1.7] text-[#4b5563] dark:text-[#9ca3af] sm:mt-4 sm:max-w-[24rem] sm:text-[15px]">
         {description}
       </p>
     </article>

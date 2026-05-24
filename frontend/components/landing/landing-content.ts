@@ -23,7 +23,7 @@ export const problem = {
     {
       icon: "chart-down" as const,
       title: "Every disposal is a taxable event",
-      body: "Rotations and exits trigger gains without lot-level awareness. Each sale compounds at your highest marginal rate.",
+      body: "Rotations trigger gains without lot-level awareness. Each sale compounds at your highest marginal rate.",
     },
     {
       icon: "layers" as const,
@@ -32,7 +32,7 @@ export const problem = {
     },
     {
       icon: "clock" as const,
-      title: "Money left on the table",
+      title: "Gains are left on the table",
       body: "Every win held one day short of long-term treatment forfeits the lower rate. Precision lot tracking is required.",
     },
   ],
@@ -40,8 +40,8 @@ export const problem = {
 
 export const solution = {
   label: "Solution",
-  title: "What taxee does for your portfolio",
-  lead: "taxee is a cross-chain portfolio agent that treats after-tax return as the primary optimization target — not gross performance, what you actually keep. It runs continuously across your portfolio, layering tax awareness into every rebalance, harvest, and hold.",
+  title: "Taxee solves that",
+  lead: "taxee is a cross-chain portfolio agent that treats after-tax return as the primary optimization target. It runs continuously across your portfolio, layering tax awareness into every rebalance, harvest, and hold.",
   items: [
     {
       icon: "trend-up" as const,
@@ -89,21 +89,21 @@ export const howItWorks = {
       icon: "wallet" as const,
       title: "Onboarding",
       description:
-        "Connect wallet, import history, set jurisdiction. Your lot ledger — every cost basis and holding period — is built once.",
+        "Connect wallet and set jurisdiction. Your lot ledger, every cost basis and holding period is built once.",
     },
     {
       phase: 2,
       icon: "pulse" as const,
       title: "Heartbeat",
       description:
-        "Hourly scans of prices, lots, and regimes. The agent surfaces harvest, rebalance, and park opportunities — you hear about it only when it matters.",
+        "Agent scans for prices, lots, and regimes. Then surfaces harvest, rebalance, and park opportunities. You hear about it only when it matters.",
     },
     {
       phase: 3,
       icon: "loop" as const,
       title: "Action loop",
       description:
-        "Approve each move, or delegate inside policy. Every disposal is logged on Arc with lot ID, basis, and rationale.",
+        "Each action is executed following user's policy. Every disposal is logged on Arc with lot ID, basis, and rationale.",
     },
   ],
 } as const;
@@ -139,6 +139,18 @@ export const execution = {
         "Immutable transaction record for every disposal — your Form 8949, pre-filled and audit-ready.",
       accent: "green" as const,
     },
+    {
+      icon: "shield" as const,
+      title: "USYC Yield",
+      description: "Idle capital earns yield while waiting for optimal tax timing through Circle's USYC protocol.",
+      accent: "blue" as const,
+    },
+    {
+      icon: "sync" as const,
+      title: "Auto-rebalance",
+      description: "Continuous monitoring rebalances positions when drift exceeds threshold while minimizing tax impact.",
+      accent: "green" as const,
+    },
   ],
   modes: {
     label: "Control",
@@ -149,9 +161,9 @@ export const execution = {
       description: "Execute, Defer, or Skip from Telegram or dashboard. Nothing runs until you confirm. Full reasoning chain visible.",
       flow: ["Detect", "Notify", "Decide"],
       timeline: [
-        { time: "Hour 0", action: "Detect", icon: "pulse" },
-        { time: "Hour 0", action: "You decide", icon: "user" },
-        { time: "Hour 0", action: "Confirm", icon: "check" },
+        { time: "Hour 0", action: "Detect" },
+        { time: "Hour 0", action: "You decide" },
+        { time: "Hour 0", action: "Confirm" },
       ],
       bestFor: ["Learning", "Large trades", "New users"],
     },
@@ -161,9 +173,9 @@ export const execution = {
       description: "Delegate approval inside guardrails. Harvest, park, and rebalance fire automatically when decision engine and LLM agree. You always get a receipt and Arc audit entry.",
       flow: ["Detect", "Validate", "Execute"],
       timeline: [
-        { time: "Hour 0", action: "Detect", icon: "pulse" },
-        { time: "Hour 0", action: "Executed", icon: "zap" },
-        { time: "Hour 0", action: "Receipt", icon: "receipt" },
+        { time: "Hour 0", action: "Detect" },
+        { time: "Hour 0", action: "Executed" },
+        { time: "Hour 0", action: "Receipt" },
       ],
       bestFor: ["Set-and-forget", "Active portfolios", "Tax-aware users"],
       recommended: true,
@@ -173,7 +185,7 @@ export const execution = {
 
 export const approvalModes = [
   {
-    icon: "hand" as const,
+    
     tag: "Manual approval",
     title: "Approve each move",
     description:
@@ -181,7 +193,7 @@ export const approvalModes = [
     variant: "neutral" as const,
   },
   {
-    icon: "bolt" as const,
+    
     tag: "Delegated",
     title: "Agent runs within policy",
     description:
@@ -193,18 +205,21 @@ export const approvalModes = [
 export const channels = [
   {
     icon: "monitor" as const,
-    title: "Web dashboard",
+    title: "Web",
     desc: "Register, monitor positions, approve or review actions, toggle manual or delegated mode.",
+    inactive: false,
   },
   {
     icon: "message" as const,
-    title: "Telegram bot",
+    title: "Telegram",
     desc: "Onboard via /start, get notified, inline Execute / Defer / Skip, post-action receipts.",
+    inactive: false,
   },
   {
     icon: "plug" as const,
-    title: "MCP / OpenClaw",
+    title: "MCP",
     desc: "Bring your own agent — taxee_scan runs the pipeline, taxee_approve_action for manual flows.",
+    inactive: false,
   },
 ] as const;
 
