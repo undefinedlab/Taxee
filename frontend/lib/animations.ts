@@ -104,49 +104,48 @@ export const animations = {
   }),
 };
 
-// Horizontal scroll utility
-export const createHorizontalScroll = (
-  container: HTMLElement,
-  track: HTMLElement,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _sectionCount: number
-) => {
-  const totalWidth = track.scrollWidth;
-  const containerWidth = container.offsetWidth;
+// Horizontal scroll utility - commented out (GSAP not installed)
+// export const createHorizontalScroll = (
+//   container: HTMLElement,
+//   track: HTMLElement,
+//   _sectionCount: number
+// ) => {
+//   const totalWidth = track.scrollWidth;
+//   const containerWidth = container.offsetWidth;
+//
+//   return gsap.to(track, {
+//     x: () => -(totalWidth - containerWidth),
+//     ease: "none",
+//     scrollTrigger: {
+//       trigger: container,
+//       pin: true,
+//       scrub: 1,
+//       end: () => `+=${totalWidth}`,
+//     },
+//   });
+// };
 
-  return gsap.to(track, {
-    x: () => -(totalWidth - containerWidth),
-    ease: "none",
-    scrollTrigger: {
-      trigger: container,
-      pin: true,
-      scrub: 1,
-      end: () => `+=${totalWidth}`,
-    },
-  });
-};
+// Sticky section utility - commented out (GSAP not installed)
+// export const createStickySection = (
+//   element: HTMLElement,
+//   start: string,
+//   end: string
+// ) => {
+//   return ScrollTrigger.create({
+//     trigger: element,
+//     start,
+//     end,
+//     pin: true,
+//     pinSpacing: true,
+//   });
+// };
 
-// Sticky section utility
-export const createStickySection = (
-  element: HTMLElement,
-  start: string,
-  end: string
-) => {
-  return ScrollTrigger.create({
-    trigger: element,
-    start,
-    end,
-    pin: true,
-    pinSpacing: true,
-  });
-};
+// Kill all ScrollTriggers (cleanup) - commented out (GSAP not installed)
+// export const cleanupScrollTriggers = () => {
+//   ScrollTrigger.getAll().forEach(trigger => trigger.kill());
+// };
 
-// Kill all ScrollTriggers (cleanup)
-export const cleanupScrollTriggers = () => {
-  ScrollTrigger.getAll().forEach(trigger => trigger.kill());
-};
-
-// Refresh ScrollTrigger (on resize)
-export const refreshScrollTrigger = () => {
-  ScrollTrigger.refresh();
-};
+// Refresh ScrollTrigger (on resize) - commented out (GSAP not installed)
+// export const refreshScrollTrigger = () => {
+//   ScrollTrigger.refresh();
+// };
