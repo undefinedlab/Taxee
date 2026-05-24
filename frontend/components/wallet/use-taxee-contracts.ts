@@ -1,7 +1,7 @@
 'use client';
 
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { parseUnits, formatUnits } from 'viem';
+import { parseUnits, formatUnits, keccak256, stringToBytes } from 'viem';
 import { CONTRACTS, USDC_ADDRESSES } from '@/lib/wagmi';
 import { useCallback } from 'react';
 
@@ -326,7 +326,7 @@ export function useRevokeDelegation() {
   };
 }
 
-// Helper function to create policy hash
+// Helper function to create policy hash (bytes32)
 export function createPolicyHash(policy: UserPolicy): `0x${string}` {
   const policyString = JSON.stringify({
     actions: policy.actions,
@@ -336,9 +336,8 @@ export function createPolicyHash(policy: UserPolicy): `0x${string}` {
     restrictions: policy.restrictions,
   });
   
-  // In production, use proper keccak256 hashing
-  // This is a placeholder
-  return `0x${Buffer.from(policyString).toString('hex').padStart(64, '0')}` as `0x${string}`;
+  // Create proper keccak256 hash (bytes32)
+  return keccak256(stringToBytes(policyString));
 }
 
 // Get USDC address for current chain

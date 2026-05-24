@@ -43,7 +43,7 @@ packages/
 
 | Tool | Version |
 |------|---------|
-| Node | 20+ |
+| Node | 22+ (required for pnpm 11; uses `node:sqlite`) |
 | pnpm | 9+ |
 | PostgreSQL | 15+ |
 
@@ -115,6 +115,8 @@ Redis from `docker-compose.yml` is optional locally; the app does not require it
 | Healthcheck | `/health` |
 
 If Railpack still reports “No start command”, confirm Root Directory is `backend` (not the monorepo root) and redeploy after pulling these config files.
+
+Railpack uses Node 22 (`engines.node`, `.nvmrc`, and `railpack.json` `packages.node`) because **pnpm 11** depends on the built-in `node:sqlite` module (not available on Node 20).
 
 Required env vars (set in Railway → Variables):
 
