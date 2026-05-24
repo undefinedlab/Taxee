@@ -83,7 +83,9 @@ async function getOrCreateAgentForWallet(
       ...(provision.wallet ? { circleWalletId: provision.wallet.id } : {}),
     })
     .returning();
-  return created!;
+  if (!created) throw new Error(`Agent insert returned undefined for userId=${userId}`);
+  console.log(`[bot] Agent created: ${created.id} for userId=${userId}`);
+  return created;
 }
 
 const regionKeyboard = () =>
@@ -402,27 +404,13 @@ bot.on("message:text", async (ctx) => {
 
       if (apiKey) {
         try {
-          const circle = new CircleClient(apiKey, circleEnv);
-          try { await circle.createCircleUser(user.id); } catch (e: any) {
-            const code = e?.response?.data?.code;
-            if (code !== 155101) throw e;
-          }
-          const { userToken, encryptionKey } = await circle.getUserToken(user.id);
-          const blockchain = circleEnv === "production" ? "BASE" as const : "BASE-SEPOLIA" as const;
-          const { challengeId } = await circle.createUserWallet({
-            userToken,
-            idempotencyKey: user.id,
-            blockchains: [blockchain],
-          });
-          const setupUrl = `${frontendUrl}/setup-wallet?userToken=${encodeURIComponent(userToken)}&encryptionKey=${encodeURIComponent(encryptionKey)}&challengeId=${encodeURIComponent(challengeId)}`;
+          const setupUrl = `${frontendUrl}/setup-wallet?userId=${encodeURIComponent(user.id)}`;
           await ctx.reply(
             "🔐 *One more step — set up your Circle PIN*\n\n" +
             "This secures your execution wallet. Nobody (not Circle, not Taxee) can execute transactions without your PIN.\n\n" +
-            "Tap the button below to create your PIN (takes ~30 seconds):",
-            {
-              parse_mode: "Markdown",
-              reply_markup: new InlineKeyboard().url("🔑 Set Up PIN", setupUrl),
-            }
+            "Open this link to create your PIN (takes ~30 seconds):\n" +
+            setupUrl,
+            { parse_mode: "Markdown" }
           );
         } catch (err: any) {
           const detail = err?.response?.data ?? err?.message ?? String(err);
@@ -464,6 +452,9 @@ bot.on("message:text", async (ctx) => {
     }
 
     // ── Step 2: import / refresh lots ─────────────────────────────────────────
+    const [verifiedAgent] = await db.select({ id: agents.id }).from(agents).where(eq(agents.id, agent.id));
+    if (!verifiedAgent) throw new Error(`Agent ${agent.id} not found in DB before lots insert`);
+
     const existing = await db
       .select({ txHash: lots.txHash })
       .from(lots)
@@ -582,11 +573,8 @@ bot.on("callback_query:data", async (ctx) => {
         const link = `${frontendUrl}/execute?userToken=${encodeURIComponent(data.userToken)}&encryptionKey=${encodeURIComponent(data.encryptionKey)}&challengeId=${encodeURIComponent(data.challengeId)}&oppId=${encodeURIComponent(oppId)}`;
 
         await ctx.reply(
-          `🔐 *Confirm your tax action*\n\nTap the button below to authorise the transaction with your Circle PIN. Circle's MPC nodes co-sign — your key never leaves your device.`,
-          {
-            parse_mode: "Markdown",
-            reply_markup: new InlineKeyboard().url("✅ Confirm & Execute", link),
-          }
+          `🔐 *Confirm your tax action*\n\nOpen this link to authorise the transaction with your Circle PIN. Circle's MPC nodes co-sign — your key never leaves your device.\n\n${link}`,
+          { parse_mode: "Markdown" }
         );
       } catch (err: unknown) {
         console.error(`[bot] Failed to create Circle challenge for ${oppId}:`, err);

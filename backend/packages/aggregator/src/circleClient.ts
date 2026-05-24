@@ -181,9 +181,33 @@ export class CircleClient {
   }
 
   /**
+   * Initialize a new Circle user — sets their PIN + security questions AND
+   * creates their wallet in a single SDK challenge (INITIALIZE_USER_AND_WALLET).
+   *
+   * This must be called FIRST before any wallet creation or transaction challenges.
+   * After the user completes this via the web SDK, subsequent operations use
+   * createUserWallet() or createUserContractExecution().
+   */
+  async initializeUser(params: {
+    userToken: string;
+    idempotencyKey: string;
+    blockchains: CircleBlockchain[];
+  }): Promise<{ challengeId: string }> {
+    const res = await this.client.post<{ data: { challengeId: string } }>(
+      "/user/initialize",
+      {
+        idempotencyKey: params.idempotencyKey,
+        blockchains:    params.blockchains,
+      },
+      { headers: { "X-User-Token": params.userToken } }
+    );
+    return { challengeId: res.data.data.challengeId };
+  }
+
+  /**
    * Initiate wallet creation for a user-controlled wallet.
-   * Returns a `challengeId` — pass it + `userToken` to the Circle web SDK
-   * so the user can set their PIN and complete the wallet setup.
+   * Only call this AFTER the user has completed initializeUser() (PIN already set).
+   * Returns a `challengeId` — pass it + `userToken` to the Circle web SDK.
    */
   async createUserWallet(params: {
     userToken: string;

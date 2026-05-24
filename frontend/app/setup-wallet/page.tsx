@@ -9,41 +9,55 @@ export default function SetupWalletPage() {
   const [message, setMessage] = useState("Initialising Circle SDK…");
 
   useEffect(() => {
-    const userToken     = params.get("userToken");
-    const encryptionKey = params.get("encryptionKey");
-    const challengeId   = params.get("challengeId");
-
-    if (!userToken || !encryptionKey || !challengeId) {
+    const userId = params.get("userId");
+    if (!userId) {
       setStatus("error");
-      setMessage("Missing parameters. Please restart the setup from Telegram.");
+      setMessage("Missing userId. Please restart from Telegram.");
       return;
     }
 
-    let sdk: any;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+    const appId  = "e88bd88e-6c02-5d2a-aa01-5e751f693e7f";
 
-    import("@circle-fin/w3s-pw-web-sdk").then(({ W3SSdk }) => {
-      sdk = new W3SSdk();
-      sdk.setAppSettings({ appId: process.env["NEXT_PUBLIC_CIRCLE_APP_ID"] ?? "" });
-      sdk.setAuthentication({ userToken, encryptionKey });
+    setMessage("Fetching fresh credentials…");
 
-      setStatus("ready");
-      setMessage("Complete wallet setup below.");
+    async function run() {
+      try {
+        const res  = await fetch(`${apiUrl}/circle/setup/${userId}`);
+        const data = await res.json();
+        if (data.error) { setStatus("error"); setMessage(`API error: ${data.error}`); return; }
+        const { userToken, encryptionKey, challengeId } = data;
 
-      sdk.execute(challengeId, (err: any, result: any) => {
-        if (err) {
-          console.error("[circle-sdk]", err);
-          setStatus("error");
-          setMessage(`Setup failed: ${err.message ?? "unknown error"}`);
-          return;
-        }
-        console.log("[circle-sdk] wallet created:", result);
-        setStatus("done");
-        setMessage("✅ Wallet created! Your Circle MPC wallet is ready. You can close this tab and return to Telegram.");
-      });
-    }).catch((err) => {
-      setStatus("error");
-      setMessage(`Failed to load Circle SDK: ${err.message}`);
-    });
+        const { W3SSdk } = await import("@circle-fin/w3s-pw-web-sdk");
+        const sdk = new W3SSdk();
+        sdk.setAppSettings({ appId });
+        sdk.setAuthentication({ userToken, encryptionKey });
+
+        setStatus("ready");
+        setMessage("Complete wallet setup below.");
+
+        sdk.execute(challengeId, (err: any, result: any) => {
+          if (err) {
+            console.error("[circle-sdk] error:", JSON.stringify(err));
+            setStatus("error");
+            setMessage(`Setup failed [${err.code ?? "?"}]: ${err.message ?? JSON.stringify(err)}`);
+            return;
+          }
+          console.log("[circle-sdk] wallet created:", result);
+          fetch(`${apiUrl}/circle/wallet-ready/${userId}`, { method: "POST" })
+            .then((r) => r.json())
+            .then((d) => console.log("[taxee] wallet stored:", d))
+            .catch((e) => console.error("[taxee] wallet-ready failed:", e));
+          setStatus("done");
+          setMessage("✅ Wallet created! Your Circle MPC wallet is ready. Return to Telegram.");
+        });
+      } catch (err: any) {
+        setStatus("error");
+        setMessage(`Unexpected error: ${err.message}`);
+      }
+    }
+
+    run();
   }, [params]);
 
   return (

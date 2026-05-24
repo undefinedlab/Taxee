@@ -22,7 +22,7 @@ export default function ExecutePage() {
 
     import("@circle-fin/w3s-pw-web-sdk").then(({ W3SSdk }) => {
       const sdk = new W3SSdk();
-      sdk.setAppSettings({ appId: process.env["NEXT_PUBLIC_CIRCLE_APP_ID"] ?? "" });
+      sdk.setAppSettings({ appId: process.env.NEXT_PUBLIC_CIRCLE_APP_ID ?? "" });
       sdk.setAuthentication({ userToken, encryptionKey });
 
       setStatus("ready");

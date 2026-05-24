@@ -51,13 +51,67 @@ const circleRoutes: FastifyPluginAsync = async (app) => {
       ? "BASE" as const
       : "BASE-SEPOLIA" as const;
 
-    const { challengeId } = await circle.createUserWallet({
+    const { challengeId } = await circle.initializeUser({
       userToken,
-      idempotencyKey: `wallet-init-${userId}`,
+      idempotencyKey: userId,
       blockchains: [blockchain],
     });
 
     return reply.send({ userToken, encryptionKey, challengeId });
+  });
+
+  /**
+   * Public endpoint — no JWT required.
+   * Called by the /setup-wallet frontend page on load to get fresh credentials.
+   * The userId from our DB is effectively a bearer token (unguessable UUID).
+   */
+  app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply) => {
+    const { userId } = request.params;
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    if (!user) return reply.code(404).send({ error: "User not found" });
+
+    const circle = getCircleClient();
+    try { await circle.createCircleUser(userId); } catch (err: any) {
+      if (err?.response?.data?.code !== 155101) throw err;
+    }
+
+    const { userToken, encryptionKey } = await circle.getUserToken(userId);
+    const blockchain = process.env["CIRCLE_ENVIRONMENT"] === "production" ? "BASE" as const : "BASE-SEPOLIA" as const;
+    const { challengeId } = await circle.initializeUser({
+      userToken,
+      idempotencyKey: userId,
+      blockchains: [blockchain],
+    });
+
+    return reply.send({ userToken, encryptionKey, challengeId });
+  });
+
+  /**
+   * Called by the /setup-wallet page after the user successfully sets up their PIN.
+   * Fetches their Circle wallet(s) and stores the first wallet ID on all their agents.
+   */
+  app.post<{ Params: { userId: string } }>("/wallet-ready/:userId", async (request, reply) => {
+    const { userId } = request.params;
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    if (!user) return reply.code(404).send({ error: "User not found" });
+
+    const circle = getCircleClient();
+    const { userToken } = await circle.getUserToken(userId);
+
+    const walletsRes = await (circle as any).client.get("/wallets", {
+      params: { userId },
+    });
+    const walletList: any[] = walletsRes.data?.data?.wallets ?? [];
+    if (walletList.length === 0) return reply.code(404).send({ error: "No wallets found for user" });
+
+    const walletId = walletList[0].id;
+
+    const userAgents = await db.select().from(agents).where(eq(agents.userId, userId));
+    await Promise.all(
+      userAgents.map((a) => db.update(agents).set({ circleWalletId: walletId }).where(eq(agents.id, a.id)))
+    );
+
+    return reply.send({ ok: true, walletId, agentsUpdated: userAgents.length });
   });
 
   /**
@@ -80,9 +134,7 @@ const circleRoutes: FastifyPluginAsync = async (app) => {
    */
   app.post<{ Params: { oppId: string } }>(
     "/challenge/:oppId",
-    { ...auth },
     async (request, reply) => {
-      const userId = (request.user as any).sub as string;
       const { oppId } = request.params;
 
       const [opp] = await db.select().from(opportunities).where(eq(opportunities.id, oppId));
@@ -96,7 +148,7 @@ const circleRoutes: FastifyPluginAsync = async (app) => {
       if (!candidate) return reply.code(400).send({ error: "No candidate action stored" });
 
       const circle = getCircleClient();
-      const { userToken, encryptionKey } = await circle.getUserToken(userId);
+      const { userToken, encryptionKey } = await circle.getUserToken(agent.userId);
 
       const lotRegistryAddress = process.env["TAXEE_LOT_REGISTRY_ADDRESS"] ?? "";
       const { challengeId } = await circle.createUserContractExecution({
