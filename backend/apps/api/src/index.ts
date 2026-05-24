@@ -6,6 +6,7 @@ import { actionRoutes }   from "./routes/action.js";
 import { lotRoutes }      from "./routes/lot.js";
 import { portfolioRoutes } from "./routes/portfolio.js";
 import { authRoutes }     from "./routes/auth.js";
+import circleRoutes       from "./routes/circle.js";
 
 const app = Fastify({
   logger: {
@@ -35,6 +36,7 @@ await app.register(agentRoutes,     { prefix: "/agents" });
 await app.register(actionRoutes,    { prefix: "/actions" });
 await app.register(lotRoutes,       { prefix: "/lots" });
 await app.register(portfolioRoutes, { prefix: "/portfolio" });
+await app.register(circleRoutes,    { prefix: "/circle" });
 
 app.get("/health", async () => ({ ok: true, ts: new Date().toISOString() }));
 

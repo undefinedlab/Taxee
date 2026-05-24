@@ -1,6 +1,6 @@
 # taxee — Project Status
 
-> Last updated: May 22, 2026
+> Last updated: May 24, 2026
 
 ---
 
@@ -25,6 +25,19 @@ Arc RPC: `https://rpc.testnet.arc-node.thecanteenapp.com/v1/<token>` (see `contr
 - [x] `Deploy.s.sol` — deployment script via Arc RPC
 - [x] Deployed + verified on Arc testnet (chain 5042002)
 
+### Circle Integration (fully wired)
+- [x] **Entity secret encryption** — RSA-OAEP-SHA256 via `node:crypto`; `encryptEntitySecret()` fetches + caches entity public key, encrypts the 32-byte hex secret per-request
+- [x] **Developer-controlled wallets** — `createWalletSet()` + `createDeveloperWallet()` via `POST /v1/w3s/developer/wallets`; auto-provisions a Circle wallet per agent on creation
+- [x] **Developer contract execution** — `createDeveloperContractExecution()` via `POST /v1/w3s/developer/transactions/contractExecution`; all on-chain calls go through this (commitDisposal, parkInUsyc, receiveMessage)
+- [x] **Circle Paymaster** — pass `paymasterWalletId` to any execution call; sponsor gas in USDC via ERC-4337 Paymaster on Base (`feeConfig: { type: "PAYMASTER", sponsorWalletId }`)
+- [x] **CCTP V1 bridge** — `burnUsdcForCCTP()` calls `depositForBurn` on `TokenMessenger`; `pollAttestation()` polls Circle Iris API (`iris-api.circle.com / iris-api-sandbox.circle.com`) until attestation is complete; relay via `receiveMessage` on destination
+- [x] **CCTP domain map** — ETH=0, ETH-Sepolia=0, Base=6, Base-Sepolia=6, ARB=3, Polygon=7
+- [x] **Full bridge utility** — `packages/execution/src/cctp.ts` → `bridgeUsdcViaCctp()`: burn → parse `MessageSent` event → keccak256 message hash → poll Iris → relay; end-to-end in one call
+- [x] **Approve → Execute wired** — `POST /actions/:id/approve` now fire-and-forgets `executeOpportunity()`; Telegram approve callback does the same
+- [x] **USYC park step** — after `commitDisposal` confirms for HARVEST type, calls `TaxeeExecutor.parkInUsyc(amount, lotId, agentId)` to park proceeds in USYC yield (non-fatal if it fails)
+- [x] **`executeOpportunity` shared utility** — `packages/execution/src/executeOpportunity.ts`; reads `candidateAction` from DB, fetches current prices, runs `validateForExecution` guardrails, executes, updates `executedAt` + `arcRecordId` + `txHash` in DB
+- [x] **`candidateAction` stored at heartbeat time** — `opportunities.candidate_action` (jsonb) stores the full `CandidateAction` at creation; approval at any time can re-validate + execute without needing a re-scan
+
 ### Real-Time Portfolio Scanning
 - [x] `packages/aggregator/src/balanceReader.ts` — live ETH + ERC-20 balances via Alchemy RPC
 - [x] `packages/aggregator/src/lotImporter.ts` — real on-chain transfer history → tax lots with cost basis
@@ -36,7 +49,8 @@ Arc RPC: `https://rpc.testnet.arc-node.thecanteenapp.com/v1/<token>` (see `contr
 ### Multi-Wallet Support (one agent per wallet)
 - [x] `wallets` table — multiple wallet addresses per Telegram user, each with a label
 - [x] `agents.walletAddress` — each agent is tied to one specific wallet address
-- [x] Sending a new 0x address in Telegram creates a new wallet + independent agent
+- [x] `agents.circleWalletId` — auto-populated on agent creation via Circle developer wallet API
+- [x] Sending a new 0x address in Telegram creates a new wallet + independent agent + Circle wallet
 - [x] Each wallet has its own lots, opportunities, and heartbeat history
 - [x] `/wallets` — lists all linked wallets with pending opportunity counts per wallet
 - [x] `/opportunities` — shows pending actions across ALL wallets, labeled per wallet
@@ -52,12 +66,8 @@ Arc RPC: `https://rpc.testnet.arc-node.thecanteenapp.com/v1/<token>` (see `contr
 ### Rich Telegram Notifications
 - [x] Type-specific layouts: 🌾 HARVEST / 🏦 PARK / ⚖️ REBALANCE / ⏸ HOLD
 - [x] Position snapshot per notification: quantity, cost basis, current value, unrealized P&L %, days held
-- [x] HARVEST: replacement asset name, wash-sale window status (clear / days remaining)
-- [x] PARK: days to long-term threshold, USYC strategy note
-- [x] REBALANCE: market regime label, allocation drift %
-- [x] Claude's analysis body (from `generateExplanation`) — 2–4 plain-English sentences
 - [x] Action buttons: `[✅ Approve]  [⏰ Defer]  [❌ Skip]`
-- [x] No dead "View on dashboard" link
+- [x] Approve button → triggers real Circle execution immediately (fire-and-forget)
 
 ### Tax Engine (pure TypeScript, zero API calls)
 - [x] `harvestScanner.ts` — flags unrealized loss > `harvestThresholdPct`, attaches correlated replacement
@@ -69,9 +79,9 @@ Arc RPC: `https://rpc.testnet.arc-node.thecanteenapp.com/v1/<token>` (see `contr
 ### Database (PostgreSQL + Drizzle ORM)
 - [x] `users` — Telegram identity; `address` nullable (supports multi-wallet)
 - [x] `wallets` — per-user wallet addresses with auto-assigned labels (Wallet 1, Wallet 2, ...)
-- [x] `agents` — one per wallet; stores `walletAddress`, `policy` (JSONB), `approvalMode`
+- [x] `agents` — one per wallet; stores `walletAddress`, `circleWalletId`, `policy` (JSONB), `approvalMode`
 - [x] `lots` — tax lots: assetId, chainId, quantity, costBasisUsd, acquiredAt, txHash
-- [x] `opportunities` — LLM decision, reasoning, headline, body, taxSavingEstimate
+- [x] `opportunities` — LLM decision, reasoning, headline, body, taxSavingEstimate, **`candidateAction` (jsonb)**
 - [x] `llm_logs` — every Claude call: promptVersion, model, tokens, latency, raw output
 - [x] `heartbeats` — per-agent scan history
 - [x] DB reset script: `npx tsx apps/api/src/db/reset.ts`
@@ -87,10 +97,10 @@ Arc RPC: `https://rpc.testnet.arc-node.thecanteenapp.com/v1/<token>` (see `contr
 
 ## What's Left
 
-### Execution (watch-tier only until Circle key filled)
-- [ ] **Circle Wallets execution** — `CIRCLE_ENTITY_SECRET` not filled; agent notifies only, does not execute
-- [ ] **USYC park** — execution pipeline wired but blocked on Circle credentials
-- [ ] **CCTP cross-chain bridging** — stubbed; single-chain works without it
+### Execution (needs env vars filled)
+- [ ] **Fill credentials** — set `CIRCLE_API_KEY`, `CIRCLE_ENTITY_SECRET`, `CIRCLE_WALLET_SET_ID` in `backend/.env`; everything is wired, execution activates immediately
+- [ ] **USYC on Base mainnet** — TaxeeExecutor on testnet; re-deploy on Base mainnet with real Hashnote USYC address
+- [ ] **CCTP end-to-end test** — test `bridgeUsdcViaCctp` on Base-Sepolia → ETH-Sepolia before mainnet
 
 ### Frontend
 - [ ] Dashboard not connected to real API endpoints (static Next.js scaffold)
@@ -123,7 +133,7 @@ docker compose up -d
 # 2. Install deps
 cd backend && pnpm install
 
-# 3. Run migrations
+# 3. Run migrations (adds candidateAction column)
 pnpm --filter @taxee/api db:migrate
 
 # 4. Start all backend apps
@@ -137,25 +147,35 @@ pnpm --filter @taxee/telegram-bot dev
 ```
 TELEGRAM_BOT_TOKEN=...
 ANTHROPIC_API_KEY=...
-ALCHEMY_API_KEY=...        # required for real portfolio scanning
-COINGECKO_API_KEY=...      # optional — free tier works
+ALCHEMY_API_KEY=...              # required for real portfolio scanning
+COINGECKO_API_KEY=...            # optional — free tier works
 DATABASE_URL=postgresql://taxee:taxee@localhost:5432/taxee
+
+# Circle (fill these to activate execution)
+CIRCLE_API_KEY=...
+CIRCLE_ENTITY_SECRET=...         # 32-byte hex — from Circle developer console
+CIRCLE_WALLET_SET_ID=...         # pre-created wallet set ID
+CIRCLE_ENVIRONMENT=sandbox       # or production
+CIRCLE_PAYMASTER_WALLET_ID=...   # optional — USDC gas abstraction on Base
+
+# Contracts
+TAXEE_LOT_REGISTRY_ADDRESS=...
+TAXEE_EXECUTOR_ADDRESS=...
+USDC_ADDRESS=...
 ```
 
-### Full real-time flow
+### Full real-time execution flow (all Circle pieces wired)
 1. `/start` in Telegram → send wallet address (0x...)
-2. Bot scans live balances across 4 chains (Alchemy)
-3. Bot imports on-chain transfer history → tax lots with cost basis (Alchemy + CoinGecko)
-4. Bot triggers Claude heartbeat in background
-5. Claude analyzes portfolio → rich opportunity notification with Approve/Defer/Skip
-6. Send another wallet address → second independent agent spun up
-7. `/wallets` → see all wallets + pending opportunity counts
-8. `/opportunities` → approve/defer/skip actions across all wallets
-
-### Reset database
-```bash
-npx tsx apps/api/src/db/reset.ts
-```
+2. Bot scans live balances + imports tax lots (Alchemy + CoinGecko)
+3. Agent creation auto-provisions a Circle developer wallet (`/developer/wallets`)
+4. Heartbeat runs Claude pipeline → stores `candidateAction` with every opportunity
+5. Claude sends rich Telegram notification with Approve/Defer/Skip buttons
+6. User taps **Approve** → bot fires `executeOpportunity()`:
+   - Validates guardrails (wash-sale, policy cap)
+   - `commitDisposal()` via Circle developer wallet → Arc record written
+   - `parkInUsyc()` for HARVEST type → proceeds parked in USYC yield
+   - `executedAt` + `arcRecordId` + `txHash` written back to DB
+7. Cross-chain: `bridgeUsdcViaCctp()` burns on source → polls Iris attestation → relays on Base
 
 ---
 
@@ -181,14 +201,26 @@ Telegram / Web / MCP
   Alchemy RPC → lots import
   CoinGecko → prices
   LLM Regime Classifier → RegimeState
-  Tax Engine (pure TS) → CandidateAction[]
+  Tax Engine (pure TS) → CandidateAction[]  ← stored in opportunities.candidate_action
   LLM Action Reasoner → EXECUTE / DEFER / SKIP
   LLM Explanation Generator → headline + body
         ↓
-  [watch tier]  Telegram rich notification → user approves
-  [exec tier]   Circle Wallets → USYC park → Arc ledger write → TaxeeLotRegistry.commitDisposal()
+  Telegram notification (manual) or immediate execute (delegated)
         ↓
-  Telegram receipt notification
+  User approves (Telegram button / POST /actions/:id/approve)
+        ↓
+  executeOpportunity()
+    → validateForExecution() guardrails
+    → ArcClient.writeDisposalRecord()            [MANDATORY — fails closed]
+    → Circle /developer/transactions/contractExecution
+        → TaxeeLotRegistry.commitDisposal()
+        → TaxeeExecutor.parkInUsyc()             [HARVEST only]
+    → opportunities.executedAt + txHash updated
+        ↓
+  (cross-chain) bridgeUsdcViaCctp()
+    → TokenMessenger.depositForBurn()
+    → poll Iris attestation
+    → MessageTransmitter.receiveMessage() on Base
 ```
 
 ---
@@ -202,102 +234,111 @@ Everything needed to go from working hackathon demo → production-grade service
 ### 🔴 P0 — Blocks any real user
 
 #### Execution
-- [ ] **Circle Wallets** — fill `CIRCLE_API_KEY` + `CIRCLE_ENTITY_SECRET`; wire `executeApprovedAction` end-to-end
-- [ ] **USYC on Base mainnet** — swap testnet USDC stub for real Hashnote USYC (`packages/execution/usyc.ts`)
-- [ ] **Mainnet contract deploy** — re-deploy `TaxeeLotRegistry` + `TaxeeExecutor` on Base mainnet with real USYC address
-- [ ] **Transaction simulation** — run `simulate()` before every execution; abort if slippage or tax impact exceeds policy cap
-- [ ] **Gas abstraction** — wire Circle Paymaster so users pay gas in USDC, not ETH
+- [ ] **Fill Circle credentials** — `CIRCLE_API_KEY` + `CIRCLE_ENTITY_SECRET` + `CIRCLE_WALLET_SET_ID`; all code is wired, execution is one env-var fill away
+- [ ] **Mainnet contract deploy** — re-deploy `TaxeeLotRegistry` + `TaxeeExecutor` on Base mainnet with real Hashnote USYC address (`0x...`)
+- [ ] **Transaction simulation** — run viem `simulateContract()` before every Circle execution; abort on revert or if tax impact > policy cap
+- [ ] **CCTP mainnet test** — verify `bridgeUsdcViaCctp` end-to-end on Base mainnet before enabling for users
 
 #### Security
-- [ ] **Wallet ownership verification** — require signed message (SIWE or eth_sign) before linking a wallet to a Telegram user; currently trusts the address as-is
-- [ ] **Telegram webhook mode** — switch from long-polling to HTTPS webhook + secret token validation (`setWebhook`)
-- [ ] **API authentication** — all Fastify routes currently unprotected; add JWT middleware (SIWE for web, `chat_id` binding for Telegram)
-- [ ] **Secrets management** — move all keys out of `.env` into AWS Secrets Manager / HashiCorp Vault; rotate on breach
-- [ ] **Rate limiting** — add `@fastify/rate-limit` on all public endpoints; protect against wallet flooding
+- [ ] **Wallet ownership verification** — require SIWE signed message before linking a wallet to Telegram user; currently trusts address as-is
+- [ ] **Telegram webhook mode** — switch from long-polling to HTTPS webhook + secret token validation
+- [ ] **API authentication** — add JWT middleware to all Fastify routes (SIWE for web, `chat_id` binding for Telegram)
+- [ ] **Secrets management** — move keys out of `.env` into AWS Secrets Manager / Vault; rotate on breach
+- [ ] **Rate limiting** — `@fastify/rate-limit` on all public endpoints
 
 #### Data integrity
-- [ ] **Lot import completeness** — current importer only catches inbound ETH transfers; add DEX swap event parsing (Uniswap V2/V3 `Swap` events) to capture trades as cost-basis lots
-- [ ] **Lot confirmation flow** — imported lots are provisional; add user confirmation step before they feed tax decisions
-- [ ] **Wash sale cross-wallet detection** — current check is per-agent only; wash sale window must be checked across all wallets owned by the same user
+- [ ] **DEX swap lot import** — current importer only catches inbound ETH transfers; add Uniswap V2/V3 `Swap` event parsing for cost-basis lots
+- [ ] **Lot confirmation flow** — imported lots are provisional; add user confirmation before feeding tax decisions
+- [ ] **Wash sale cross-wallet detection** — current check is per-agent; must check all wallets owned by the same user
 
 ---
 
 ### 🟠 P1 — Required before charging users
 
 #### Reliability
-- [ ] **Job queue** — replace `node-cron` with Inngest (durable, retryable, per-agent fan-out, dead-letter); node-cron drops jobs on restart
-- [ ] **Heartbeat idempotency** — prevent duplicate opportunity rows if heartbeat runs twice before prior one finishes (add `UNIQUE(agent_id, type, lot_id)` or dedup on insert)
-- [ ] **LLM fallback** — if Claude API is down → use `deterministicRecommendation` from tax engine; surface `llm_unavailable: true` in notification
-- [ ] **Database connection pooling** — add PgBouncer or switch to `pg` pool; Drizzle's default single connection won't survive concurrent agents
-- [ ] **Error alerting** — integrate Sentry (or equivalent); alert on heartbeat failures, execution errors, LLM schema validation failures
-- [ ] **Retry + circuit breaker** — wrap Alchemy, CoinGecko, Circle, Arc API calls with exponential backoff + circuit breaker
+- [ ] **Job queue** — replace `node-cron` with Inngest (durable, retryable, per-agent fan-out, dead-letter)
+- [ ] **Heartbeat idempotency** — add `UNIQUE(agent_id, type, lot_id)` or dedup insert to prevent duplicate opportunity rows
+- [ ] **LLM fallback** — Claude down → `deterministicRecommendation` from tax engine; surface `llm_unavailable: true`
+- [ ] **DB connection pooling** — add PgBouncer or `pg` pool; Drizzle single connection won't survive concurrent agents
+- [ ] **Error alerting** — Sentry on heartbeat failures, execution errors, LLM schema validation failures
+- [ ] **Retry + circuit breaker** — exponential backoff on Alchemy, CoinGecko, Circle, Arc, Iris API calls
 
 #### Compliance
-- [ ] **Arc REST integration** — wire `arcWriter.ts` to real Arc API; every executed disposal must write an immutable Arc record before agent marks action complete
-- [ ] **Form 8949 export** — `form8949.ts` aggregates Arc records per tax year → CSV download; hook into API route `GET /arc/:agentId/form8949`
-- [ ] **Audit log** — every state change (lot status, opportunity approved/executed/skipped) must be append-only with actor + timestamp
-- [ ] **Tax jurisdiction guardrails** — US federal only is fine for MVP; add disclaimer and block non-US users or add `jurisdiction: "OTHER"` handling
+- [ ] **Arc REST read path** — wire `arcClient.listDisposalRecords()` to real lot records for compliance export
+- [ ] **Form 8949 export** — aggregate Arc records per tax year → CSV; `GET /arc/:agentId/form8949`
+- [ ] **Audit log** — every state change (lot status, opportunity lifecycle) must be append-only with actor + timestamp
 
 #### Lot data quality
-- [ ] **CSV cost-basis override** — let users upload a CSV to correct provisional lots (coinbase, kraken, etc. exports)
-- [ ] **Multi-source reconciliation** — merge on-chain lots with CSV lots by asset + date window; flag conflicts for user review
-- [ ] **Historical price accuracy** — CoinGecko free tier rate-limits; add caching layer (Redis or Postgres) for historical prices; avoid re-fetching the same date twice
+- [ ] **CSV cost-basis override** — let users upload Coinbase/Kraken CSV to correct provisional lots
+- [ ] **Historical price caching** — cache CoinGecko historical prices in Postgres; avoid re-fetching same date twice
 
 ---
 
 ### 🟡 P2 — Quality of life / scale
 
 #### Real market signals
-- [ ] **Regime signals** — replace stub regime signals with real Defillama (TVL, stablecoin flows) + Glassnode (funding rate, realized vol) API calls
-- [ ] **Price feed fallback** — add Chainlink on-chain price as fallback when CoinGecko is unavailable or rate-limited
-- [ ] **Multi-asset correlation table** — current `correlations.json` covers 4 pairs; expand to top-50 DeFi assets for better HARVEST replacement suggestions
+- [ ] **Regime signals** — replace stubs with real Defillama (TVL, stablecoin flows) + Glassnode (funding rate, realized vol)
+- [ ] **Price feed fallback** — Chainlink on-chain price when CoinGecko is unavailable
+- [ ] **Multi-asset correlation table** — expand `correlations.json` from 4 pairs to top-50 DeFi assets
 
 #### Frontend
-- [ ] **Dashboard** — connect Next.js components to real API (`GET /portfolio/:agentId`, `GET /opportunities/:agentId`)
-- [ ] **Opportunity approval UI** — web-based Execute/Defer/Skip buttons (currently Telegram-only)
-- [ ] **After-tax return chart** — pull realized YTD from `opportunities` table; chart gross vs after-tax return delta
-- [ ] **Arc compliance page** — Form 8949 preview + CSV download button
+- [ ] **Dashboard** — connect Next.js to real API (`GET /portfolio/:agentId`, `GET /opportunities/:agentId`)
+- [ ] **Opportunity approval UI** — web-based Execute/Defer/Skip (currently Telegram-only)
+- [ ] **After-tax return chart** — realized YTD from `opportunities` table; gross vs after-tax delta
+- [ ] **Arc compliance page** — Form 8949 preview + CSV download
 - [ ] **SIWE login** — wallet-connect → sign → JWT; tie web session to existing `userId`
 
 #### Tax engine improvements
-- [ ] **CCTP cross-chain execution** — harvest on Ethereum, park USYC on Base in one atomic flow via Circle CCTP bridge
-- [ ] **Short-term vs long-term tax rate input** — let users input their marginal rate for more accurate `taxSavingEstimate`
-- [ ] **AMT / NIIT flags** — warn users approaching $200k income threshold where NIIT applies
-- [ ] **Carry-forward loss tracking** — persist prior-year harvested losses; apply them to offset current-year gains in opportunity scoring
+- [ ] **Short-term vs long-term rate input** — user's marginal rate for accurate `taxSavingEstimate`
+- [ ] **AMT / NIIT flags** — warn users approaching $200k where NIIT applies
+- [ ] **Carry-forward loss tracking** — persist prior-year harvested losses; apply to offset current-year gains
 
 #### Infrastructure
-- [ ] **Redis caching** — cache CoinGecko prices (1min TTL), regime state (4h TTL), lot snapshots (per-heartbeat)
-- [ ] **Horizontal scaling** — stateless Fastify API behind load balancer; agent worker as separate horizontally-scalable process
-- [ ] **Observability** — structured JSON logs (pino), trace IDs per heartbeat, latency histograms for LLM + Alchemy calls
-- [ ] **MCP server production wiring** — connect `taxee_scan` tool to live heartbeat; add per-`agentId` API key auth
+- [ ] **Redis caching** — CoinGecko prices (1min TTL), regime state (4h TTL), lot snapshots (per-heartbeat)
+- [ ] **Observability** — pino structured logs, trace IDs per heartbeat, LLM + Alchemy latency histograms
+- [ ] **MCP server production wiring** — connect `taxee_scan` to live heartbeat; per-`agentId` API key auth
 
 ---
 
 ### 🔵 P3 — Future product
 
 - [ ] **Multi-jurisdiction** — UK CGT, EU per-country rules, carry-forward allowances
-- [ ] **Tax-loss harvesting calendar** — proactive "best days to harvest" based on year-end liability projection
-- [ ] **Portfolio optimization mode** — beyond tax: suggest rebalance toward higher after-tax Sharpe ratio
-- [ ] **CEX import** — Binance, Coinbase, Kraken CSV parsers to reconstruct full cost-basis history off-chain
-- [ ] **Email / push notifications** — channel fallback when Telegram not available
-- [ ] **Mobile app** — React Native wrapper around Telegram bot flows + dashboard
-- [ ] **Institutional tier** — multi-user org accounts, sub-agents per portfolio manager, consolidated Form 8949 across clients
+- [ ] **Tax-loss harvesting calendar** — proactive "best days to harvest" based on year-end liability
+- [ ] **CEX import** — Binance, Coinbase, Kraken CSV parsers for full off-chain cost-basis history
+- [ ] **Email / push notifications** — channel fallback when Telegram unavailable
+- [ ] **Institutional tier** — multi-user org accounts, sub-agents per portfolio manager, consolidated Form 8949
 
 ---
 
 ### Production Readiness Checklist
 
 ```
+Circle Integration
+  ✅ Entity secret RSA-OAEP-SHA256 encryption (node:crypto)
+  ✅ Developer-controlled wallet creation (POST /developer/wallets)
+  ✅ Developer contract execution (POST /developer/transactions/contractExecution)
+  ✅ Circle Paymaster wired (feeConfig.type = PAYMASTER)
+  ✅ CCTP V1 burn (depositForBurn via Circle wallet)
+  ✅ Iris attestation polling (iris-api.circle.com)
+  ✅ CCTP relay (receiveMessage via Circle wallet on destination)
+  ✅ USYC park step (TaxeeExecutor.parkInUsyc after commitDisposal)
+  ✅ Approve → Execute wired end-to-end (API + Telegram bot)
+  ✅ Circle wallet auto-provisioned per agent on creation
+  ❌ Credentials not filled (CIRCLE_API_KEY, CIRCLE_ENTITY_SECRET, CIRCLE_WALLET_SET_ID)
+  ❌ Contracts on testnet only — need Base mainnet deploy
+
 Security
-  ✅ Never stores private keys (Circle MPC)
-  ✅ LLM cannot bypass policy guardrails (code-enforced)
+  ✅ Never stores private keys (Circle MPC developer wallets)
+  ✅ LLM cannot bypass policy guardrails (code-enforced in compliance package)
   ❌ Wallet ownership not verified before linking
-  ❌ All API routes unauthenticated
+  ❌ API routes unauthenticated
   ❌ Telegram running in long-polling (not webhook)
 
 Reliability
   ✅ Heartbeat runs every 15min for all active agents
   ✅ LLM outputs Zod-validated (fails closed)
+  ✅ Arc write mandatory before on-chain execution (fails closed)
+  ✅ USYC park is non-fatal (disposal already committed if park fails)
   ❌ Job queue has no durability (node-cron, drops on restart)
   ❌ No retry logic on external API calls
   ❌ No error alerting / Sentry
@@ -305,19 +346,23 @@ Reliability
 Data
   ✅ Lot deduplication via txHash
   ✅ Real on-chain transfer history (Alchemy)
+  ✅ candidateAction stored per opportunity (enables any-time execution)
   ❌ DEX swaps not captured (Uniswap, etc.)
   ❌ Wash sale check is per-wallet, not per-user
-  ❌ No user lot confirmation flow
 
 Compliance
   ✅ Arc contracts deployed + verified
   ✅ Every LLM call logged with promptVersion + tokens
-  ❌ Arc REST write not wired to live execution
+  ✅ Arc write wired to execution (writeDisposalRecord before commitDisposal)
+  ❌ Arc REST read path not tested with live records
   ❌ Form 8949 export not connected
 
 Execution
-  ✅ Execution pipeline wired (packages/execution)
-  ✅ Policy guardrails enforced before execution
-  ❌ Circle entity secret not filled (watch-tier only)
-  ❌ No mainnet contract deployment
+  ✅ Full execution pipeline wired (packages/execution)
+  ✅ Policy guardrails enforced before execution (packages/compliance)
+  ✅ USYC park step implemented (TaxeeExecutor.parkInUsyc)
+  ✅ CCTP bridge implemented (bridgeUsdcViaCctp)
+  ✅ Paymaster support implemented
+  ❌ Credentials not filled — watch-tier only until then
+  ❌ Contracts on testnet — mainnet deploy required
 ```

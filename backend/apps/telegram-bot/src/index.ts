@@ -5,7 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { db, users, wallets, agents, opportunities, lots } from "@taxee/db";
 import { importLotsForWallet, fetchWalletPositions, provisionCircleWallet, CircleClient } from "@taxee/aggregator";
-import { executeOpportunity } from "@taxee/execution";
+import axios from "axios";
 
 const __dirname  = path.dirname(fileURLToPath(import.meta.url));
 const BACKEND_DIR = path.resolve(__dirname, "../../..");
@@ -60,9 +60,10 @@ async function getOrCreateAgentForWallet(
     telegramChatId,
   };
 
+  const blockchain = process.env["CIRCLE_ENVIRONMENT"] === "production" ? "BASE" : "BASE-SEPOLIA";
   const provision = await provisionCircleWallet({
     idempotencyKey: `agent-${userId}-${normalized}`,
-    blockchain:     "BASE",
+    blockchain:     blockchain as "BASE" | "BASE-SEPOLIA",
   });
   if (provision.status === "provisioned" && provision.wallet) {
     console.log(`[bot] Created Circle wallet ${provision.wallet.id} for user ${userId}`);
@@ -394,6 +395,38 @@ bot.on("message:text", async (ctx) => {
       { parse_mode: "Markdown" }
     );
 
+    if (isNew) {
+      try {
+        const apiKey    = process.env["CIRCLE_API_KEY"];
+        const circleEnv = (process.env["CIRCLE_ENVIRONMENT"] ?? "sandbox") as "sandbox" | "production";
+        const frontendUrl = process.env["FRONTEND_URL"] ?? "http://localhost:3000";
+
+        if (apiKey) {
+          const circle = new CircleClient(apiKey, circleEnv);
+          try { await circle.createCircleUser(user.id); } catch { /* already exists */ }
+          const { userToken, encryptionKey } = await circle.getUserToken(user.id);
+          const blockchain = circleEnv === "production" ? "BASE" as const : "BASE-SEPOLIA" as const;
+          const { challengeId } = await circle.createUserWallet({
+            userToken,
+            idempotencyKey: `wallet-init-${user.id}`,
+            blockchains: [blockchain],
+          });
+          const setupUrl = `${frontendUrl}/setup-wallet?userToken=${encodeURIComponent(userToken)}&encryptionKey=${encodeURIComponent(encryptionKey)}&challengeId=${encodeURIComponent(challengeId)}`;
+          await ctx.reply(
+            "🔐 *One more step — set up your Circle PIN*\n\n" +
+            "This secures your execution wallet. Nobody (not Circle, not Taxee) can execute transactions without your PIN.\n\n" +
+            "Tap the button below to create your PIN (takes ~30 seconds):",
+            {
+              parse_mode: "Markdown",
+              reply_markup: new InlineKeyboard().url("🔑 Set Up PIN", setupUrl),
+            }
+          );
+        }
+      } catch (err: unknown) {
+        console.error("[bot] Circle user wallet init failed:", err);
+      }
+    }
+
     const alchemyKey = process.env["ALCHEMY_API_KEY"];
     const geckoKey   = process.env["COINGECKO_API_KEY"];
 
@@ -529,9 +562,31 @@ bot.on("callback_query:data", async (ctx) => {
       }
 
       await db.update(opportunities).set({ approvedAt: new Date() }).where(eq(opportunities.id, oppId));
-      executeOpportunity(oppId).catch((err: unknown) =>
-        console.error(`[bot] Execution failed for opportunity ${oppId}:`, err)
-      );
+
+      try {
+        const apiUrl = process.env["API_URL"] ?? "http://localhost:3001";
+        const frontendUrl = process.env["FRONTEND_URL"] ?? "http://localhost:3000";
+        const jwtSecret   = process.env["JWT_SECRET"] ?? "dev-secret-change-me";
+
+        const { data } = await axios.post(
+          `${apiUrl}/circle/challenge/${oppId}`,
+          {},
+          { headers: { Authorization: `Bearer ${jwtSecret}` } }
+        );
+
+        const link = `${frontendUrl}/execute?userToken=${encodeURIComponent(data.userToken)}&encryptionKey=${encodeURIComponent(data.encryptionKey)}&challengeId=${encodeURIComponent(data.challengeId)}&oppId=${encodeURIComponent(oppId)}`;
+
+        await ctx.reply(
+          `🔐 *Confirm your tax action*\n\nTap the button below to authorise the transaction with your Circle PIN. Circle's MPC nodes co-sign — your key never leaves your device.`,
+          {
+            parse_mode: "Markdown",
+            reply_markup: new InlineKeyboard().url("✅ Confirm & Execute", link),
+          }
+        );
+      } catch (err: unknown) {
+        console.error(`[bot] Failed to create Circle challenge for ${oppId}:`, err);
+        await ctx.reply("⚠️ Could not create execution challenge. Check backend logs.");
+      }
     } else if (action === "defer") {
       const deferredUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
       await db.update(opportunities).set({ deferDays: 30, deferredUntil }).where(eq(opportunities.id, oppId));

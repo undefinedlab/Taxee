@@ -1,4 +1,10 @@
+import crypto from "node:crypto";
 import { CircleClient, type CircleBlockchain, type CircleEnvironment } from "./circleClient.js";
+
+function toUUID(input: string): string {
+  const h = crypto.createHash("md5").update(input).digest("hex");
+  return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-${h.slice(16,20)}-${h.slice(20,32)}`;
+}
 
 export interface ProvisionedWallet {
   id:         string;
@@ -41,14 +47,18 @@ export async function provisionCircleWallet(params: {
 
   try {
     const circle = new CircleClient(apiKey, env, entitySecret);
+    const defaultChain: CircleBlockchain = env === "production" ? "BASE" : "BASE-SEPOLIA";
     const wallet = await circle.createDeveloperWallet({
-      idempotencyKey: params.idempotencyKey,
+      idempotencyKey: toUUID(params.idempotencyKey),
       walletSetId,
-      blockchain:     params.blockchain ?? "BASE",
+      blockchain:     params.blockchain ?? defaultChain,
     });
     return { status: "provisioned", wallet };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+  } catch (err: unknown) {
+    const axiosData = (err as any)?.response?.data;
+    const msg = axiosData
+      ? JSON.stringify(axiosData)
+      : err instanceof Error ? err.message : String(err);
     return { status: "failed", reason: msg };
   }
 }

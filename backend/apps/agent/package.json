@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "dev:trigger": "tsx src/trigger.ts",
+    "dev": "node --env-file=../../.env --import tsx --watch src/index.ts",
+    "dev:trigger": "node --env-file=../../.env --import tsx src/trigger.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "clean": "rm -rf dist",

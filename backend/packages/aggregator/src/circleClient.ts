@@ -162,6 +162,78 @@ export class CircleClient {
     return res.data.data.tokenBalances;
   }
 
+  // ─── User-Controlled Wallet Management ───────────────────────────────────
+
+  /** Register a Circle user by your internal user ID. Idempotent. */
+  async createCircleUser(userId: string): Promise<void> {
+    await this.client.post("/users", { userId });
+  }
+
+  /**
+   * Get a short-lived session token for a Circle user.
+   * Returns `userToken` + `encryptionKey` — both are passed to the web SDK.
+   */
+  async getUserToken(userId: string): Promise<{ userToken: string; encryptionKey: string }> {
+    const res = await this.client.post<{
+      data: { userToken: string; encryptionKey: string };
+    }>("/users/token", { userId });
+    return res.data.data;
+  }
+
+  /**
+   * Initiate wallet creation for a user-controlled wallet.
+   * Returns a `challengeId` — pass it + `userToken` to the Circle web SDK
+   * so the user can set their PIN and complete the wallet setup.
+   */
+  async createUserWallet(params: {
+    userToken: string;
+    idempotencyKey: string;
+    blockchains: CircleBlockchain[];
+  }): Promise<{ challengeId: string }> {
+    const res = await this.client.post<{ data: { challengeId: string } }>(
+      "/user/wallets",
+      {
+        idempotencyKey: params.idempotencyKey,
+        blockchains:    params.blockchains,
+      },
+      { headers: { "X-User-Token": params.userToken } }
+    );
+    return { challengeId: res.data.data.challengeId };
+  }
+
+  /**
+   * Create an execution challenge for a user-controlled wallet transaction.
+   * Returns a `challengeId` — pass it to the Circle web SDK for PIN confirmation.
+   * Circle's MPC nodes co-sign only after the user confirms.
+   */
+  async createUserContractExecution(params: {
+    userToken: string;
+    idempotencyKey: string;
+    walletId: string;
+    contractAddress: string;
+    abiFunctionSignature: string;
+    abiParameters: unknown[];
+    feeLevel?: "LOW" | "MEDIUM" | "HIGH";
+    paymasterWalletId?: string;
+  }): Promise<{ challengeId: string }> {
+    const res = await this.client.post<{ data: { challengeId: string } }>(
+      "/user/transactions/contractExecution",
+      {
+        idempotencyKey:       params.idempotencyKey,
+        walletId:             params.walletId,
+        contractAddress:      params.contractAddress,
+        abiFunctionSignature: params.abiFunctionSignature,
+        abiParameters:        params.abiParameters,
+        ...(params.paymasterWalletId
+          ? { feeConfig: { type: "PAYMASTER", sponsorWalletId: params.paymasterWalletId } }
+          : { feeLevel: params.feeLevel ?? "MEDIUM" }
+        ),
+      },
+      { headers: { "X-User-Token": params.userToken } }
+    );
+    return { challengeId: res.data.data.challengeId };
+  }
+
   // ─── Developer-Controlled Contract Execution ─────────────────────────────
 
   /**

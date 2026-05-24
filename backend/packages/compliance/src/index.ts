@@ -24,7 +24,7 @@ export function validateForExecution(
     );
   }
 
-  if ((action.washSaleDaysRemaining ?? 0) > 0) {
+  if ((policy as any).enforceWashSale && (action.washSaleDaysRemaining ?? 0) > 0) {
     throw new Error(
       `Wash-sale window not cleared. ${action.washSaleDaysRemaining} days remaining.`
     );
