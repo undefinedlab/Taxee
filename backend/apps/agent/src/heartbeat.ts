@@ -359,7 +359,7 @@ export async function runHeartbeat(agentId: string): Promise<{
               taxSavingEstimate:    explanation.taxSavingEstimate,
               llmReasoning:         decision.reasoning,
               approvalMode:         "manual",
-              buttons:              ["execute", "defer", "skip"],
+              buttons:              ["approve", "defer", "skip"],
               assetSymbol:          assetId,
               quantity:             totalQty,
               costBasisUsd:         totalCost,

@@ -245,7 +245,7 @@ export interface OpportunityNotification {
   taxSavingEstimate: number;
   llmReasoning: string;
   approvalMode: ApprovalMode;
-  buttons?: ("execute" | "defer" | "skip")[];
+  buttons?: ("approve" | "execute" | "defer" | "skip")[];
   autoExecuteAt?: Date;
   deferOptions?: { days: number; reason: string };
   assetSymbol?: string;
