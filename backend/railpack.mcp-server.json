@@ -1,0 +1,11 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "steps": {
+    "build": {
+      "commands": ["pnpm turbo run build --filter=@taxee/mcp-server..."]
+    }
+  },
+  "deploy": {
+    "startCommand": "node apps/mcp-server/dist/index.js"
+  }
+}

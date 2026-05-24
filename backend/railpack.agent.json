@@ -1,0 +1,11 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "steps": {
+    "build": {
+      "commands": ["pnpm turbo run build --filter=@taxee/agent..."]
+    }
+  },
+  "deploy": {
+    "startCommand": "node apps/agent/dist/index.js"
+  }
+}

@@ -89,7 +89,7 @@ This runs all apps in parallel via Turborepo with `--watch` hot-reload.
 
 ## Railway (Production)
 
-Deploy the backend as one or more Railway services from the **`backend/`** root directory.
+Deploy from the **`backend/`** directory (set **Root Directory** to `backend` on every service). Builds use [Railpack](https://railpack.com); `railpack.json` at the repo root of that directory defines the default API build and start command.
 
 ### 1. Add PostgreSQL
 
@@ -109,10 +109,12 @@ Redis from `docker-compose.yml` is optional locally; the app does not require it
 | Setting | Value |
 |---------|-------|
 | Root Directory | `backend` |
-| Build Command | *(from `railway.toml`)* `pnpm build --filter @taxee/api...` |
-| Start Command | `pnpm start:api` |
+| Config | default `railpack.json` / `railway.toml` |
+| Start Command | `node apps/api/dist/index.js` *(auto from `railpack.json`)* |
 | Pre-deploy | `pnpm db:migrate` |
 | Healthcheck | `/health` |
+
+If Railpack still reports “No start command”, confirm Root Directory is `backend` (not the monorepo root) and redeploy after pulling these config files.
 
 Required env vars (set in Railway → Variables):
 
@@ -133,15 +135,15 @@ Railway sets `PORT` automatically — the API already reads it.
 
 ### 3. Worker services (optional, same repo)
 
-Create **separate** Railway services pointing at `backend/` with different start commands:
+Create **separate** Railway services with Root Directory `backend` and set **`RAILPACK_CONFIG_FILE`** so Railpack builds and starts the right app:
 
-| Service | Start Command |
-|---------|---------------|
-| Agent heartbeat | `pnpm start:agent` |
-| Telegram bot | `pnpm start:telegram-bot` |
-| MCP server | `pnpm start:mcp-server` |
+| Service | `RAILPACK_CONFIG_FILE` | Start command (in config) |
+|---------|------------------------|---------------------------|
+| Agent heartbeat | `railpack.agent.json` | `node apps/agent/dist/index.js` |
+| Telegram bot | `railpack.telegram-bot.json` | `node apps/telegram-bot/dist/index.js` |
+| MCP server | `railpack.mcp-server.json` | `node apps/mcp-server/dist/index.js` |
 
-Copy the same env vars (especially `DATABASE_URL`) to each worker service.
+You can still use `pnpm start:agent` etc. locally. Copy the same env vars (especially `DATABASE_URL`) to each worker service.
 
 ### Individual services
 

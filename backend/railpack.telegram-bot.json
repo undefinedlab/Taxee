@@ -1,0 +1,11 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "steps": {
+    "build": {
+      "commands": ["pnpm turbo run build --filter=@taxee/telegram-bot..."]
+    }
+  },
+  "deploy": {
+    "startCommand": "node apps/telegram-bot/dist/index.js"
+  }
+}
