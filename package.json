@@ -1,10 +1,9 @@
 {
-  "type": "module",
   "scripts": {
-    "deploy:contracts": "hardhat run deploy/deploy.ts --network baseSepolia",
-    "deploy:update-frontend": "npx ts-node deploy/update-frontend.ts",
+    "deploy:contracts": "hardhat run deploy/deploy.js --network baseSepolia",
     "verify:contracts": "echo 'Run: npx hardhat verify --network baseSepolia <CONTRACT_ADDRESS> [ARGS]'",
-    "test:contracts": "hardhat test"
+    "test:contracts": "hardhat test",
+    "compile:contracts": "hardhat compile"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",

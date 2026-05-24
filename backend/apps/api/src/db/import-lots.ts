@@ -36,11 +36,12 @@ async function main() {
     const [user] = await db.select().from(users).where(eq(users.id, agent.userId));
     if (!user) continue;
 
-    const walletAddress = TARGET_WALLET ?? user.address;
-    if (!walletAddress) {
+    const wallet = TARGET_WALLET ?? user.address;
+    if (!wallet) {
       console.log(`\n── Agent ${agent.id} · skipping (no wallet address) ──`);
       continue;
     }
+    const walletAddress: string = wallet;
     console.log(`\n── Agent ${agent.id} · wallet ${walletAddress} ────────────────`);
 
     const existingLots = await db

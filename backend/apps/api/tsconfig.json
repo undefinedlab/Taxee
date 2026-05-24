@@ -4,5 +4,10 @@
     "outDir": "dist",
     "rootDir": "src"
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": [
+    "src/db/import-lots.ts",
+    "src/db/seed.demo.ts",
+    "src/db/reset.ts"
+  ]
 }
