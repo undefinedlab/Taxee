@@ -32,8 +32,8 @@ export function ApprovalModesPanel({
   const active = mode === "manual" ? manual : automatic;
 
   return (
-    <div className="grid gap-8 lg:grid-cols-2 lg:items-start lg:gap-10 xl:gap-14">
-      <div className="max-w-xl lg:text-right">
+    <div className="grid gap-8 lg:grid-cols-[0.8fr_1fr] lg:items-start lg:gap-16">
+      <div className="max-w-md lg:text-right lg:ml-auto">
         <header>
           <p className="font-landing text-[10px] font-bold uppercase tracking-[0.14em] text-[#6b7280] dark:text-[#9ca3af]">
             {label}
@@ -41,39 +41,10 @@ export function ApprovalModesPanel({
           <h2 className="mt-3 font-serif text-3xl font-bold leading-tight text-black dark:text-[#f9fafb] sm:text-4xl lg:text-5xl">
             {title}
           </h2>
-          <p className="mt-4 font-landing text-[15px] leading-[1.75] text-[#4b5563] dark:text-[#9ca3af]">
+          <p className="mt-4 font-landing text-[15px] leading-[1.75] text-[#4b5563] dark:text-[#9ca3af] lg:ml-auto">
             {lead}
           </p>
         </header>
-
-        <div
-          className="mt-6 inline-flex w-fit rounded-xl border border-black/[0.08] bg-black/[0.04] p-1 dark:border-white/10 dark:bg-white/[0.06] sm:mt-8 lg:ml-auto"
-          role="tablist"
-          aria-label="Approval mode"
-        >
-          {(
-            [
-              { id: "manual" as const, label: "Manual" },
-              { id: "automatic" as const, label: "Automatic" },
-            ] as const
-          ).map((opt) => (
-            <button
-              key={opt.id}
-              type="button"
-              role="tab"
-              aria-selected={mode === opt.id}
-              onClick={() => setMode(opt.id)}
-              className={cn(
-                "rounded-lg px-5 py-2.5 font-landing text-[13px] font-semibold transition-colors sm:px-6 sm:text-[14px]",
-                mode === opt.id
-                  ? "bg-black text-white shadow-sm dark:bg-[#f9fafb] dark:text-[#111827]"
-                  : "text-[#6b7280] hover:text-black dark:text-[#9ca3af] dark:hover:text-[#f9fafb]",
-              )}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
       </div>
 
       <article
@@ -90,10 +61,36 @@ export function ApprovalModesPanel({
             />
           ) : null}
           <div className="min-w-0 flex-1">
-            <span className="inline-block bg-[#f3f4f6] px-3 py-1 font-landing text-[11px] font-semibold text-black dark:bg-[#1f2937] dark:text-[#f9fafb]">
-              {active.tag}
-            </span>
-            <h3 className="mt-4 font-landing text-xl font-semibold text-black dark:text-[#f9fafb] sm:text-2xl">
+            {/* Toggle */}
+            <div
+              className="inline-flex rounded-lg border border-black/[0.08] bg-black/[0.04] p-0.5 mb-4 dark:border-white/10 dark:bg-white/[0.06]"
+              role="tablist"
+              aria-label="Approval mode"
+            >
+                {(
+                  [
+                    { id: "manual" as const, label: "Manual" },
+                    { id: "automatic" as const, label: "Automatic" },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={mode === opt.id}
+                    onClick={() => setMode(opt.id)}
+                    className={cn(
+                      "rounded-md px-3 py-1 font-landing text-[11px] font-medium transition-colors",
+                      mode === opt.id
+                        ? "bg-black text-white shadow-sm dark:bg-[#f9fafb] dark:text-[#111827]"
+                        : "text-[#6b7280] hover:text-black dark:text-[#9ca3af] dark:hover:text-[#f9fafb]",
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+            </div>
+            <h3 className="font-landing text-xl font-semibold text-black dark:text-[#f9fafb] sm:text-2xl">
               {active.title}
             </h3>
             <p className="mt-3 font-landing text-[14px] leading-[1.7] text-[#4b5563] dark:text-[#9ca3af] sm:text-[15px]">

@@ -14,7 +14,7 @@ export function TaxeeLogo({ showWordmark = false }: { showWordmark?: boolean }) 
       />
       {showWordmark ? (
         <span className="font-serif text-[1.35rem] font-bold leading-none tracking-tight sm:text-2xl">
-          taxee
+          Taxee
         </span>
       ) : null}
     </span>

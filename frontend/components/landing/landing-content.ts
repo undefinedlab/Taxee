@@ -10,15 +10,15 @@ export const hero = {
 } as const;
 
 export const heroStats = [
-  { value: "+3%", label: "After-tax alpha vs gross-only" },
+  { value: "+3%", label: "After-tax alpha" },
   { value: "+8%", label: "Saved in tax drag" },
-  { value: "F8949", label: "Auto-generated, audit-ready" },
+  { value: "F8949", label: "Audit-ready" },
 ] as const;
 
 export const problem = {
-  label: "Problem",
+  label: "",
   title: "Today's agents are blind to taxes",
-  lead: "DeFi portfolio agents rebalance when drift exceeds a threshold, rotate into yield when regimes shift, and harvest gains across chains — all while silently destroying after-tax returns in the process.",
+  lead: "Today DeFi portfolio agents rebalance, rotate, and harvest, all while silently destroying after-tax returns in the process.",
   bullets: [
     {
       icon: "chart-down" as const,
@@ -39,9 +39,9 @@ export const problem = {
 } as const;
 
 export const solution = {
-  label: "Solution",
-  title: "Taxee solves that",
-  lead: "taxee is a cross-chain portfolio agent that treats after-tax return as the primary optimization target. It runs continuously across your portfolio, layering tax awareness into every rebalance, harvest, and hold.",
+  label: "",
+  title: "Taxee treats after-tax return as the primary optimization target.",
+  lead: "It is a cross-chain portfolio agent that runs continuously across your portfolio, layering tax awareness into every rebalance, harvest, and hold.",
   items: [
     {
       icon: "trend-up" as const,
@@ -81,7 +81,7 @@ export const solution = {
 } as const;
 
 export const howItWorks = {
-  label: "How it works",
+  label: "",
   title: "Set up once. Run continuously.",
   phases: [
     {
@@ -89,21 +89,21 @@ export const howItWorks = {
       icon: "wallet" as const,
       title: "Onboarding",
       description:
-        "Connect wallet and set jurisdiction. Your lot ledger, every cost basis and holding period is built once.",
+        "Connect wallet and set jurisdiction. Your lot ledger, every cost basis and holding period is synced.", 
     },
     {
       phase: 2,
       icon: "pulse" as const,
       title: "Heartbeat",
       description:
-        "Agent scans for prices, lots, and regimes. Then surfaces harvest, rebalance, and park opportunities. You hear about it only when it matters.",
+        "Agent scans for prices, lots, and regimes. Then harvest, rebalance, and park opportunities. You hear about it only when it matters.",
     },
     {
       phase: 3,
       icon: "loop" as const,
       title: "Action loop",
       description:
-        "Each action is executed following user's policy. Every disposal is logged on Arc with lot ID, basis, and rationale.",
+        "Each action is executed following user's policy. Every disposal is logged on Arc with lot ID, basis, and rationale. Audit ready.",
     },
   ],
 } as const;
@@ -224,13 +224,32 @@ export const channels = [
 ] as const;
 
 export const cta = {
-  eyebrow: "Ready when you are",
-  title: "Start maximising your after-tax alpha now.",
-  subtitle:
-    "",
+  eyebrow: "Ready when and where you are",
+  title: "Maximise your after-tax alpha anywhere, anytime.",
+  subtitle: "",
   primary: "Register your agent",
   primaryHint: "~2 min setup",
   secondary: "View demo dashboard",
+  platforms: {
+    web: {
+      title: "Web",
+      description: "Full-featured dashboard for complete portfolio management. Register, monitor, and control your agent with detailed analytics and real-time insights.",
+      cta: "Register your agent",
+      href: "/onboarding"
+    },
+    telegram: {
+      title: "Telegram",
+      description: "Manage your portfolio directly from Telegram. Get instant notifications, approve actions, and monitor performance with simple commands.",
+      cta: "Open in Telegram",
+      href: "https://t.me/taxee_bot"
+    },
+    mcp: {
+      title: "MCP",
+      description: "",
+      cta: "",
+      href: "https://mcp.taxee.ai/server"
+    }
+  },
   ticker: [
     { value: "2,847", label: "agents registered" },
     { value: "$4.2M", label: "tax saved" },

@@ -44,7 +44,8 @@ export function LandingPage() {
                   </span>
                 </div>
                 <h1 className="landing-animate-in landing-delay-4 mt-5 font-serif text-[2rem] font-bold leading-[1.08] tracking-tight text-black dark:text-[#f9fafb] sm:text-[2.5rem] lg:text-[2.85rem] xl:text-[3rem]">
-                  {hero.title}
+                  <span className="text-[2.5rem] sm:text-[3rem] lg:text-[3.5rem] xl:text-[3.75rem]">{hero.title.charAt(0)}</span>
+                  {hero.title.slice(1)}
                 </h1>
                 <p className="landing-animate-in landing-delay-5 mt-5 max-w-lg font-landing text-[14px] leading-[1.7] text-[#4b5563] dark:text-[#9ca3af]">
                   {hero.subtitle}

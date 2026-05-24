@@ -1,12 +1,9 @@
 export function TaxSummaryCard() {
   return (
-    <div className="landing-float-delay landing-glass-widget-solid w-[236px] p-3.5">
+    <div className="landing-float-delay w-[236px] rounded-xl bg-gradient-to-br from-white via-gray-50 to-gray-100 p-3.5 shadow-md dark:from-gray-800 dark:via-gray-900 dark:to-gray-950">
       <div className="flex items-start justify-between gap-2">
         <span className="font-landing text-[13px] font-semibold text-black dark:text-[#f9fafb]">
           Tax impact YTD
-        </span>
-        <span className="rounded border border-[#e5e7eb] bg-[#f3f4f6] px-2 py-0.5 font-landing text-[10px] text-[#6b7280] dark:border-[#374151] dark:bg-[#111827] dark:text-[#9ca3af]">
-          Demo
         </span>
       </div>
       <p className="mt-1 font-landing text-[10px] text-[#6b7280]">

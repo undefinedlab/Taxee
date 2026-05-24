@@ -1,19 +1,12 @@
-import {
-  SectionIcon,
-  type SectionIconName,
-} from "@/components/landing/section-icon";
-import { PLAIN_ICON_LG_CLASS } from "@/components/landing/icon-sizes";
 import { cn } from "@/lib/utils";
 
 export function HowItWorksStep({
   phase,
-  icon,
   title,
   description,
   className,
 }: {
   phase: number;
-  icon: SectionIconName;
   title: string;
   description: string;
   className?: string;
@@ -25,18 +18,13 @@ export function HowItWorksStep({
         className,
       )}
     >
-      <SectionIcon
-        name={icon}
-        variant="plain"
-        className={cn("mb-6 sm:mb-7", PLAIN_ICON_LG_CLASS)}
-      />
       <p className="font-landing text-[11px] font-bold uppercase tracking-[0.14em] text-[#6b7280] dark:text-[#9ca3af]">
         Phase {phase}
       </p>
-      <h3 className="mt-2 font-landing text-xl font-semibold leading-snug text-black dark:text-[#f9fafb] sm:mt-3 sm:text-2xl">
+      <h3 className="mt-3 font-landing text-2xl font-semibold leading-snug text-black dark:text-[#f9fafb] sm:mt-4 sm:text-3xl">
         {title}
       </h3>
-      <p className="mt-3 max-w-[20rem] flex-1 font-landing text-[14px] leading-[1.7] text-[#4b5563] dark:text-[#9ca3af] sm:mt-4 sm:max-w-[24rem] sm:text-[15px]">
+      <p className="mt-4 max-w-[20rem] flex-1 font-landing text-[14px] leading-[1.7] text-[#4b5563] dark:text-[#9ca3af] sm:mt-5 sm:max-w-[24rem] sm:text-[15px]">
         {description}
       </p>
     </article>
