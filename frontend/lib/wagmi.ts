@@ -8,8 +8,8 @@ import { http } from 'wagmi';
 // Contract addresses - update these after deployment
 export const CONTRACTS = {
   baseSepolia: {
-    delegationRegistry: process.env.NEXT_PUBLIC_DELEGATION_REGISTRY_SEPOLIA || '',
-    taxeeManager: process.env.NEXT_PUBLIC_TAXEE_MANAGER_SEPOLIA || '',
+    delegationRegistry: '0x403Fe0408976b518b2952BdF590135Ec6ba12ebc',
+    taxeeManager: '0xEE8DAE2D3f142052bDb704Ba0D94e04eC1680193',
   },
   base: {
     delegationRegistry: process.env.NEXT_PUBLIC_DELEGATION_REGISTRY || '',

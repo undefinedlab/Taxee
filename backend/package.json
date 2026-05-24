@@ -23,7 +23,8 @@
     "db:migrate": "pnpm --filter @taxee/api db:migrate",
     "db:seed": "pnpm --filter @taxee/api db:seed",
     "db:seed:demo": "pnpm --filter @taxee/api db:seed:demo",
-    "format": "prettier --write \"**/*.{ts,json,md}\""
+    "format": "prettier --write \"**/*.{ts,json,md}\"",
+    "smoke:prod": "node scripts/smoke-production.mjs"
   },
   "devDependencies": {
     "turbo": "^2.0.0",

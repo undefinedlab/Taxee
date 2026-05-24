@@ -114,13 +114,15 @@ export function useDelegationStatus() {
   
   const registryAddress = chainId === 84532 
     ? CONTRACTS.baseSepolia.delegationRegistry 
-    : CONTRACTS.base.delegationRegistry;
+    : chainId === 8453
+    ? CONTRACTS.base.delegationRegistry
+    : '';
 
   const { data, isLoading, refetch } = useReadContract({
-    address: registryAddress as `0x${string}`,
+    address: (registryAddress as `0x${string}`) || undefined,
     abi: DELEGATION_REGISTRY_ABI,
     functionName: 'hasActiveDelegation',
-    args: address ? [address] : undefined,
+    args: address && registryAddress ? [address] : undefined,
     query: {
       enabled: !!address && !!registryAddress,
     },
@@ -143,13 +145,15 @@ export function useMonthlyLimits() {
   
   const registryAddress = chainId === 84532 
     ? CONTRACTS.baseSepolia.delegationRegistry 
-    : CONTRACTS.base.delegationRegistry;
+    : chainId === 8453
+    ? CONTRACTS.base.delegationRegistry
+    : '';
 
   const { data, isLoading, refetch } = useReadContract({
-    address: registryAddress as `0x${string}`,
+    address: (registryAddress as `0x${string}`) || undefined,
     abi: DELEGATION_REGISTRY_ABI,
     functionName: 'getRemainingMonthlyLimit',
-    args: address ? [address] : undefined,
+    args: address && registryAddress ? [address] : undefined,
     query: {
       enabled: !!address && !!registryAddress,
     },
@@ -171,13 +175,15 @@ export function useDelegationDetails() {
   
   const registryAddress = chainId === 84532 
     ? CONTRACTS.baseSepolia.delegationRegistry 
-    : CONTRACTS.base.delegationRegistry;
+    : chainId === 8453
+    ? CONTRACTS.base.delegationRegistry
+    : '';
 
   const { data, isLoading } = useReadContract({
-    address: registryAddress as `0x${string}`,
+    address: (registryAddress as `0x${string}`) || undefined,
     abi: DELEGATION_REGISTRY_ABI,
     functionName: 'delegations',
-    args: address ? [address] : undefined,
+    args: address && registryAddress ? [address] : undefined,
     query: {
       enabled: !!address && !!registryAddress,
     },
@@ -216,16 +222,18 @@ export function useCanExecute(
   
   const managerAddress = chainId === 84532 
     ? CONTRACTS.baseSepolia.taxeeManager 
-    : CONTRACTS.base.taxeeManager;
+    : chainId === 8453
+    ? CONTRACTS.base.taxeeManager
+    : '';
 
   const actionType = action === 'HARVEST' ? 0 : action === 'REBUY' ? 1 : 2;
   const valueWei = parseUnits(value || '0', 18);
 
   const { data, isLoading } = useReadContract({
-    address: managerAddress as `0x${string}`,
+    address: (managerAddress as `0x${string}`) || undefined,
     abi: TAXEE_MANAGER_ABI,
     functionName: 'canExecute',
-    args: address && asset ? [address, actionType, asset as `0x${string}`, valueWei] : undefined,
+    args: address && asset && managerAddress ? [address, actionType, asset as `0x${string}`, valueWei] : undefined,
     query: {
       enabled: !!address && !!asset && !!value && !!managerAddress,
     },
@@ -250,18 +258,22 @@ export function useCreateDelegation() {
 
   const registryAddress = chainId === 84532 
     ? CONTRACTS.baseSepolia.delegationRegistry 
-    : CONTRACTS.base.delegationRegistry;
+    : chainId === 8453 
+    ? CONTRACTS.base.delegationRegistry
+    : '';
 
   const managerAddress = chainId === 84532 
     ? CONTRACTS.baseSepolia.taxeeManager 
-    : CONTRACTS.base.taxeeManager;
+    : chainId === 8453
+    ? CONTRACTS.base.taxeeManager
+    : '';
 
   const createDelegation = useCallback((
     policy: UserPolicy,
     signature: `0x${string}`
   ) => {
     if (!registryAddress || !managerAddress) {
-      throw new Error('Contracts not deployed on this network');
+      throw new Error(`Contracts not deployed on this network (chainId: ${chainId}). Please switch to Base Sepolia (84532) or Base (8453).`);
     }
 
     const policyHash = createPolicyHash(policy);
@@ -304,11 +316,13 @@ export function useRevokeDelegation() {
 
   const registryAddress = chainId === 84532 
     ? CONTRACTS.baseSepolia.delegationRegistry 
-    : CONTRACTS.base.delegationRegistry;
+    : chainId === 8453
+    ? CONTRACTS.base.delegationRegistry
+    : '';
 
   const revokeDelegation = useCallback(() => {
     if (!registryAddress) {
-      throw new Error('Contracts not deployed on this network');
+      throw new Error(`Contracts not deployed on this network (chainId: ${chainId}). Please switch to Base Sepolia (84532) or Base (8453).`);
     }
 
     writeContract({
@@ -316,7 +330,7 @@ export function useRevokeDelegation() {
       abi: DELEGATION_REGISTRY_ABI,
       functionName: 'revokeDelegation',
     });
-  }, [registryAddress, writeContract]);
+  }, [registryAddress, writeContract, chainId]);
 
   return {
     revokeDelegation,

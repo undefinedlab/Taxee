@@ -1,0 +1,16 @@
+{
+  "name": "taxee-contracts",
+  "version": "1.0.0",
+  "description": "Taxee smart contracts",
+  "scripts": {
+    "compile": "hardhat compile",
+    "deploy": "hardhat run deploy-eip7702.js --network baseSepolia",
+    "verify": "echo 'Run: npx hardhat verify --network baseSepolia <CONTRACT_ADDRESS> [ARGS]'",
+    "test": "hardhat test"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^2.0.0",
+    "dotenv": "^16.0.0",
+    "hardhat": "^2.19.0"
+  }
+}
