@@ -8,6 +8,7 @@ import type {
   Lot,
   Position,
 } from "@taxee/shared";
+import { getHarvestTaxRate } from "@taxee/shared";
 
 interface CorrelationData {
   pairs: Record<string, { replacement: string; correlation: number }>;
@@ -61,6 +62,9 @@ export function scanForHarvestOpportunities(
 
     if (unrealizedPct >= policy.harvestThresholdPct) continue;
 
+    const minLossUsd = policy.minHarvestLossUsd ?? 0;
+    if (unrealizedGainLoss > -minLossUsd) continue;
+
     const openLots = position.lots.filter(
       (l: Lot) => l.status === "open" || l.status === "partial"
     );
@@ -70,10 +74,7 @@ export function scanForHarvestOpportunities(
     const washSaleDaysRemaining = computeWashSaleDaysRemaining(openLots, now);
     const replacementAsset      = getReplacementAsset(position.assetId);
 
-    // Tax-saving estimate by jurisdiction:
-    //   US — assume short-term ordinary income rate (37% top bracket; conservative upper bound)
-    //   UK — Capital Gains Tax higher rate (20% on crypto/shares above the £3K allowance)
-    const harvestRate           = policy.jurisdiction === "UK" ? 0.20 : 0.37;
+    const harvestRate = getHarvestTaxRate(policy);
     const estimatedTaxSaving    = Math.abs(unrealizedGainLoss) * harvestRate;
 
     candidates.push({

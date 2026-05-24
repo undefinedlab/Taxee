@@ -35,14 +35,23 @@ export interface ApprovalSettings {
   vetoWindowSeconds?: number;
 }
 
+export type JurisdictionCode = "US" | "UK" | "EU" | "BR" | "MX" | "IN" | "OTHER";
+
 export interface UserPolicy {
   primaryObjective: PrimaryObjective;
+  /** Negative % — e.g. -8 means harvest when loss exceeds 8% */
   harvestThresholdPct: number;
   maturationBufferDays: number;
   rebalanceAggressiveness: RebalanceAggressiveness;
   allowedActions: ActionType[];
   maxTaxPerAction?: number;
-  jurisdiction: "US" | "UK";
+  jurisdiction: JurisdictionCode;
+  /** Ignore harvest candidates below this absolute USD loss */
+  minHarvestLossUsd?: number;
+  /** How often the agent worker scans this wallet */
+  heartbeatIntervalMinutes?: number;
+  telegramChatId?: string;
+  lastHeartbeatAt?: string;
 }
 
 export interface WalletBinding {
@@ -238,7 +247,7 @@ export interface OpportunityNotification {
   actionId: string;
   walletLabel?: string;
   walletAddress?: string;
-  jurisdiction?: "US" | "UK";
+  jurisdiction?: JurisdictionCode;
   type: ActionType;
   headline: string;
   explanationBody: string;
@@ -280,7 +289,7 @@ export interface ActionReceipt {
 export interface RegisterAgentRequest {
   walletAddress: string;
   chains: number[];
-  jurisdiction: "US" | "UK";
+  jurisdiction: JurisdictionCode;
   harvestThresholdPct: number;
   maturationBufferDays?: number;
   approvalMode: ApprovalMode;

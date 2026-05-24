@@ -1,14 +1,26 @@
 import { Bot, InlineKeyboard } from "grammy";
 import { eq, and, inArray } from "drizzle-orm";
-import { spawn } from "child_process";
-import path from "path";
-import { fileURLToPath } from "url";
+import { runHeartbeat } from "@taxee/agent/heartbeat";
+import { buildAgentPolicy, jurisdictionDisplay, normalizeJurisdiction } from "@taxee/shared";
+import type { JurisdictionCode, UserPolicy } from "@taxee/shared";
 import { db, users, wallets, agents, opportunities, lots } from "@taxee/db";
 import { importLotsForWallet, fetchWalletPositions, provisionCircleWallet, CircleClient } from "@taxee/aggregator";
 import axios from "axios";
-
-const __dirname  = path.dirname(fileURLToPath(import.meta.url));
-const BACKEND_DIR = path.resolve(__dirname, "../../..");
+import {
+  clearPendingPolicy,
+  formatPolicySummary,
+  getPendingPolicy,
+  harvestThresholdKeyboard,
+  heartbeatKeyboard,
+  isPolicySetupComplete,
+  jurisdictionKeyboard,
+  minLossKeyboard,
+  setHarvestThreshold,
+  setHeartbeat,
+  setJurisdiction,
+  setMinLoss,
+  type PendingAgentPolicy,
+} from "./onboarding.js";
 
 const token = process.env["TELEGRAM_BOT_TOKEN"];
 if (!token) throw new Error("TELEGRAM_BOT_TOKEN is required");
@@ -27,13 +39,33 @@ async function getOrCreateUser(chatId: string) {
   return created!;
 }
 
+function policyFromPending(
+  userJurisdiction: string | null | undefined,
+  chatId: string,
+): UserPolicy {
+  const pending = getPendingPolicy(chatId);
+  const overrides: Parameters<typeof buildAgentPolicy>[1] = { telegramChatId: chatId };
+  if (pending?.harvestThresholdPct != null) {
+    overrides.harvestThresholdPct = pending.harvestThresholdPct;
+  }
+  if (pending?.minHarvestLossUsd != null) {
+    overrides.minHarvestLossUsd = pending.minHarvestLossUsd;
+  }
+  if (pending?.heartbeatIntervalMinutes != null) {
+    overrides.heartbeatIntervalMinutes = pending.heartbeatIntervalMinutes;
+  }
+  return buildAgentPolicy(userJurisdiction, overrides);
+}
+
 async function getOrCreateAgentForWallet(
   userId: string,
   walletAddress: string,
   telegramChatId: string,
   walletLabel: string,
+  userJurisdiction: string | null | undefined,
 ) {
   const normalized = walletAddress.toLowerCase();
+  const agentPolicy = policyFromPending(userJurisdiction, telegramChatId);
 
   const [existingAgent] = await db
     .select()
@@ -41,24 +73,17 @@ async function getOrCreateAgentForWallet(
     .where(and(eq(agents.userId, userId), eq(agents.walletAddress, normalized)));
 
   if (existingAgent) {
-    const policy = existingAgent.policy as Record<string, unknown>;
-    if (!policy["telegramChatId"]) {
-      await db.update(agents)
-        .set({ policy: { ...policy, telegramChatId } })
-        .where(eq(agents.id, existingAgent.id));
-    }
-    return existingAgent;
+    await db.update(agents)
+      .set({
+        policy: {
+          ...(existingAgent.policy as object),
+          ...agentPolicy,
+          telegramChatId,
+        },
+      })
+      .where(eq(agents.id, existingAgent.id));
+    return { ...existingAgent, policy: agentPolicy };
   }
-
-  const defaultPolicy = {
-    primaryObjective:        "minimize_tax",
-    harvestThresholdPct:     -8,
-    maturationBufferDays:    30,
-    rebalanceAggressiveness: "moderate",
-    allowedActions:          ["HARVEST", "PARK", "REBALANCE"],
-    jurisdiction:            "US",
-    telegramChatId,
-  };
 
   const blockchain = process.env["CIRCLE_ENVIRONMENT"] === "production" ? "BASE" : "BASE-SEPOLIA";
   const provision = await provisionCircleWallet({
@@ -79,7 +104,7 @@ async function getOrCreateAgentForWallet(
       name:          walletLabel,
       status:        "active",
       approvalMode:  "manual",
-      policy:        defaultPolicy,
+      policy:        agentPolicy,
       ...(provision.wallet ? { circleWalletId: provision.wallet.id } : {}),
     })
     .returning();
@@ -88,15 +113,35 @@ async function getOrCreateAgentForWallet(
   return created;
 }
 
-const regionKeyboard = () =>
-  new InlineKeyboard()
-    .text("🇺🇸 United States", "region:US")
-    .text("🇬🇧 United Kingdom", "region:UK");
-
-async function jurisdictionLabel(j: string | null | undefined): Promise<string> {
-  if (j === "UK") return "🇬🇧 United Kingdom";
-  if (j === "US") return "🇺🇸 United States";
-  return "_not set_";
+async function promptPolicySetup(ctx: { reply: Function; chat?: { id: number } }, chatId: string) {
+  const pending = getPendingPolicy(chatId);
+  if (!pending?.jurisdiction) {
+    await ctx.reply(
+      "🌍 Choose your tax jurisdiction first:",
+      { parse_mode: "Markdown", reply_markup: jurisdictionKeyboard() },
+    );
+    return;
+  }
+  if (pending.heartbeatIntervalMinutes == null) {
+    await ctx.reply(
+      "⏱ *How often should I scan your portfolio?*",
+      { parse_mode: "Markdown", reply_markup: heartbeatKeyboard() },
+    );
+    return;
+  }
+  if (pending.harvestThresholdPct == null) {
+    await ctx.reply(
+      "🌾 *Harvest when unrealized loss exceeds:*",
+      { parse_mode: "Markdown", reply_markup: harvestThresholdKeyboard() },
+    );
+    return;
+  }
+  if (pending.minHarvestLossUsd == null) {
+    await ctx.reply(
+      "💵 *Minimum loss (USD) before suggesting a harvest trade:*\n_Skip tiny trades below this amount._",
+      { parse_mode: "Markdown", reply_markup: minLossKeyboard() },
+    );
+  }
 }
 
 bot.command("start", async (ctx) => {
@@ -106,35 +151,52 @@ bot.command("start", async (ctx) => {
   if (!user.jurisdiction) {
     await ctx.reply(
       "👋 Welcome to *taxee* — your AI tax-routing agent.\n\n" +
-      "First, which tax regime should I use for your portfolio? " +
-      "This affects what counts as a taxable event, the holding-period rules, and the savings math.",
-      { parse_mode: "Markdown", reply_markup: regionKeyboard() }
+      "Step 1: pick your tax jurisdiction (US, UK, EU, Mexico, etc.).\n" +
+      "Step 2: set scan rhythm + harvest rules.\n" +
+      "Step 3: send your wallet (0x...).",
+      { parse_mode: "Markdown", reply_markup: jurisdictionKeyboard() },
     );
+    return;
+  }
+
+  if (!isPolicySetupComplete(chatId)) {
+    setJurisdiction(chatId, normalizeJurisdiction(user.jurisdiction));
+    await ctx.reply(
+      `👋 Welcome back. Finish agent setup (${jurisdictionDisplay(user.jurisdiction)}):`,
+      { parse_mode: "Markdown" },
+    );
+    await promptPolicySetup(ctx, chatId);
     return;
   }
 
   await ctx.reply(
     `👋 Welcome back to *taxee*.\n\n` +
-    `🌍 Tax regime: ${await jurisdictionLabel(user.jurisdiction)} _(change with /region)_\n\n` +
-    "I watch your DeFi portfolio for tax-smart opportunities: loss harvesting, maturation parking, rebalancing.\n\n" +
-    "Send me a wallet address (0x...) to start — you can add multiple wallets.\n\n" +
-    "Commands:\n" +
-    "/wallets — list all linked wallets\n" +
-    "/opportunities — pending actions across all wallets\n" +
-    "/status — agent overview\n" +
-    "/mode manual|delegated — approval mode\n" +
-    "/region — change tax regime (US / UK)",
-    { parse_mode: "Markdown" }
+    `🌍 ${jurisdictionDisplay(user.jurisdiction)}\n\n` +
+    "Send a wallet (0x...) or use /policy to change scan rhythm & harvest rules.\n\n" +
+    "Commands: /wallets · /opportunities · /status · /policy · /region · /mode",
+    { parse_mode: "Markdown" },
   );
 });
 
 bot.command("region", async (ctx) => {
   const chatId = String(ctx.chat.id);
-  const user   = await getOrCreateUser(chatId);
+  await getOrCreateUser(chatId);
+  clearPendingPolicy(chatId);
   await ctx.reply(
-    `Current tax regime: ${await jurisdictionLabel(user.jurisdiction)}\n\nChoose a new one:`,
-    { parse_mode: "Markdown", reply_markup: regionKeyboard() }
+    "🌍 Choose your tax jurisdiction:",
+    { parse_mode: "Markdown", reply_markup: jurisdictionKeyboard() },
   );
+});
+
+bot.command("policy", async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  const [user] = await db.select().from(users).where(eq(users.telegramId, chatId));
+  clearPendingPolicy(chatId);
+  if (user?.jurisdiction) {
+    setJurisdiction(chatId, normalizeJurisdiction(user.jurisdiction));
+  }
+  await ctx.reply("⚙️ Reconfigure your agent policy:", { parse_mode: "Markdown" });
+  await promptPolicySetup(ctx, chatId);
 });
 
 bot.command("wallets", async (ctx) => {
@@ -365,9 +427,15 @@ bot.on("message:text", async (ctx) => {
   const user = await getOrCreateUser(chatId);
   if (!user.jurisdiction) {
     await ctx.reply(
-      "Before linking a wallet, please choose your tax regime — it changes which opportunities I'll surface:",
-      { reply_markup: regionKeyboard() }
+      "Before linking a wallet, choose your tax jurisdiction:",
+      { reply_markup: jurisdictionKeyboard() },
     );
+    return;
+  }
+  if (!isPolicySetupComplete(chatId)) {
+    setJurisdiction(chatId, normalizeJurisdiction(user.jurisdiction));
+    await ctx.reply("Finish policy setup before linking a wallet:");
+    await promptPolicySetup(ctx, chatId);
     return;
   }
 
@@ -384,7 +452,13 @@ bot.on("message:text", async (ctx) => {
       await db.insert(wallets).values({ userId: user.id, address: normalized, label: walletLabel });
     }
 
-    const agent = await getOrCreateAgentForWallet(user.id, normalized, chatId, walletLabel);
+    const agent = await getOrCreateAgentForWallet(
+      user.id,
+      normalized,
+      chatId,
+      walletLabel,
+      user.jurisdiction,
+    );
     const isNew = !alreadyLinked;
 
     await ctx.reply(
@@ -424,7 +498,12 @@ bot.on("message:text", async (ctx) => {
     const geckoKey   = process.env["COINGECKO_API_KEY"];
 
     if (!alchemyKey) {
-      await ctx.reply("⚠️ Add ALCHEMY_API_KEY to .env to enable real portfolio scanning.");
+      await ctx.reply(
+        "⚠️ *Portfolio scan disabled* — `ALCHEMY_API_KEY` is not set on the *telegram-bot* Railway service.\n\n" +
+          "Railway → telegram-bot → Variables → add `ALCHEMY_API_KEY` (same value as API), then redeploy.\n\n" +
+          "Optional: `COINGECKO_API_KEY` for prices.",
+        { parse_mode: "Markdown" },
+      );
       return;
     }
 
@@ -487,14 +566,14 @@ bot.on("message:text", async (ctx) => {
       { parse_mode: "Markdown" }
     );
 
-    // ── Step 3: trigger heartbeat in background → sends Telegram notifs ───────
-    const trigger = spawn(
-      "pnpm",
-      ["--filter", "@taxee/agent", "dev:trigger"],
-      { cwd: BACKEND_DIR, env: process.env, stdio: "pipe" }
-    );
-    trigger.on("error", (err) => console.error("[bot] heartbeat spawn error:", err));
-    trigger.on("close", (code) => console.log(`[bot] heartbeat exited ${code}`));
+    // ── Step 3: run tax scan (harvest / park / rebalance) + notify via Telegram ─
+    void runHeartbeat(agent.id)
+      .then((result) => {
+        console.log(
+          `[bot] heartbeat agent=${agent.id} opportunities=${result.opportunitiesFound} executed=${result.actionsExecuted}`,
+        );
+      })
+      .catch((err) => console.error("[bot] heartbeat failed:", err));
   } catch (err) {
     console.error("[bot] wallet handler error:", err);
     await ctx.reply("❌ Failed to set up agent. Please try again.");
@@ -505,27 +584,51 @@ bot.on("callback_query:data", async (ctx) => {
   const data = ctx.callbackQuery.data;
   const chatId = String(ctx.chat?.id ?? "");
 
-  // ── Region picker ────────────────────────────────────────────────────────
   if (data.startsWith("region:")) {
-    const region = data.split(":")[1];
-    if (region !== "US" && region !== "UK") {
-      await ctx.answerCallbackQuery({ text: "Unknown region." });
-      return;
-    }
+    const code = normalizeJurisdiction(data.split(":")[1]);
     const user = await getOrCreateUser(chatId);
-    await db.update(users).set({ jurisdiction: region }).where(eq(users.id, user.id));
+    await db.update(users).set({ jurisdiction: code }).where(eq(users.id, user.id));
+    setJurisdiction(chatId, code);
     await ctx.editMessageReplyMarkup(undefined);
-    await ctx.answerCallbackQuery({ text: `Set to ${region === "UK" ? "🇬🇧 UK" : "🇺🇸 US"}` });
+    await ctx.answerCallbackQuery({ text: jurisdictionDisplay(code) });
     await ctx.reply(
-      region === "UK"
-        ? "🇬🇧 *UK tax regime selected.*\n\nI'll surface loss-harvesting opportunities and respect the 30-day matching rule. " +
-          "Note: PARK strategies (waiting for long-term threshold) don't apply under UK CGT — those will be skipped.\n\n" +
-          "Send a wallet address (0x...) when you're ready."
-        : "🇺🇸 *US tax regime selected.*\n\nI'll surface loss harvesting, maturation parking, and rebalancing opportunities " +
-          "following US capital-gains rules (365-day long-term threshold, 30-day wash-sale window).\n\n" +
-          "Send a wallet address (0x...) when you're ready.",
-      { parse_mode: "Markdown" }
+      `${jurisdictionDisplay(code)} selected.\n\n⏱ *How often should I scan your portfolio?*`,
+      { parse_mode: "Markdown", reply_markup: heartbeatKeyboard() },
     );
+    return;
+  }
+
+  if (data.startsWith("policy:heartbeat:")) {
+    const mins = parseInt(data.split(":")[2] ?? "30", 10);
+    setHeartbeat(chatId, mins);
+    await ctx.editMessageReplyMarkup(undefined);
+    await ctx.answerCallbackQuery({ text: `Every ${mins} min` });
+    await ctx.reply(
+      `⏱ Scan rhythm: *${mins} minutes*\n\n🌾 *Harvest when unrealized loss exceeds:*`,
+      { parse_mode: "Markdown", reply_markup: harvestThresholdKeyboard() },
+    );
+    return;
+  }
+
+  if (data.startsWith("policy:harvest:")) {
+    const pct = parseInt(data.split(":")[2] ?? "-8", 10);
+    setHarvestThreshold(chatId, pct);
+    await ctx.editMessageReplyMarkup(undefined);
+    await ctx.answerCallbackQuery({ text: `${Math.abs(pct)}% threshold` });
+    await ctx.reply(
+      `🌾 Harvest threshold: *${Math.abs(pct)}% loss*\n\n💵 *Minimum USD loss before suggesting a harvest:*`,
+      { parse_mode: "Markdown", reply_markup: minLossKeyboard() },
+    );
+    return;
+  }
+
+  if (data.startsWith("policy:minloss:")) {
+    const usd = parseInt(data.split(":")[2] ?? "0", 10);
+    setMinLoss(chatId, usd);
+    await ctx.editMessageReplyMarkup(undefined);
+    await ctx.answerCallbackQuery({ text: usd === 0 ? "Any size" : `≥ $${usd}` });
+    const pending = getPendingPolicy(chatId)! as PendingAgentPolicy;
+    await ctx.reply(formatPolicySummary(pending), { parse_mode: "Markdown" });
     return;
   }
 

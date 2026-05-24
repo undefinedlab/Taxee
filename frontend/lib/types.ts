@@ -21,9 +21,13 @@ export interface ApprovalSettings {
 
 export interface UserPolicy {
   jurisdiction: "US" | "UK" | "EU" | "BR" | "MX" | "IN" | "OTHER";
+  /** Negative % — e.g. -8 = harvest when loss exceeds 8% */
   harvestThresholdPct: number;
   maturationBufferDays: number;
   primaryObjective: "minimize_tax" | "maximize_return" | "balanced";
+  /** Ignore harvest suggestions below this USD loss */
+  minHarvestLossUsd?: number;
+  heartbeatIntervalMinutes?: number;
 }
 
 export interface WalletBinding {

@@ -1,36 +1,54 @@
 import cron from "node-cron";
 import { eq } from "drizzle-orm";
 import { db, agents } from "@taxee/db";
+import type { UserPolicy } from "@taxee/shared";
 import { runHeartbeat } from "./heartbeat.js";
 
 console.log("[agent] taxee heartbeat worker starting");
 
-cron.schedule("*/15 * * * *", async () => {
-  console.log(`[agent] Heartbeat tick at ${new Date().toISOString()}`);
-
+/** Check every minute; each agent runs on its own heartbeatIntervalMinutes */
+cron.schedule("* * * * *", async () => {
   try {
     const activeAgents = await db
-      .select({ id: agents.id })
+      .select()
       .from(agents)
       .where(eq(agents.status, "active"));
 
-    console.log(`[agent] Running heartbeat for ${activeAgents.length} active agents`);
+    const now = Date.now();
 
-    await Promise.allSettled(
-      activeAgents.map(async ({ id }) => {
-        try {
-          const result = await runHeartbeat(id);
-          console.log(
-            `[agent] agent=${id} found=${result.opportunitiesFound} executed=${result.actionsExecuted}`
-          );
-        } catch (err) {
-          console.error(`[agent] Heartbeat error for agent ${id}:`, err);
-        }
-      })
-    );
+    for (const agent of activeAgents) {
+      const policy = (agent.policy ?? {}) as UserPolicy;
+      const intervalMin = policy.heartbeatIntervalMinutes ?? 30;
+      const lastAt = policy.lastHeartbeatAt
+        ? new Date(policy.lastHeartbeatAt).getTime()
+        : 0;
+
+      if (lastAt > 0 && now - lastAt < intervalMin * 60_000) {
+        continue;
+      }
+
+      try {
+        const result = await runHeartbeat(agent.id);
+        await db
+          .update(agents)
+          .set({
+            policy: {
+              ...policy,
+              lastHeartbeatAt: new Date().toISOString(),
+            },
+          })
+          .where(eq(agents.id, agent.id));
+
+        console.log(
+          `[agent] agent=${agent.id} interval=${intervalMin}m found=${result.opportunitiesFound} executed=${result.actionsExecuted}`,
+        );
+      } catch (err) {
+        console.error(`[agent] Heartbeat error for agent ${agent.id}:`, err);
+      }
+    }
   } catch (err) {
     console.error("[agent] Failed to fetch active agents:", err);
   }
 });
 
-console.log("[agent] Cron scheduled — running every 15 minutes");
+console.log("[agent] Cron scheduled — per-agent interval from policy.heartbeatIntervalMinutes");

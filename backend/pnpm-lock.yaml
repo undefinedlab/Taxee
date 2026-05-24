@@ -173,6 +173,9 @@ importers:
 
   apps/telegram-bot:
     dependencies:
+      '@taxee/agent':
+        specifier: workspace:*
+        version: link:../agent
       '@taxee/aggregator':
         specifier: workspace:*
         version: link:../../packages/aggregator

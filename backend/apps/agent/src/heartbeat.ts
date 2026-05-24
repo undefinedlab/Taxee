@@ -27,6 +27,7 @@ import type {
   RealizedYtd,
   NotificationChannel,
 } from "@taxee/shared";
+import { buildAgentPolicy, normalizeJurisdiction } from "@taxee/shared";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const circle = new (CircleClient as any)(
@@ -105,23 +106,9 @@ export async function runHeartbeat(agentId: string): Promise<{
   }
 
   const [agentOwner] = await db.select().from(users).where(eq(users.id, agent.userId));
-  const userJurisdiction = (agentOwner?.jurisdiction === "UK" ? "UK" : "US") as "US" | "UK";
-
-  const DEFAULT_POLICY: UserPolicy = {
-    primaryObjective:        "minimize_tax",
-    harvestThresholdPct:     -8,
-    maturationBufferDays:    30,
-    rebalanceAggressiveness: "moderate",
-    allowedActions:          userJurisdiction === "UK"
-      ? ["HARVEST", "REBALANCE"]      // UK: no long-term threshold, PARK is meaningless
-      : ["HARVEST", "PARK", "REBALANCE"],
-    jurisdiction:            userJurisdiction,
-  };
-  const policy: UserPolicy = {
-    ...DEFAULT_POLICY,
-    ...(agent.policy as Partial<UserPolicy>),
-    jurisdiction: userJurisdiction,     // user setting always wins over agent.policy default
-  };
+  const userJurisdiction = normalizeJurisdiction(agentOwner?.jurisdiction);
+  const stored = (agent.policy ?? {}) as Partial<UserPolicy>;
+  const policy: UserPolicy = buildAgentPolicy(userJurisdiction, stored);
 
   const openLots = await db
     .select()
@@ -207,7 +194,9 @@ export async function runHeartbeat(agentId: string): Promise<{
     ...rebalanceCandidates,
   ].filter((c) => isWashSaleSafe(c));
 
-  console.log(`[heartbeat] ${allCandidates.length} candidates found for agent ${agentId}`);
+  console.log(
+    `[heartbeat] ${allCandidates.length} candidates (harvest threshold ${policy.harvestThresholdPct}%, min loss $${policy.minHarvestLossUsd ?? 0}, every ${policy.heartbeatIntervalMinutes ?? 30}m)`,
+  );
 
   let actionsExecuted = 0;
 

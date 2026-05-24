@@ -12,9 +12,11 @@ export const DEMO_WALLET = "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb";
 
 export const defaultPolicy: UserPolicy = {
   jurisdiction: "US",
-  harvestThresholdPct: 8,
+  harvestThresholdPct: -8,
   maturationBufferDays: 30,
   primaryObjective: "minimize_tax",
+  minHarvestLossUsd: 100,
+  heartbeatIntervalMinutes: 30,
 };
 
 export const defaultApproval: ApprovalSettings = {
@@ -119,7 +121,7 @@ export function createDemoAgent(
     policy,
     approval,
     executionTier: "watch",
-    heartbeatIntervalMinutes: 60,
+    heartbeatIntervalMinutes: policy.heartbeatIntervalMinutes ?? 30,
     createdAt: new Date().toISOString(),
   };
 }

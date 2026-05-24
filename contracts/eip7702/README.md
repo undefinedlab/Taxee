@@ -4,7 +4,14 @@ Smart contracts implementing EIP-7702 for Taxee's self-custody wallet integratio
 
 ## Overview
 
-These contracts allow MetaMask and other self-custody wallet users to authorize Taxee to execute tax optimization transactions on their behalf through EIP-7702 delegation. Users retain full control - they can revoke authorization at any time, and Taxee can only execute transactions within strict policy limits.
+These contracts allow **self-custody wallet users** (MetaMask, Rainbow, etc.) to authorize Taxee via EIP-7702 delegation. 
+
+⚠️ **Note:** This is one of three wallet options in Taxee:
+1. **Self-Custody (EIP-7702)** ← These contracts
+2. **Circle MPC Wallet** ← Custodial option via `/setup-wallet`
+3. **Watch-Only Mode** ← Read-only tracking
+
+See [Wallet Options Guide](../../docs/wallet-options.md) for full comparison.
 
 ## Architecture
 

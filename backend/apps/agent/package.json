@@ -3,9 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./heartbeat": {
+      "import": "./dist/heartbeat.js",
+      "types": "./dist/heartbeat.d.ts"
+    }
+  },
   "scripts": {
     "dev": "node --env-file=../../.env --import tsx --watch src/index.ts",
-    "dev:trigger": "node --env-file=../../.env --import tsx src/trigger.ts",
+    "dev:trigger": "node --env-file=../../.env.local --import tsx src/trigger.ts",
+    "trigger": "node dist/trigger.js",
     "build": "tsc",
     "start": "node dist/index.js",
     "clean": "rm -rf dist",

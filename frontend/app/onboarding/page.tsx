@@ -9,12 +9,13 @@ import { ApprovalModePicker } from "@/components/onboarding/approval-mode-picker
 import { OnboardingTopBar } from "@/components/onboarding/onboarding-topbar";
 import { registerAgent } from "@/lib/agent-store";
 import { truncateAddress } from "@/lib/utils";
-import { WalletOnboardingStep } from "@/components/wallet/wallet-onboarding-step";
+import { SimpleWalletConnect } from "@/components/wallet/simple-wallet-connect";
+import { AgentActivation } from "@/components/wallet/agent-activation";
 import { useWalletData } from "@/hooks/use-wallet-data";
 
-type Step = "wallet-input" | "wallet-connect" | "import" | "policy" | "done";
+type Step = "wallet-input" | "wallet-connect" | "import" | "policy" | "review" | "activate" | "done";
 
-const STEP_ORDER: Step[] = ["wallet-input", "wallet-connect", "import", "policy", "done"];
+const STEP_ORDER: Step[] = ["wallet-input", "wallet-connect", "import", "policy", "review", "activate", "done"];
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -152,7 +153,51 @@ export default function OnboardingPage() {
                         </div>
                       </button>
 
-                      {/* Option 2: Watch Address */}
+                      {/* Option 2: Circle MPC Wallet - Via Telegram */}
+                      <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                          <div className="w-full border-t border-[#e5e7eb] dark:border-[#374151]" />
+                        </div>
+                        <div className="relative flex justify-center text-sm">
+                          <span className="bg-white px-2 font-landing text-[#9ca3af] dark:bg-[#0b0f19]">or</span>
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-6 dark:border-blue-900/30 dark:bg-blue-900/10">
+                        <div className="flex items-start gap-4">
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+                            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                            </svg>
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="font-landing font-medium text-[#111827] dark:text-[#f9fafb]">
+                              Circle MPC Wallet
+                            </h3>
+                            <p className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af] mt-1">
+                              Custodial wallet with PIN protection and multi-party computation security.
+                            </p>
+                            <div className="mt-3 p-3 rounded-lg bg-white dark:bg-[#111827]">
+                              <p className="font-landing text-xs text-[#6b7280] dark:text-[#9ca3af]">
+                                Available via Telegram bot. Start a chat with @taxee_bot and type /start to create your Circle wallet.
+                              </p>
+                            </div>
+                            <a
+                              href="https://t.me/taxee_bot"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                            >
+                              Open Telegram
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Option 3: Watch Address */}
                       <div className="relative">
                         <div className="absolute inset-0 flex items-center">
                           <div className="w-full border-t border-[#e5e7eb] dark:border-[#374151]" />
@@ -201,7 +246,7 @@ export default function OnboardingPage() {
                 )}
 
                 {step === "wallet-connect" && (
-                  <WalletOnboardingStep 
+                  <SimpleWalletConnect 
                     onComplete={() => setStep("import")}
                     onBack={() => setStep("wallet-input")}
                   />
@@ -455,9 +500,54 @@ export default function OnboardingPage() {
                             }
                             className="w-full rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 font-landing text-sm text-[#111827] focus:border-[#111827] focus:outline-none focus:ring-1 focus:ring-[#111827]/20 dark:border-[#374151] dark:bg-[#111827] dark:text-[#f9fafb] dark:focus:border-[#f9fafb] dark:focus:ring-[#f9fafb]/20"
                           >
-                            <option value={5}>5%</option>
-                            <option value={8}>8%</option>
-                            <option value={10}>10%</option>
+                            <option value={-5}>5% loss</option>
+                            <option value={-8}>8% loss</option>
+                            <option value={-10}>10% loss</option>
+                            <option value={-15}>15% loss</option>
+                          </select>
+                        </label>
+
+                        <label className="block space-y-2">
+                          <span className="font-landing text-sm font-medium text-[#111827] dark:text-[#f9fafb]">
+                            Minimum loss (USD) to suggest harvest
+                          </span>
+                          <select
+                            value={policy.minHarvestLossUsd ?? 0}
+                            onChange={(e) =>
+                              setPolicy({
+                                ...policy,
+                                minHarvestLossUsd: Number(e.target.value),
+                              })
+                            }
+                            className="w-full rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 font-landing text-sm text-[#111827] focus:border-[#111827] focus:outline-none focus:ring-1 focus:ring-[#111827]/20 dark:border-[#374151] dark:bg-[#111827] dark:text-[#f9fafb] dark:focus:border-[#f9fafb] dark:focus:ring-[#f9fafb]/20"
+                          >
+                            <option value={0}>Any loss size</option>
+                            <option value={50}>$50+</option>
+                            <option value={100}>$100+</option>
+                            <option value={250}>$250+</option>
+                            <option value={500}>$500+</option>
+                            <option value={1000}>$1,000+</option>
+                          </select>
+                        </label>
+
+                        <label className="block space-y-2">
+                          <span className="font-landing text-sm font-medium text-[#111827] dark:text-[#f9fafb]">
+                            Portfolio scan rhythm
+                          </span>
+                          <select
+                            value={policy.heartbeatIntervalMinutes ?? 30}
+                            onChange={(e) =>
+                              setPolicy({
+                                ...policy,
+                                heartbeatIntervalMinutes: Number(e.target.value),
+                              })
+                            }
+                            className="w-full rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 font-landing text-sm text-[#111827] focus:border-[#111827] focus:outline-none focus:ring-1 focus:ring-[#111827]/20 dark:border-[#374151] dark:bg-[#111827] dark:text-[#f9fafb] dark:focus:border-[#f9fafb] dark:focus:ring-[#f9fafb]/20"
+                          >
+                            <option value={15}>Every 15 minutes</option>
+                            <option value={30}>Every 30 minutes</option>
+                            <option value={60}>Every hour</option>
+                            <option value={120}>Every 2 hours</option>
                           </select>
                         </label>
 
@@ -527,11 +617,11 @@ export default function OnboardingPage() {
 
                       <button
                         type="button"
-                        onClick={finishOnboarding}
+                        onClick={() => setStep("review")}
                         className="group inline-flex w-full items-stretch overflow-hidden bg-black shadow-[0_4px_16px_rgba(0,0,0,0.12)] dark:bg-[#f9fafb] dark:shadow-none"
                       >
                         <span className="flex flex-1 items-center justify-center px-6 py-3.5 font-landing text-[14px] font-medium text-white dark:text-[#111827]">
-                          Activate agent
+                          Review & Activate
                         </span>
                         <span className="flex w-[52px] items-center justify-center bg-[#374151] transition-colors group-hover:bg-[#4b5563] dark:bg-[#4b5563] dark:group-hover:bg-[#6b7280]">
                           <svg
@@ -550,6 +640,137 @@ export default function OnboardingPage() {
                       </button>
                     </div>
                   </div>
+                )}
+
+                {step === "review" && (
+                  <div className="space-y-8">
+                    <div className="text-center space-y-2">
+                      <h2 className="font-serif text-2xl font-bold text-black dark:text-[#f9fafb]">
+                        Review & Activate
+                      </h2>
+                      <p className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
+                        Review your portfolio and policy before activating your Taxee agent
+                      </p>
+                    </div>
+
+                    {/* Portfolio Summary */}
+                    <div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4 dark:border-[#374151] dark:bg-[#1f2937]">
+                      <h3 className="font-landing text-sm font-medium text-[#111827] dark:text-[#f9fafb] mb-3">
+                        Portfolio ({positions.length} positions)
+                      </h3>
+                      <div className="space-y-2 max-h-32 overflow-y-auto">
+                        {positions.slice(0, 5).map((pos, idx) => (
+                          <div key={idx} className="flex items-center justify-between text-sm">
+                            <span className="font-landing text-[#111827] dark:text-[#f9fafb]">{pos.symbol}</span>
+                            <span className="font-landing text-[#6b7280] dark:text-[#9ca3af]">
+                              {parseFloat(pos.quantity).toFixed(4)} · ${pos.valueUsd.toLocaleString()}
+                            </span>
+                          </div>
+                        ))}
+                        {positions.length > 5 && (
+                          <p className="text-xs text-[#9ca3af] text-center">+{positions.length - 5} more</p>
+                        )}
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-[#e5e7eb] dark:border-[#374151]">
+                        <div className="flex justify-between">
+                          <span className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">Total Value</span>
+                          <span className="font-landing font-semibold text-[#111827] dark:text-[#f9fafb]">${totalValueUsd.toLocaleString()}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Policy Summary */}
+                    <div className="rounded-lg border border-[#e5e7eb] bg-white p-4 dark:border-[#374151] dark:bg-[#111827]">
+                      <h3 className="font-landing text-sm font-medium text-[#111827] dark:text-[#f9fafb] mb-3">
+                        Agent Policy
+                      </h3>
+                      <ul className="space-y-2 text-sm">
+                        <li className="flex items-center gap-2">
+                          <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          <span className="font-landing text-[#111827] dark:text-[#f9fafb]">Max ${policy.maxPerTransaction?.toLocaleString() || '5,000'} per transaction</span>
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          <span className="font-landing text-[#111827] dark:text-[#f9fafb]">Max ${(policy.maxPerMonth || 20000).toLocaleString()} per month</span>
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          <span className="font-landing text-[#111827] dark:text-[#f9fafb]">Valid for 90 days</span>
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          <span className="font-landing text-[#111827] dark:text-[#f9fafb]">Approval: {approval.mode === 'delegated' ? 'Autonomous' : 'Manual'}</span>
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          <span className="font-landing text-[#111827] dark:text-[#f9fafb]">Jurisdiction: {policy.jurisdiction}</span>
+                        </li>
+                      </ul>
+                    </div>
+
+                    {/* EIP-7702 Info */}
+                    <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                      <div className="flex items-start gap-3">
+                        <svg className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div>
+                          <p className="text-white/90 font-medium">EIP-7702 Delegation</p>
+                          <p className="text-white/60 text-sm">
+                            By activating, you&apos;ll sign a message granting Taxee limited authority to execute 
+                            tax optimization within your policy limits. You keep full control and can revoke anytime.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setStep("policy")}
+                        className="flex-1 px-6 py-3 rounded-xl border border-[#e5e7eb] font-landing text-sm font-medium text-[#6b7280] hover:bg-[#f9fafb] dark:border-[#374151] dark:text-[#9ca3af] dark:hover:bg-[#1f2937]"
+                      >
+                        Edit Policy
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setStep("activate")}
+                        className="flex-[2] group inline-flex items-stretch overflow-hidden rounded-xl bg-black shadow-[0_4px_16px_rgba(0,0,0,0.12)] dark:bg-[#f9fafb] dark:shadow-none"
+                      >
+                        <span className="flex flex-1 items-center justify-center px-6 py-3 font-landing text-sm font-medium text-white dark:text-[#111827]">
+                          Activate Agent
+                        </span>
+                        <span className="flex w-[52px] items-center justify-center bg-[#374151] transition-colors group-hover:bg-[#4b5563] dark:bg-[#4b5563] dark:group-hover:bg-[#6b7280]">
+                          <svg className="landing-cta-arrow" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#111827" strokeWidth="2.2">
+                            <path d="M5 10h10M11 6l4 4-4 4" />
+                          </svg>
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {step === "activate" && (
+                  <AgentActivation
+                    policy={policy}
+                    onSuccess={() => {
+                      const agent = registerAgent(walletAddress || '', policy, approval);
+                      setAgentId(agent.id);
+                      setStep("done");
+                    }}
+                    onBack={() => setStep("review")}
+                  />
                 )}
 
                 {step === "done" && agentId && (

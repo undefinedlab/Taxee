@@ -1,4 +1,5 @@
 import type { PortfolioSnapshot, UserPolicy, CandidateAction, Lot } from "@taxee/shared";
+import { supportsLongTermParking } from "@taxee/shared";
 
 const LONG_TERM_THRESHOLD_DAYS = 365;
 
@@ -19,9 +20,7 @@ export function trackMaturationOpportunities(
   snapshot: PortfolioSnapshot,
   policy: UserPolicy
 ): CandidateAction[] {
-  // UK CGT has no holding-period distinction — gains taxed at the same rate
-  // whether held 1 day or 10 years. PARK strategy is meaningless here.
-  if (policy.jurisdiction === "UK") return [];
+  if (!supportsLongTermParking(policy)) return [];
 
   const candidates: CandidateAction[] = [];
   const now = new Date();

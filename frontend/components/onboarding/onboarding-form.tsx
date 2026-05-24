@@ -131,6 +131,11 @@ export function OnboardingForm() {
               className="mt-1 w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-zinc-100"
             >
               <option value="US">United States</option>
+              <option value="UK">United Kingdom</option>
+              <option value="EU">Europe</option>
+              <option value="BR">Brasil</option>
+              <option value="MX">Mexico</option>
+              <option value="IN">India</option>
               <option value="OTHER">Other</option>
             </select>
           </label>
@@ -146,9 +151,43 @@ export function OnboardingForm() {
               }
               className="mt-1 w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-zinc-100"
             >
-              <option value={5}>5%</option>
-              <option value={8}>8%</option>
-              <option value={10}>10%</option>
+              <option value={-5}>5%</option>
+              <option value={-8}>8%</option>
+              <option value={-10}>10%</option>
+            </select>
+          </label>
+          <label className="block text-sm text-zinc-400">
+            Min harvest loss (USD)
+            <select
+              value={policy.minHarvestLossUsd ?? 0}
+              onChange={(e) =>
+                setPolicy({
+                  ...policy,
+                  minHarvestLossUsd: Number(e.target.value),
+                })
+              }
+              className="mt-1 w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-zinc-100"
+            >
+              <option value={0}>Any</option>
+              <option value={100}>$100+</option>
+              <option value={500}>$500+</option>
+            </select>
+          </label>
+          <label className="block text-sm text-zinc-400">
+            Scan every
+            <select
+              value={policy.heartbeatIntervalMinutes ?? 30}
+              onChange={(e) =>
+                setPolicy({
+                  ...policy,
+                  heartbeatIntervalMinutes: Number(e.target.value),
+                })
+              }
+              className="mt-1 w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-zinc-100"
+            >
+              <option value={15}>15 min</option>
+              <option value={30}>30 min</option>
+              <option value={60}>60 min</option>
             </select>
           </label>
           <ApprovalModePicker value={approval} onChange={setApproval} />

@@ -11,6 +11,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@taxee/agent": "workspace:*",
     "@taxee/shared": "workspace:*",
     "@taxee/db": "workspace:*",
     "@taxee/aggregator": "workspace:*",

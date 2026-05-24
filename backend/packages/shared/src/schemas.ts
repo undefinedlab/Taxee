@@ -9,7 +9,7 @@ export const LotStatusSchema = z.enum(["open", "partial", "closed"]);
 export const RegimeLabelSchema = z.enum(["risk-on", "risk-off", "neutral"]);
 export const LLMDecisionSchema = z.enum(["EXECUTE", "DEFER", "SKIP"]);
 export const TaxTermSchema = z.enum(["short", "long"]);
-export const JurisdictionSchema = z.enum(["US", "OTHER"]);
+export const JurisdictionSchema = z.enum(["US", "UK", "EU", "BR", "MX", "IN", "OTHER"]);
 
 // ─── Policy & Settings ────────────────────────────────────────────────────────
 
@@ -21,6 +21,10 @@ export const UserPolicySchema = z.object({
   allowedActions: z.array(ActionTypeSchema).min(1),
   maxTaxPerAction: z.number().positive().optional(),
   jurisdiction: JurisdictionSchema,
+  minHarvestLossUsd: z.number().min(0).optional(),
+  heartbeatIntervalMinutes: z.number().min(5).max(1440).optional(),
+  telegramChatId: z.string().optional(),
+  lastHeartbeatAt: z.string().optional(),
 });
 
 export const ApprovalSettingsSchema = z.object({
