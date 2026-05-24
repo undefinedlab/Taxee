@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type {
   PortfolioSnapshot,
   UserPolicy,
@@ -5,14 +8,18 @@ import type {
   Lot,
   Position,
 } from "@taxee/shared";
-import correlations from "./data/correlations.json";
 
 interface CorrelationData {
   pairs: Record<string, { replacement: string; correlation: number }>;
   minCorrelationThreshold: number;
 }
 
-const correlationData = correlations as CorrelationData;
+const correlationData = JSON.parse(
+  readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "data", "correlations.json"),
+    "utf8",
+  ),
+) as CorrelationData;
 
 /**
  * Scan the portfolio snapshot for loss-harvest opportunities.

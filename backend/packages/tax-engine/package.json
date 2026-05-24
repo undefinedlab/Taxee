@@ -13,7 +13,7 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && cp -r src/data dist/data",
     "dev": "tsc --watch",
     "test": "node --experimental-vm-modules node_modules/.bin/jest",
     "clean": "rm -rf dist",

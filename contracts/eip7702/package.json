@@ -1,0 +1,17 @@
+{
+  "name": "taxee-eip7702",
+  "version": "1.0.0",
+  "description": "EIP-7702 delegation contracts for Taxee",
+  "scripts": {
+    "compile": "hardhat compile",
+    "deploy": "hardhat run deploy.js --network baseSepolia",
+    "deploy:mainnet": "hardhat run deploy.js --network base",
+    "verify": "echo 'Run: npx hardhat verify --network baseSepolia <CONTRACT_ADDRESS> [ARGS]'",
+    "test": "hardhat test"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^2.0.0",
+    "dotenv": "^16.0.0",
+    "hardhat": "^2.19.0"
+  }
+}
