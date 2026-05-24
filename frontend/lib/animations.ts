@@ -1,11 +1,12 @@
 // Animation utilities and configurations
-import { gsap } from "gsap";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
+// Note: GSAP imports commented out - install gsap if needed
+// import { gsap } from "gsap";
+// import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 // Register GSAP plugins
-if (typeof window !== "undefined") {
-  gsap.registerPlugin(ScrollTrigger);
-}
+// if (typeof window !== "undefined") {
+//   gsap.registerPlugin(ScrollTrigger);
+// }
 
 // Easing functions
 export const easings = {

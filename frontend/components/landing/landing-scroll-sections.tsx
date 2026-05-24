@@ -7,7 +7,6 @@ import { SectionIcon } from "@/components/landing/section-icon";
 import { HowItWorksStep } from "@/components/landing/how-it-works-step";
 import { LandingBandSection } from "@/components/landing/landing-band-section";
 import { ValueCardsCarousel } from "@/components/landing/value-cards-carousel";
-import { ValueCard } from "@/components/landing/value-card";
 import {
   channels,
   cta,
@@ -17,7 +16,6 @@ import {
   solution,
 } from "@/components/landing/landing-content";
 import { SectionHeader } from "@/components/landing/section-header";
-import { cn } from "@/lib/utils";
 
 export function LandingScrollSections() {
   return (

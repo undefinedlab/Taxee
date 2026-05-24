@@ -49,7 +49,6 @@ export function ValueCardsCarousel({
   }, [paused, active]);
 
   if (minimal) {
-    const item = items[active];
     return (
       <div
         className="flex h-full w-full min-w-0 flex-col"
