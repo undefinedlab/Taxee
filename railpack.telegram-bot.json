@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "packages": {
+    "node": "22"
+  },
+  "steps": {
+    "build": {
+      "commands": [
+        "cd backend && pnpm install",
+        "cd backend && pnpm turbo run build --filter=@taxee/telegram-bot..."
+      ]
+    }
+  },
+  "deploy": {
+    "startCommand": "cd backend && node apps/telegram-bot/dist/index.js"
+  }
+}

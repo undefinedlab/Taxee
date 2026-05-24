@@ -145,6 +145,8 @@ Create **separate** Railway services with Root Directory `backend` and set **`RA
 | Telegram bot | `railpack.telegram-bot.json` | `node apps/telegram-bot/dist/index.js` |
 | MCP server | `railpack.mcp-server.json` | `node apps/mcp-server/dist/index.js` |
 
+**Railpack “config file not found”?** The telegram/agent/mcp configs live under `backend/`. Either set **Root Directory** to `backend` (recommended), or use repo root with `RAILPACK_CONFIG_FILE=railpack.telegram-bot.json` (wrapper at monorepo root).
+
 You can still use `pnpm start:agent` etc. locally. Copy the same env vars (especially `DATABASE_URL`) to each worker service.
 
 ### Individual services

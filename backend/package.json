@@ -24,7 +24,8 @@
     "db:seed": "pnpm --filter @taxee/api db:seed",
     "db:seed:demo": "pnpm --filter @taxee/api db:seed:demo",
     "format": "prettier --write \"**/*.{ts,json,md}\"",
-    "smoke:prod": "node scripts/smoke-production.mjs"
+    "smoke:prod": "node scripts/smoke-production.mjs",
+    "check:telegram": "node scripts/check-telegram-bot.mjs"
   },
   "devDependencies": {
     "turbo": "^2.0.0",

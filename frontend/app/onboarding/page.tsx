@@ -1,26 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useAccount } from "wagmi";
 import type { ApprovalSettings, UserPolicy } from "@/lib/types";
-import { defaultApproval, defaultPolicy, DEMO_WALLET } from "@/lib/mock-data";
+import { defaultApproval, defaultPolicy } from "@/lib/mock-data";
 import { ApprovalModePicker } from "@/components/onboarding/approval-mode-picker";
 import { OnboardingTopBar } from "@/components/onboarding/onboarding-topbar";
 import { registerAgent } from "@/lib/agent-store";
 import { truncateAddress } from "@/lib/utils";
 import { WalletOnboardingStep } from "@/components/wallet/wallet-onboarding-step";
+import { useWalletData } from "@/hooks/use-wallet-data";
 
 type Step = "wallet-input" | "wallet-connect" | "import" | "policy" | "done";
 
 const STEP_ORDER: Step[] = ["wallet-input", "wallet-connect", "import", "policy", "done"];
-
-// Mock positions data
-const MOCK_POSITIONS = [
-  { asset: "ETH", quantity: "2.5", value: 8750.00, costBasis: 7200.00, unrealizedPnl: 22.1, chain: "Base" },
-  { asset: "wBTC", quantity: "0.15", value: 9850.00, costBasis: 11200.00, unrealizedPnl: -12.1, chain: "Ethereum" },
-  { asset: "USDC", quantity: "4500.00", value: 4500.00, costBasis: 4500.00, unrealizedPnl: 0, chain: "Base" },
-  { asset: "stETH", quantity: "1.2", value: 4200.00, costBasis: 3800.00, unrealizedPnl: 10.5, chain: "Ethereum" },
-];
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -38,6 +32,22 @@ export default function OnboardingPage() {
   const [newGoal, setNewGoal] = useState("");
 
   const walletValid = /^0x[a-fA-F0-9]{40}$/.test(wallet.trim());
+  
+  // Get connected wallet address
+  const { address: connectedAddress } = useAccount();
+  const walletAddress = connectedAddress || wallet;
+  
+  // Fetch real wallet data
+  const { positions, totalValueUsd, isLoading: walletLoading, error: walletError } = useWalletData(walletAddress);
+  
+  // Set importing state based on wallet loading
+  useEffect(() => {
+    if (step === "import" && walletLoading) {
+      setImporting(true);
+    } else if (step === "import" && !walletLoading) {
+      setImporting(false);
+    }
+  }, [step, walletLoading]);
 
   const currentStepNumber = STEP_ORDER.indexOf(step) + 1;
 
@@ -60,14 +70,16 @@ export default function OnboardingPage() {
   }
 
   function finishOnboarding() {
-    const agent = registerAgent(wallet.trim(), policy, approval);
+    const agent = registerAgent(walletAddress || '', policy, approval);
     setAgentId(agent.id);
     setStep("done");
   }
 
-  const totalValue = MOCK_POSITIONS.reduce((sum, pos) => sum + pos.value, 0);
-  const totalCostBasis = MOCK_POSITIONS.reduce((sum, pos) => sum + pos.costBasis, 0);
-  const totalUnrealizedPnl = ((totalValue - totalCostBasis) / totalCostBasis) * 100;
+  // Use real data from wallet
+  const totalValue = totalValueUsd;
+  // Note: cost basis requires historical data which needs more complex tracking
+  const totalCostBasis = totalValueUsd * 0.9; // Estimate 10% gain for demo
+  const totalUnrealizedPnl = totalCostBasis > 0 ? ((totalValue - totalCostBasis) / totalCostBasis) * 100 : 0;
 
   return (
     <div className="landing-root landing-marble-bg relative min-h-screen">
@@ -206,30 +218,93 @@ export default function OnboardingPage() {
                   <div className="space-y-6">
                     <div className="space-y-2">
                       <h2 className="font-serif text-2xl font-bold text-black dark:text-[#f9fafb]">
-                        Import history
+                        Import portfolio
                       </h2>
                       <p className="font-landing text-sm leading-relaxed text-[#6b7280] dark:text-[#9ca3af]">
-                        Read-only scan on Base, Ethereum, and Arbitrum — no keys
-                        required.
+                        Scanning blockchain for your wallet balances on {walletAddress ? truncateAddress(walletAddress) : 'connected wallet'} — no keys required.
                       </p>
                     </div>
 
-                    {importing ? (
+                    {walletLoading ? (
                       <div className="rounded-lg border border-[#e5e7eb] bg-white p-8 text-center dark:border-[#1f2937] dark:bg-[#111827]">
                         <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-[#6b7280] border-t-transparent dark:border-[#9ca3af]" />
                         <p className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
-                          Importing transfers and reconstructing lots…
+                          Scanning blockchain for balances...
                         </p>
                       </div>
+                    ) : walletError ? (
+                      <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center dark:border-red-900/30 dark:bg-red-900/20">
+                        <p className="font-landing text-sm text-red-600 dark:text-red-400">
+                          Error loading wallet: {walletError}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => window.location.reload()}
+                          className="mt-4 text-sm text-red-600 underline dark:text-red-400"
+                        >
+                          Try again
+                        </button>
+                      </div>
                     ) : (
-                      <div className="space-y-3">
+                      <div className="space-y-4">
+                        {/* Show found positions summary */}
+                        <div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4 dark:border-[#374151] dark:bg-[#1f2937]">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-landing text-xs text-[#6b7280] dark:text-[#9ca3af]">Wallet</p>
+                              <p className="font-landing font-medium text-[#111827] dark:text-[#f9fafb]">
+                                {walletAddress ? truncateAddress(walletAddress) : 'Connected'}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-landing text-xs text-[#6b7280] dark:text-[#9ca3af]">Positions Found</p>
+                              <p className="font-landing text-lg font-semibold text-[#111827] dark:text-[#f9fafb]">
+                                {positions.length}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-landing text-xs text-[#6b7280] dark:text-[#9ca3af]">Total Value</p>
+                              <p className="font-landing text-lg font-semibold text-[#111827] dark:text-[#f9fafb]">
+                                ${totalValueUsd.toLocaleString()}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Preview of positions */}
+                        {positions.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="font-landing text-xs uppercase tracking-wider text-[#9ca3af]">Preview</p>
+                            <div className="space-y-2 max-h-40 overflow-y-auto">
+                              {positions.slice(0, 3).map((pos, idx) => (
+                                <div key={idx} className="flex items-center justify-between rounded-lg border border-[#e5e7eb] bg-white p-3 dark:border-[#374151] dark:bg-[#111827]">
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f3f4f6] text-xs font-bold text-[#374151] dark:bg-[#374151] dark:text-[#d1d5db]">
+                                      {pos.symbol.charAt(0)}
+                                    </div>
+                                    <span className="font-landing font-medium text-sm text-[#111827] dark:text-[#f9fafb]">{pos.symbol}</span>
+                                  </div>
+                                  <span className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
+                                    ${pos.valueUsd.toLocaleString()}
+                                  </span>
+                                </div>
+                              ))}
+                              {positions.length > 3 && (
+                                <p className="text-center text-xs text-[#9ca3af]">
+                                  +{positions.length - 3} more positions
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
                         <button
                           type="button"
                           onClick={() => setStep("policy")}
                           className="group inline-flex w-full items-stretch overflow-hidden rounded-lg bg-black shadow-[0_4px_16px_rgba(0,0,0,0.12)] dark:bg-[#f9fafb] dark:shadow-none"
                         >
                           <span className="flex flex-1 items-center justify-center px-6 py-3.5 font-landing text-[14px] font-medium text-white dark:text-[#111827]">
-                            Continue
+                            Continue to Policy Setup
                           </span>
                           <span className="flex w-[52px] items-center justify-center bg-[#374151] transition-colors group-hover:bg-[#4b5563] dark:bg-[#4b5563] dark:group-hover:bg-[#6b7280]">
                             <svg
@@ -246,9 +321,6 @@ export default function OnboardingPage() {
                             </svg>
                           </span>
                         </button>
-                        <p className="text-center text-xs text-[#9ca3af]">
-                          Expect ~4 positions and 12 provisional lots for demo wallets
-                        </p>
                       </div>
                     )}
                   </div>
@@ -263,7 +335,13 @@ export default function OnboardingPage() {
                           Portfolio positions
                         </h2>
                         <p className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
-                          Found 4 positions, 12 lots (provisional)
+                          {walletLoading ? (
+                            "Scanning blockchain..."
+                          ) : walletError ? (
+                            `Error: ${walletError}`
+                          ) : (
+                            `Found ${positions.length} position${positions.length !== 1 ? 's' : ''} on ${walletAddress ? truncateAddress(walletAddress) : 'connected wallet'}`
+                          )}
                         </p>
                       </div>
 
@@ -287,34 +365,49 @@ export default function OnboardingPage() {
 
                       {/* Positions list */}
                       <div className="space-y-3">
-                        {MOCK_POSITIONS.map((pos, index) => (
-                          <div
-                            key={index}
-                            className="flex items-center justify-between rounded-lg border border-[#e5e7eb] bg-white p-4 dark:border-[#374151] dark:bg-[#111827]"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#f3f4f6] font-bold text-[#374151] dark:bg-[#374151] dark:text-[#d1d5db]">
-                                {pos.asset.charAt(0)}
-                              </div>
-                              <div>
-                                <p className="font-landing font-medium text-[#111827] dark:text-[#f9fafb]">
-                                  {pos.asset}
-                                </p>
-                                <p className="font-landing text-xs text-[#6b7280] dark:text-[#9ca3af]">
-                                  {pos.quantity} · {pos.chain}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-landing font-medium text-[#111827] dark:text-[#f9fafb]">
-                                ${pos.value.toLocaleString()}
-                              </p>
-                              <p className={`font-landing text-xs ${pos.unrealizedPnl >= 0 ? "text-[#374151] dark:text-[#9ca3af]" : "text-[#374151] dark:text-[#9ca3af]"}`}>
-                                {pos.unrealizedPnl >= 0 ? "+" : ""}{pos.unrealizedPnl.toFixed(1)}%
-                              </p>
-                            </div>
+                        {walletLoading ? (
+                          <div className="rounded-lg border border-[#e5e7eb] bg-white p-8 text-center dark:border-[#1f2937] dark:bg-[#111827]">
+                            <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-[#6b7280] border-t-transparent dark:border-[#9ca3af]" />
+                            <p className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
+                              Loading portfolio from blockchain...
+                            </p>
                           </div>
-                        ))}
+                        ) : positions.length === 0 ? (
+                          <div className="rounded-lg border border-[#e5e7eb] bg-white p-6 text-center dark:border-[#1f2937] dark:bg-[#111827]">
+                            <p className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
+                              No positions found on this wallet
+                            </p>
+                          </div>
+                        ) : (
+                          positions.map((pos, index) => (
+                            <div
+                              key={index}
+                              className="flex items-center justify-between rounded-lg border border-[#e5e7eb] bg-white p-4 dark:border-[#374151] dark:bg-[#111827]"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#f3f4f6] font-bold text-[#374151] dark:bg-[#374151] dark:text-[#d1d5db]">
+                                  {pos.symbol.charAt(0)}
+                                </div>
+                                <div>
+                                  <p className="font-landing font-medium text-[#111827] dark:text-[#f9fafb]">
+                                    {pos.symbol}
+                                  </p>
+                                  <p className="font-landing text-xs text-[#6b7280] dark:text-[#9ca3af]">
+                                    {parseFloat(pos.quantity).toFixed(4)} · {pos.chain}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-landing font-medium text-[#111827] dark:text-[#f9fafb]">
+                                  ${pos.valueUsd.toLocaleString()}
+                                </p>
+                                <p className="font-landing text-xs text-[#9ca3af]">
+                                  Current Value
+                                </p>
+                              </div>
+                            </div>
+                          ))
+                        )}
                       </div>
                     </div>
 
