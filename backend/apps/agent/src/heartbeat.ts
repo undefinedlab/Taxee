@@ -5,14 +5,16 @@ import {
   ArcClient,
   fetchPrices,
   collectRegimeSignals,
-  importLotsForWallet,
+  syncAgentLotsFromChain,
   resolveAcquisitionPrice,
 } from "@taxee/aggregator";
 import {
   scanForHarvestOpportunities,
   trackMaturationOpportunities,
   computeRebalanceCandidates,
+  buildScanDiagnostics,
 } from "@taxee/tax-engine";
+import type { ScanDiagnostics } from "@taxee/tax-engine";
 import {
   classifyRegime,
   reasonAboutAction,
@@ -61,6 +63,9 @@ export async function runHeartbeat(agentId: string): Promise<{
   /** Rows inserted into opportunities (pending notify) */
   opportunitiesSaved: number;
   actionsExecuted: number;
+  /** Per-strategy explanation (harvest / park / rebalance) */
+  scanDiagnostics: ScanDiagnostics;
+  lotSync?: { inserted: number; closed: number; basisRefreshed: number };
 }> {
   console.log(`[heartbeat] Starting for agent ${agentId}`);
 
@@ -69,42 +74,54 @@ export async function runHeartbeat(agentId: string): Promise<{
     .from(agents)
     .where(eq(agents.id, agentId));
 
+  const emptyDiagnostics: ScanDiagnostics = {
+    harvest: { candidateCount: 0, lines: ["Agent not active."] },
+    park: { candidateCount: 0, lines: [] },
+    rebalance: { candidateCount: 0, lines: [] },
+    openLotCount: 0,
+  };
+
   if (!agent || agent.status !== "active") {
     console.log(`[heartbeat] Agent ${agentId} is not active, skipping`);
-    return { candidatesFound: 0, opportunitiesSaved: 0, actionsExecuted: 0 };
+    return {
+      candidatesFound: 0,
+      opportunitiesSaved: 0,
+      actionsExecuted: 0,
+      scanDiagnostics: emptyDiagnostics,
+    };
   }
 
   const walletAddress = agent.walletAddress;
+  let lotSync: { inserted: number; closed: number; basisRefreshed: number } | undefined;
 
   if (walletAddress && process.env["ALCHEMY_API_KEY"]) {
-    const existing = await db
-      .select({ txHash: lots.txHash })
-      .from(lots)
-      .where(eq(lots.agentId, agentId));
-    const existingHashes = new Set(
-      existing.map((l) => l.txHash).filter(Boolean) as string[]
-    );
-    const imported = await importLotsForWallet(
+    const sync = await syncAgentLotsFromChain(
+      agentId,
       walletAddress,
       process.env["ALCHEMY_API_KEY"],
       process.env["COINGECKO_API_KEY"],
-      existingHashes,
+      {
+        selectOpenLots: async (id) =>
+          db.select().from(lots).where(and(eq(lots.agentId, id), eq(lots.status, "open"))),
+        insertLots: async (rows) => {
+          await db.insert(lots).values(rows);
+        },
+        closeLot: async (lotId) => {
+          await db.update(lots).set({ status: "closed" }).where(eq(lots.id, lotId));
+        },
+        updateLotBasis: async (lotId, costBasisUsd) => {
+          await db.update(lots).set({ costBasisUsd }).where(eq(lots.id, lotId));
+        },
+      },
     );
-    if (imported.length > 0) {
-      await db.insert(lots).values(
-        imported.map((l) => ({
-          agentId,
-          assetId:      l.assetId,
-          chainId:      l.chainId,
-          quantity:     l.quantity,
-          costBasisUsd: l.costBasisUsd,
-          acquiredAt:   l.acquiredAt,
-          status:       "open" as const,
-          txHash:       l.txHash,
-        }))
-      );
-      console.log(`[heartbeat] Synced ${imported.length} new lots for agent ${agentId}`);
-    }
+    lotSync = {
+      inserted: sync.inserted,
+      closed: sync.closed,
+      basisRefreshed: sync.basisRefreshed,
+    };
+    console.log(
+      `[heartbeat] Lot sync: +${sync.inserted} new, ${sync.closed} closed (stale), ${sync.basisRefreshed} basis refreshed, ${sync.openOnChain} on-chain`,
+    );
   } else if (!process.env["ALCHEMY_API_KEY"]) {
     console.log(`[heartbeat] ALCHEMY_API_KEY not set — using existing lots from DB`);
   }
@@ -117,7 +134,7 @@ export async function runHeartbeat(agentId: string): Promise<{
   const openLots = await db
     .select()
     .from(lots)
-    .where(eq(lots.agentId, agentId));
+    .where(and(eq(lots.agentId, agentId), eq(lots.status, "open")));
 
   const assetIds = [...new Set(openLots.map((l) => l.assetId))];
   const prices   = await fetchPrices(assetIds, process.env["COINGECKO_API_KEY"]);
@@ -399,6 +416,12 @@ export async function runHeartbeat(agentId: string): Promise<{
     }
   }
 
+  const scanDiagnostics = buildScanDiagnostics(snapshot, policy, regime.regime, {
+    harvest: harvestCandidates.length,
+    park: maturationCandidates.length,
+    rebalance: rebalanceCandidates.length,
+  });
+
   console.log(
     `[heartbeat] Done for agent ${agentId}: ${allCandidates.length} candidates, ${opportunitiesSaved} saved, ${actionsExecuted} executed`,
   );
@@ -407,5 +430,7 @@ export async function runHeartbeat(agentId: string): Promise<{
     candidatesFound: allCandidates.length,
     opportunitiesSaved,
     actionsExecuted,
+    scanDiagnostics,
+    ...(lotSync !== undefined ? { lotSync } : {}),
   };
 }

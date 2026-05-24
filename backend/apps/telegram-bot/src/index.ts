@@ -4,7 +4,13 @@ import { runHeartbeat } from "@taxee/agent/heartbeat";
 import { buildAgentPolicy, jurisdictionDisplay, normalizeJurisdiction } from "@taxee/shared";
 import type { JurisdictionCode, UserPolicy } from "@taxee/shared";
 import { db, users, wallets, agents, opportunities, lots } from "@taxee/db";
-import { importLotsForWallet, fetchWalletPositions, provisionCircleWallet, CircleClient } from "@taxee/aggregator";
+import {
+  syncAgentLotsFromChain,
+  fetchWalletPositions,
+  provisionCircleWallet,
+  CircleClient,
+} from "@taxee/aggregator";
+import { formatScanDiagnosticsTelegram } from "@taxee/tax-engine";
 import axios from "axios";
 import {
   clearPendingPolicy,
@@ -534,36 +540,36 @@ bot.on("message:text", async (ctx) => {
     const [verifiedAgent] = await db.select({ id: agents.id }).from(agents).where(eq(agents.id, agent.id));
     if (!verifiedAgent) throw new Error(`Agent ${agent.id} not found in DB before lots insert`);
 
-    const existing = await db
-      .select({ txHash: lots.txHash })
+    const sync = await syncAgentLotsFromChain(agent.id, normalized, alchemyKey, geckoKey, {
+      selectOpenLots: async (id) =>
+        db.select().from(lots).where(and(eq(lots.agentId, id), eq(lots.status, "open"))),
+      insertLots: async (rows) => {
+        await db.insert(lots).values(rows);
+      },
+      closeLot: async (lotId) => {
+        await db.update(lots).set({ status: "closed" }).where(eq(lots.id, lotId));
+      },
+      updateLotBasis: async (lotId, costBasisUsd) => {
+        await db.update(lots).set({ costBasisUsd }).where(eq(lots.id, lotId));
+      },
+    });
+
+    const openCount = await db
+      .select({ id: lots.id })
       .from(lots)
-      .where(eq(lots.agentId, agent.id));
-    const existingHashes = new Set(
-      existing.map((l) => l.txHash).filter(Boolean) as string[]
-    );
+      .where(and(eq(lots.agentId, agent.id), eq(lots.status, "open")));
+    const syncParts = [
+      sync.inserted > 0 ? `+${sync.inserted} new` : null,
+      sync.closed > 0 ? `${sync.closed} stale closed` : null,
+      sync.basisRefreshed > 0 ? `${sync.basisRefreshed} basis updated` : null,
+    ].filter(Boolean);
+    const syncNote = syncParts.length > 0 ? ` (${syncParts.join(", ")})` : " (matches chain)";
 
-    const imported = await importLotsForWallet(normalized, alchemyKey, geckoKey, existingHashes);
-
-    if (imported.length > 0) {
-      await db.insert(lots).values(
-        imported.map((l) => ({
-          agentId:      agent.id,
-          assetId:      l.assetId,
-          chainId:      l.chainId,
-          quantity:     l.quantity,
-          costBasisUsd: l.costBasisUsd,
-          acquiredAt:   l.acquiredAt,
-          status:       "open" as const,
-          txHash:       l.txHash,
-        }))
-      );
-    }
-
-    const allLots = existing.length + imported.length;
     await ctx.reply(
-      `📚 *${allLots} tax lots* for ${walletLabel}${imported.length > 0 ? ` (+${imported.length} new)` : " (up to date)"}\n\n` +
-      `🧠 Running tax analysis — I'll message you with opportunities shortly...`,
-      { parse_mode: "Markdown" }
+      `📚 *${openCount.length} open tax lots* for ${walletLabel}${syncNote}\n` +
+        `_On-chain acquisitions: ${sync.openOnChain}_\n\n` +
+        `🧠 Running tax analysis — I'll message you with opportunities shortly...`,
+      { parse_mode: "Markdown" },
     );
 
     // ── Step 3: run tax scan (harvest / park / rebalance) + notify via Telegram ─
@@ -573,13 +579,12 @@ bot.on("message:text", async (ctx) => {
           `[bot] heartbeat agent=${agent.id} saved=${result.opportunitiesSaved} candidates=${result.candidatesFound} executed=${result.actionsExecuted}`,
         );
         if (result.opportunitiesSaved === 0) {
-          await ctx.reply(
-            "✅ *Tax analysis complete.*\n\n" +
-              "No actionable opportunities right now — positions are roughly flat vs cost basis " +
-              `(harvest needs ≥${Math.abs((agent.policy as { harvestThresholdPct?: number })?.harvestThresholdPct ?? 5)}% loss). ` +
-              "I'll notify you on the next scan or try `/opportunities`.",
-            { parse_mode: "Markdown" },
-          );
+          let body = formatScanDiagnosticsTelegram(result.scanDiagnostics);
+          if (result.lotSync && (result.lotSync.closed > 0 || result.lotSync.inserted > 0)) {
+            body +=
+              `\n\n🔄 *Lot sync:* +${result.lotSync.inserted} new, ${result.lotSync.closed} removed from chain.`;
+          }
+          await ctx.reply(body, { parse_mode: "Markdown" });
         }
       })
       .catch(async (err) => {

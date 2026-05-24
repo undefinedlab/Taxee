@@ -191,6 +191,9 @@ importers:
       '@taxee/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@taxee/tax-engine':
+        specifier: workspace:*
+        version: link:../../packages/tax-engine
       axios:
         specifier: ^1.6.8
         version: 1.16.1

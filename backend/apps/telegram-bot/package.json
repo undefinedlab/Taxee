@@ -15,6 +15,7 @@
     "@taxee/shared": "workspace:*",
     "@taxee/db": "workspace:*",
     "@taxee/aggregator": "workspace:*",
+    "@taxee/tax-engine": "workspace:*",
     "@taxee/execution": "workspace:*",
     "@taxee/notifications": "workspace:*",
     "grammy": "^1.21.0",
