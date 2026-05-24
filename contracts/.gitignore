@@ -1,0 +1,40 @@
+# Compiler files
+cache/
+out/
+
+# Ignores development broadcast logs
+!/broadcast
+/broadcast/*/31337/
+/broadcast/**/dry-run/
+
+# Docs
+docs/
+
+# Dotenv file
+.env
+.env.local
+.env.*.local
+
+# Node modules
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test coverage
+lcov.info
+coverage/
+
+# Deployments (keep structure, ignore generated)
+deployments/*.json
+!deployments/.gitkeep
+
+# Forge
+test-logs/

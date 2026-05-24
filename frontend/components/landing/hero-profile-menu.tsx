@@ -139,7 +139,7 @@ export function HeroProfileMenu() {
           <div className="p-2">
             {hasAgent ? (
               <Link
-                href={agentId ? `/dashboard/${agentId}` : "/dashboard/demo"}
+                href={agentId ? `/dashboard/${agentId}` : "/dashboard"}
                 className="landing-glass-menu-item block rounded-md px-3 py-2 font-landing text-sm text-black dark:text-[#f9fafb]"
                 onClick={() => setOpen(false)}
               >
@@ -155,7 +155,7 @@ export function HeroProfileMenu() {
                   Log in / Register
                 </Link>
                 <Link
-                  href="/dashboard/demo"
+                  href="/dashboard"
                   className="landing-glass-menu-item block rounded-md px-3 py-2 font-landing text-sm text-[#4b5563] dark:text-[#9ca3af]"
                   onClick={() => setOpen(false)}
                 >

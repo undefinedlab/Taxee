@@ -7,16 +7,24 @@ import { defaultApproval, defaultPolicy, DEMO_WALLET } from "@/lib/mock-data";
 import { ApprovalModePicker } from "@/components/onboarding/approval-mode-picker";
 import { OnboardingTopBar } from "@/components/onboarding/onboarding-topbar";
 import { registerAgent } from "@/lib/agent-store";
-import { Button } from "@/components/ui/button";
 import { truncateAddress } from "@/lib/utils";
+import { WalletOnboardingStep } from "@/components/wallet/wallet-onboarding-step";
 
-type Step = "wallet" | "import" | "policy" | "done";
+type Step = "wallet-input" | "wallet-connect" | "import" | "policy" | "done";
 
-const STEP_ORDER: Step[] = ["wallet", "import", "policy", "done"];
+const STEP_ORDER: Step[] = ["wallet-input", "wallet-connect", "import", "policy", "done"];
+
+// Mock positions data
+const MOCK_POSITIONS = [
+  { asset: "ETH", quantity: "2.5", value: 8750.00, costBasis: 7200.00, unrealizedPnl: 22.1, chain: "Base" },
+  { asset: "wBTC", quantity: "0.15", value: 9850.00, costBasis: 11200.00, unrealizedPnl: -12.1, chain: "Ethereum" },
+  { asset: "USDC", quantity: "4500.00", value: 4500.00, costBasis: 4500.00, unrealizedPnl: 0, chain: "Base" },
+  { asset: "stETH", quantity: "1.2", value: 4200.00, costBasis: 3800.00, unrealizedPnl: 10.5, chain: "Ethereum" },
+];
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>("wallet");
+  const [step, setStep] = useState<Step>("wallet-input");
   const [wallet, setWallet] = useState("");
   const [importing, setImporting] = useState(false);
   const [policy, setPolicy] = useState<UserPolicy>({ ...defaultPolicy });
@@ -24,17 +32,31 @@ export default function OnboardingPage() {
     ...defaultApproval,
   });
   const [agentId, setAgentId] = useState<string | null>(null);
+  const [goals, setGoals] = useState<string[]>([
+    "Minimize taxes this year",
+  ]);
+  const [newGoal, setNewGoal] = useState("");
 
   const walletValid = /^0x[a-fA-F0-9]{40}$/.test(wallet.trim());
 
   const currentStepNumber = STEP_ORDER.indexOf(step) + 1;
 
-  async function runImport() {
-    if (!walletValid) return;
-    setImporting(true);
-    await new Promise((r) => setTimeout(r, 1200));
-    setImporting(false);
-    setStep("policy");
+  function goBack() {
+    const currentIndex = STEP_ORDER.indexOf(step);
+    if (currentIndex > 0) {
+      setStep(STEP_ORDER[currentIndex - 1]);
+    }
+  }
+
+  function addGoal() {
+    if (newGoal.trim()) {
+      setGoals([...goals, newGoal.trim()]);
+      setNewGoal("");
+    }
+  }
+
+  function removeGoal(index: number) {
+    setGoals(goals.filter((_, i) => i !== index));
   }
 
   function finishOnboarding() {
@@ -42,6 +64,10 @@ export default function OnboardingPage() {
     setAgentId(agent.id);
     setStep("done");
   }
+
+  const totalValue = MOCK_POSITIONS.reduce((sum, pos) => sum + pos.value, 0);
+  const totalCostBasis = MOCK_POSITIONS.reduce((sum, pos) => sum + pos.costBasis, 0);
+  const totalUnrealizedPnl = ((totalValue - totalCostBasis) / totalCostBasis) * 100;
 
   return (
     <div className="landing-root landing-marble-bg relative min-h-screen">
@@ -52,27 +78,112 @@ export default function OnboardingPage() {
             <OnboardingTopBar currentStep={currentStepNumber} />
 
             <main className="landing-grid-line border-t border-[#e5e7eb] bg-white/50 px-6 py-10 dark:border-[#1f2937] dark:bg-[#0b0f19]/50 sm:px-8 sm:py-12 lg:px-12 lg:py-16">
-              <div className="mx-auto max-w-lg">
-                {step === "wallet" && (
+              {/* Back button */}
+              {step !== "wallet-input" && step !== "done" && (
+                <div className="mb-6">
+                  <button
+                    type="button"
+                    onClick={goBack}
+                    className="inline-flex items-center gap-2 font-landing text-sm text-[#6b7280] transition-colors hover:text-[#111827] dark:text-[#9ca3af] dark:hover:text-[#f9fafb]"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 20 20"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M12 16l-4-4 4-4" />
+                    </svg>
+                    Back
+                  </button>
+                </div>
+              )}
+
+              <div className={step === "policy" ? "mx-auto max-w-6xl" : "mx-auto max-w-lg"}>
+                {step === "wallet-input" && (
                   <div className="space-y-6">
                     <div className="space-y-2">
                       <h2 className="font-serif text-2xl font-bold text-black dark:text-[#f9fafb]">
                         Connect wallet
                       </h2>
                       <p className="font-landing text-sm leading-relaxed text-[#6b7280] dark:text-[#9ca3af]">
-                        Watch tier only — paste a public address. We never ask
-                        for a seed phrase or private key.
+                        Choose how you want to connect your wallet to Taxee.
                       </p>
                     </div>
 
                     <div className="space-y-4">
-                      <input
-                        type="text"
-                        placeholder="0x…"
-                        value={wallet}
-                        onChange={(e) => setWallet(e.target.value)}
-                        className="w-full rounded-lg border border-[#e5e7eb] bg-white px-4 py-3 font-mono text-sm text-[#111827] placeholder:text-[#9ca3af] focus:border-[#3dcc4e] focus:outline-none focus:ring-1 focus:ring-[#3dcc4e]/30 dark:border-[#1f2937] dark:bg-[#111827] dark:text-[#f9fafb]"
-                      />
+                      {/* Option 1: Connect with Wallet (MetaMask, etc.) */}
+                      <button
+                        type="button"
+                        onClick={() => setStep("wallet-connect")}
+                        className="group w-full rounded-xl border border-[#e5e7eb] bg-white p-6 text-left transition-all hover:border-[#111827] hover:shadow-lg dark:border-[#374151] dark:bg-[#111827] dark:hover:border-[#f9fafb]"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#f3f4f6] dark:bg-[#374151]">
+                            <svg className="h-6 w-6 text-[#111827] dark:text-[#f9fafb]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="font-landing font-medium text-[#111827] dark:text-[#f9fafb]">
+                              Connect Wallet
+                            </h3>
+                              <p className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
+                              MetaMask, Rainbow, Coinbase Wallet, and 50+ more
+                            </p>
+                          </div>
+                          <svg className="h-5 w-5 text-[#9ca3af] transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </div>
+                      </button>
+
+                      {/* Option 2: Watch Address */}
+                      <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                          <div className="w-full border-t border-[#e5e7eb] dark:border-[#374151]" />
+                        </div>
+                        <div className="relative flex justify-center text-sm">
+                          <span className="bg-white px-2 font-landing text-[#9ca3af] dark:bg-[#0b0f19]">or</span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <input
+                          type="text"
+                          placeholder="0x… (watch-only mode)"
+                          value={wallet}
+                          onChange={(e) => setWallet(e.target.value)}
+                          className="w-full rounded-lg border border-[#e5e7eb] bg-white px-4 py-3 font-mono text-sm text-[#111827] placeholder:text-[#9ca3af] focus:border-[#111827] focus:outline-none focus:ring-1 focus:ring-[#111827]/20 dark:border-[#374151] dark:bg-[#111827] dark:text-[#f9fafb] dark:focus:border-[#f9fafb] dark:focus:ring-[#f9fafb]/20"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setStep("import")}
+                          disabled={!/^0x[a-fA-F0-9]{40}$/.test(wallet.trim())}
+                          className="group inline-flex w-full items-stretch overflow-hidden rounded-lg bg-black shadow-[0_4px_16px_rgba(0,0,0,0.12)] disabled:opacity-50 disabled:cursor-not-allowed dark:bg-[#f9fafb] dark:shadow-none"
+                        >
+                          <span className="flex flex-1 items-center justify-center px-6 py-3.5 font-landing text-[14px] font-medium text-white dark:text-[#111827]">
+                            Continue (Watch-Only)
+                          </span>
+                          <span className="flex w-[52px] items-center justify-center bg-[#374151] transition-colors group-hover:bg-[#4b5563] dark:bg-[#4b5563] dark:group-hover:bg-[#6b7280]">
+                            <svg
+                              className="landing-cta-arrow"
+                              width="20"
+                              height="20"
+                              viewBox="0 0 20 20"
+                              fill="none"
+                              stroke="#111827"
+                              strokeWidth="2.2"
+                              aria-hidden
+                            >
+                              <path d="M5 10h10M11 6l4 4-4 4" />
+                            </svg>
+                          </span>
+                        </button>
+                      </div>
+
                       <button
                         type="button"
                         onClick={() => setWallet(DEMO_WALLET)}
@@ -81,32 +192,14 @@ export default function OnboardingPage() {
                         Use demo wallet ({truncateAddress(DEMO_WALLET)})
                       </button>
                     </div>
-
-                    <button
-                      type="button"
-                      disabled={!walletValid}
-                      onClick={() => setStep("import")}
-                      className="group inline-flex w-full items-stretch overflow-hidden bg-black shadow-[0_4px_16px_rgba(0,0,0,0.12)] disabled:cursor-not-allowed disabled:opacity-50 dark:bg-[#f9fafb] dark:shadow-none"
-                    >
-                      <span className="flex flex-1 items-center justify-center px-6 py-3.5 font-landing text-[14px] font-medium text-white dark:text-[#111827]">
-                        Continue
-                      </span>
-                      <span className="flex w-[52px] items-center justify-center bg-[#374151] transition-colors group-hover:bg-[#4b5563] group-disabled:bg-zinc-400 dark:bg-[#4b5563] dark:group-hover:bg-[#6b7280]">
-                        <svg
-                          className="landing-cta-arrow"
-                          width="20"
-                          height="20"
-                          viewBox="0 0 20 20"
-                          fill="none"
-                          stroke="#111827"
-                          strokeWidth="2.2"
-                          aria-hidden
-                        >
-                          <path d="M5 10h10M11 6l4 4-4 4" />
-                        </svg>
-                      </span>
-                    </button>
                   </div>
+                )}
+
+                {step === "wallet-connect" && (
+                  <WalletOnboardingStep 
+                    onComplete={() => setStep("import")}
+                    onBack={() => setStep("wallet-input")}
+                  />
                 )}
 
                 {step === "import" && (
@@ -129,16 +222,16 @@ export default function OnboardingPage() {
                         </p>
                       </div>
                     ) : (
-                      <>
+                      <div className="space-y-3">
                         <button
                           type="button"
-                          onClick={runImport}
-                          className="group inline-flex w-full items-stretch overflow-hidden bg-black shadow-[0_4px_16px_rgba(0,0,0,0.12)] dark:bg-[#f9fafb] dark:shadow-none"
+                          onClick={() => setStep("policy")}
+                          className="group inline-flex w-full items-stretch overflow-hidden rounded-lg bg-black shadow-[0_4px_16px_rgba(0,0,0,0.12)] dark:bg-[#f9fafb] dark:shadow-none"
                         >
                           <span className="flex flex-1 items-center justify-center px-6 py-3.5 font-landing text-[14px] font-medium text-white dark:text-[#111827]">
-                            Run onchain import
+                            Continue
                           </span>
-                      <span className="flex w-[52px] items-center justify-center bg-[#374151] transition-colors group-hover:bg-[#4b5563] dark:bg-[#4b5563] dark:group-hover:bg-[#6b7280]">
+                          <span className="flex w-[52px] items-center justify-center bg-[#374151] transition-colors group-hover:bg-[#4b5563] dark:bg-[#4b5563] dark:group-hover:bg-[#6b7280]">
                             <svg
                               className="landing-cta-arrow"
                               width="20"
@@ -154,124 +247,229 @@ export default function OnboardingPage() {
                           </span>
                         </button>
                         <p className="text-center text-xs text-[#9ca3af]">
-                          Expect ~4 positions and 12 provisional lots for demo
-                          wallets
+                          Expect ~4 positions and 12 provisional lots for demo wallets
                         </p>
-                      </>
+                      </div>
                     )}
                   </div>
                 )}
 
                 {step === "policy" && (
-                  <div className="space-y-6">
-                    <div className="rounded-lg border border-[#3dcc4e]/30 bg-[#3dcc4e]/5 p-4 dark:bg-[#3dcc4e]/10">
-                      <p className="font-landing text-sm text-[#111827] dark:text-[#f9fafb]">
-                        Found 4 positions, 12 lots (provisional)
-                      </p>
-                      <p className="mt-1 font-landing text-sm font-medium text-[#3dcc4e]">
-                        Est. YTD realized gains: $8,400
-                      </p>
+                  <div className="grid gap-8 lg:grid-cols-2">
+                    {/* Left column - Positions */}
+                    <div className="space-y-6">
+                      <div className="space-y-2">
+                        <h2 className="font-serif text-2xl font-bold text-black dark:text-[#f9fafb]">
+                          Portfolio positions
+                        </h2>
+                        <p className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
+                          Found 4 positions, 12 lots (provisional)
+                        </p>
+                      </div>
+
+                      {/* Summary card */}
+                      <div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4 dark:border-[#374151] dark:bg-[#1f2937]">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="font-landing text-xs text-[#6b7280] dark:text-[#9ca3af]">Total value</p>
+                            <p className="font-landing text-lg font-semibold text-[#111827] dark:text-[#f9fafb]">
+                              ${totalValue.toLocaleString()}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="font-landing text-xs text-[#6b7280] dark:text-[#9ca3af]">Unrealized P&L</p>
+                            <p className={`font-landing text-lg font-semibold ${totalUnrealizedPnl >= 0 ? "text-[#374151] dark:text-[#d1d5db]" : "text-[#374151] dark:text-[#d1d5db]"}`}>
+                              {totalUnrealizedPnl >= 0 ? "+" : ""}{totalUnrealizedPnl.toFixed(1)}%
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Positions list */}
+                      <div className="space-y-3">
+                        {MOCK_POSITIONS.map((pos, index) => (
+                          <div
+                            key={index}
+                            className="flex items-center justify-between rounded-lg border border-[#e5e7eb] bg-white p-4 dark:border-[#374151] dark:bg-[#111827]"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#f3f4f6] font-bold text-[#374151] dark:bg-[#374151] dark:text-[#d1d5db]">
+                                {pos.asset.charAt(0)}
+                              </div>
+                              <div>
+                                <p className="font-landing font-medium text-[#111827] dark:text-[#f9fafb]">
+                                  {pos.asset}
+                                </p>
+                                <p className="font-landing text-xs text-[#6b7280] dark:text-[#9ca3af]">
+                                  {pos.quantity} · {pos.chain}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-landing font-medium text-[#111827] dark:text-[#f9fafb]">
+                                ${pos.value.toLocaleString()}
+                              </p>
+                              <p className={`font-landing text-xs ${pos.unrealizedPnl >= 0 ? "text-[#374151] dark:text-[#9ca3af]" : "text-[#374151] dark:text-[#9ca3af]"}`}>
+                                {pos.unrealizedPnl >= 0 ? "+" : ""}{pos.unrealizedPnl.toFixed(1)}%
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <h2 className="font-serif text-2xl font-bold text-black dark:text-[#f9fafb]">
-                        Preferences
-                      </h2>
-                      <p className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
-                        Configure how your taxee agent manages your portfolio.
-                      </p>
+                    {/* Right column - Policy settings */}
+                    <div className="space-y-6">
+                      <div className="space-y-2">
+                        <h2 className="font-serif text-2xl font-bold text-black dark:text-[#f9fafb]">
+                          Agent preferences
+                        </h2>
+                        <p className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
+                          Configure how your taxee agent manages your portfolio.
+                        </p>
+                      </div>
+
+                      <div className="space-y-5">
+                        <label className="block space-y-2">
+                          <span className="font-landing text-sm font-medium text-[#111827] dark:text-[#f9fafb]">
+                            Jurisdiction
+                          </span>
+                          <select
+                            value={policy.jurisdiction}
+                            onChange={(e) =>
+                              setPolicy({
+                                ...policy,
+                                jurisdiction: e.target
+                                  .value as UserPolicy["jurisdiction"],
+                              })
+                            }
+                            className="w-full rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 font-landing text-sm text-[#111827] focus:border-[#111827] focus:outline-none focus:ring-1 focus:ring-[#111827]/20 dark:border-[#374151] dark:bg-[#111827] dark:text-[#f9fafb] dark:focus:border-[#f9fafb] dark:focus:ring-[#f9fafb]/20"
+                          >
+                            <option value="US">United States</option>
+                            <option value="UK">United Kingdom</option>
+                            <option value="EU">Europe</option>
+                            <option value="BR">Brasil</option>
+                            <option value="MX">Mexico</option>
+                            <option value="IN">India</option>
+                            <option value="OTHER">Other</option>
+                          </select>
+                        </label>
+
+                        <label className="block space-y-2">
+                          <span className="font-landing text-sm font-medium text-[#111827] dark:text-[#f9fafb]">
+                            Harvest when loss exceeds
+                          </span>
+                          <select
+                            value={policy.harvestThresholdPct}
+                            onChange={(e) =>
+                              setPolicy({
+                                ...policy,
+                                harvestThresholdPct: Number(e.target.value),
+                              })
+                            }
+                            className="w-full rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 font-landing text-sm text-[#111827] focus:border-[#111827] focus:outline-none focus:ring-1 focus:ring-[#111827]/20 dark:border-[#374151] dark:bg-[#111827] dark:text-[#f9fafb] dark:focus:border-[#f9fafb] dark:focus:ring-[#f9fafb]/20"
+                          >
+                            <option value={5}>5%</option>
+                            <option value={8}>8%</option>
+                            <option value={10}>10%</option>
+                          </select>
+                        </label>
+
+                        <ApprovalModePicker value={approval} onChange={setApproval} />
+
+                        {/* Goal Parser with add/remove functionality */}
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="font-landing text-sm font-medium text-[#111827] dark:text-[#f9fafb]">
+                              Goals
+                            </span>
+                            <span className="font-landing text-xs text-[#9ca3af]">
+                              LLM will parse these into policy rules
+                            </span>
+                          </div>
+
+                          {/* Existing goals */}
+                          <div className="space-y-2">
+                            {goals.map((goal, index) => (
+                              <div
+                                key={index}
+                                className="flex items-start gap-2 rounded-lg border border-[#e5e7eb] bg-white p-3 dark:border-[#374151] dark:bg-[#111827]"
+                              >
+                                <span className="mt-0.5 text-[#9ca3af]">•</span>
+                                <p className="flex-1 font-landing text-sm text-[#111827] dark:text-[#f9fafb]">
+                                  {goal}
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => removeGoal(index)}
+                                  className="text-[#9ca3af] transition-colors hover:text-[#6b7280]"
+                                >
+                                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M6 6l8 8M14 6l-8 8" />
+                                  </svg>
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Add new goal */}
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              placeholder="Add a goal..."
+                              value={newGoal}
+                              onChange={(e) => setNewGoal(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  addGoal();
+                                }
+                              }}
+                              className="flex-1 rounded-lg border border-[#e5e7eb] bg-white px-3 py-2 font-landing text-sm text-[#111827] placeholder:text-[#9ca3af] focus:border-[#111827] focus:outline-none focus:ring-1 focus:ring-[#111827]/20 dark:border-[#374151] dark:bg-[#111827] dark:text-[#f9fafb] dark:focus:border-[#f9fafb] dark:focus:ring-[#f9fafb]/20"
+                            />
+                            <button
+                              type="button"
+                              onClick={addGoal}
+                              className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#111827] text-white transition-colors hover:bg-[#374151] dark:bg-[#f9fafb] dark:text-[#111827] dark:hover:bg-[#e5e7eb]"
+                            >
+                              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M10 5v10M5 10h10" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={finishOnboarding}
+                        className="group inline-flex w-full items-stretch overflow-hidden bg-black shadow-[0_4px_16px_rgba(0,0,0,0.12)] dark:bg-[#f9fafb] dark:shadow-none"
+                      >
+                        <span className="flex flex-1 items-center justify-center px-6 py-3.5 font-landing text-[14px] font-medium text-white dark:text-[#111827]">
+                          Activate agent
+                        </span>
+                        <span className="flex w-[52px] items-center justify-center bg-[#374151] transition-colors group-hover:bg-[#4b5563] dark:bg-[#4b5563] dark:group-hover:bg-[#6b7280]">
+                          <svg
+                            className="landing-cta-arrow"
+                            width="20"
+                            height="20"
+                            viewBox="0 0 20 20"
+                            fill="none"
+                            stroke="#111827"
+                            strokeWidth="2.2"
+                            aria-hidden
+                          >
+                            <path d="M5 10h10M11 6l4 4-4 4" />
+                          </svg>
+                        </span>
+                      </button>
                     </div>
-
-                    <div className="space-y-4">
-                      <label className="block space-y-2">
-                        <span className="font-landing text-sm font-medium text-[#111827] dark:text-[#f9fafb]">
-                          Jurisdiction
-                        </span>
-                        <select
-                          value={policy.jurisdiction}
-                          onChange={(e) =>
-                            setPolicy({
-                              ...policy,
-                              jurisdiction: e.target
-                                .value as UserPolicy["jurisdiction"],
-                            })
-                          }
-                          className="w-full rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 font-landing text-sm text-[#111827] focus:border-[#3dcc4e] focus:outline-none focus:ring-1 focus:ring-[#3dcc4e]/30 dark:border-[#1f2937] dark:bg-[#111827] dark:text-[#f9fafb]"
-                        >
-                          <option value="US">United States</option>
-                          <option value="OTHER">Other</option>
-                        </select>
-                      </label>
-
-                      <label className="block space-y-2">
-                        <span className="font-landing text-sm font-medium text-[#111827] dark:text-[#f9fafb]">
-                          Harvest when loss exceeds
-                        </span>
-                        <select
-                          value={policy.harvestThresholdPct}
-                          onChange={(e) =>
-                            setPolicy({
-                              ...policy,
-                              harvestThresholdPct: Number(e.target.value),
-                            })
-                          }
-                          className="w-full rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 font-landing text-sm text-[#111827] focus:border-[#3dcc4e] focus:outline-none focus:ring-1 focus:ring-[#3dcc4e]/30 dark:border-[#1f2937] dark:bg-[#111827] dark:text-[#f9fafb]"
-                        >
-                          <option value={5}>5%</option>
-                          <option value={8}>8%</option>
-                          <option value={10}>10%</option>
-                        </select>
-                      </label>
-
-                      <ApprovalModePicker value={approval} onChange={setApproval} />
-
-                      <label className="block space-y-2">
-                        <span className="font-landing text-sm font-medium text-[#111827] dark:text-[#f9fafb]">
-                          Goal
-                        </span>
-                        <textarea
-                          defaultValue="Minimize taxes this year. Don't sell lots within 30 days of long-term threshold."
-                          rows={3}
-                          className="w-full rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 font-landing text-sm text-[#111827] focus:border-[#3dcc4e] focus:outline-none focus:ring-1 focus:ring-[#3dcc4e]/30 dark:border-[#1f2937] dark:bg-[#111827] dark:text-[#f9fafb]"
-                          readOnly
-                        />
-                        <span className="block text-xs text-[#9ca3af]">
-                          LLM Goal Parser will map this on backend (demo: static
-                          policy)
-                        </span>
-                      </label>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={finishOnboarding}
-                      className="group inline-flex w-full items-stretch overflow-hidden bg-black shadow-[0_4px_16px_rgba(0,0,0,0.12)] dark:bg-[#f9fafb] dark:shadow-none"
-                    >
-                      <span className="flex flex-1 items-center justify-center px-6 py-3.5 font-landing text-[14px] font-medium text-white dark:text-[#111827]">
-                        Activate agent
-                      </span>
-                      <span className="flex w-[52px] items-center justify-center bg-[#3dcc4e] transition-colors group-hover:bg-[#34b844]">
-                        <svg
-                          className="landing-cta-arrow"
-                          width="20"
-                          height="20"
-                          viewBox="0 0 20 20"
-                          fill="none"
-                          stroke="#111827"
-                          strokeWidth="2.2"
-                          aria-hidden
-                        >
-                          <path d="M5 10h10M11 6l4 4-4 4" />
-                        </svg>
-                      </span>
-                    </button>
                   </div>
                 )}
 
                 {step === "done" && agentId && (
                   <div className="space-y-6 text-center">
-                    <div className="rounded-xl border border-[#3dcc4e]/30 bg-[#3dcc4e]/10 p-8">
-                      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#3dcc4e]">
+                    <div className="rounded-xl border border-[#e5e7eb] bg-[#f9fafb] p-8 dark:border-[#374151] dark:bg-[#1f2937]">
+                      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#111827] dark:bg-[#f9fafb]">
                         <svg
                           width="32"
                           height="32"
@@ -279,6 +477,7 @@ export default function OnboardingPage() {
                           fill="none"
                           stroke="white"
                           strokeWidth="3"
+                          className="dark:stroke-[#111827]"
                         >
                           <path d="M20 6L9 17l-5-5" />
                         </svg>
@@ -305,7 +504,7 @@ export default function OnboardingPage() {
                       <span className="flex flex-1 items-center justify-center px-6 py-3.5 font-landing text-[14px] font-medium text-white dark:text-[#111827]">
                         Open dashboard
                       </span>
-                      <span className="flex w-[52px] items-center justify-center bg-[#3dcc4e] transition-colors group-hover:bg-[#34b844]">
+                      <span className="flex w-[52px] items-center justify-center bg-[#374151] transition-colors group-hover:bg-[#4b5563] dark:bg-[#4b5563] dark:group-hover:bg-[#6b7280]">
                         <svg
                           className="landing-cta-arrow"
                           width="20"

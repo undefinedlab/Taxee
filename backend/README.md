@@ -85,6 +85,64 @@ pnpm dev
 
 This runs all apps in parallel via Turborepo with `--watch` hot-reload.
 
+---
+
+## Railway (Production)
+
+Deploy the backend as one or more Railway services from the **`backend/`** root directory.
+
+### 1. Add PostgreSQL
+
+In your Railway project:
+
+1. Click **+ New** → **Database** → **PostgreSQL**
+2. On the API service, add a variable reference:
+   ```
+   DATABASE_URL=${{Postgres.DATABASE_URL}}
+   ```
+   (Use your Postgres service name if it is not `Postgres`.)
+
+Redis from `docker-compose.yml` is optional locally; the app does not require it in production.
+
+### 2. API service (`taxee-production.up.railway.app`)
+
+| Setting | Value |
+|---------|-------|
+| Root Directory | `backend` |
+| Build Command | *(from `railway.toml`)* `pnpm build --filter @taxee/api...` |
+| Start Command | `pnpm start:api` |
+| Pre-deploy | `pnpm db:migrate` |
+| Healthcheck | `/health` |
+
+Required env vars (set in Railway → Variables):
+
+| Variable | Example |
+|----------|---------|
+| `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
+| `JWT_SECRET` | random 32+ char string |
+| `APP_URL` | your frontend URL (CORS) |
+| `FRONTEND_URL` | your frontend URL |
+| `API_URL` | `https://taxee-production.up.railway.app` |
+| `TELEGRAM_BOT_TOKEN` | from @BotFather |
+| `ANTHROPIC_API_KEY` | Claude key |
+| `CIRCLE_*` | Circle wallet keys |
+| `ALCHEMY_API_KEY` | on-chain reads |
+| `COINGECKO_API_KEY` | price lookups |
+
+Railway sets `PORT` automatically — the API already reads it.
+
+### 3. Worker services (optional, same repo)
+
+Create **separate** Railway services pointing at `backend/` with different start commands:
+
+| Service | Start Command |
+|---------|---------------|
+| Agent heartbeat | `pnpm start:agent` |
+| Telegram bot | `pnpm start:telegram-bot` |
+| MCP server | `pnpm start:mcp-server` |
+
+Copy the same env vars (especially `DATABASE_URL`) to each worker service.
+
 ### Individual services
 
 ```bash

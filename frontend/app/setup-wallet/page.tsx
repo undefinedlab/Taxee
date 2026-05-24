@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
-export default function SetupWalletPage() {
+function SetupWalletContent() {
   const params     = useSearchParams();
   const [status, setStatus]   = useState<"loading" | "ready" | "done" | "error">("loading");
   const [message, setMessage] = useState("Initialising Circle SDK…");
@@ -36,11 +36,12 @@ export default function SetupWalletPage() {
         setStatus("ready");
         setMessage("Complete wallet setup below.");
 
-        sdk.execute(challengeId, (err: any, result: any) => {
+        sdk.execute(challengeId, (err: unknown, result: unknown) => {
           if (err) {
             console.error("[circle-sdk] error:", JSON.stringify(err));
             setStatus("error");
-            setMessage(`Setup failed [${err.code ?? "?"}]: ${err.message ?? JSON.stringify(err)}`);
+            const errorObj = err as { code?: string; message?: string };
+            setMessage(`Setup failed [${errorObj.code ?? "?"}]: ${errorObj.message ?? JSON.stringify(err)}`);
             return;
           }
           console.log("[circle-sdk] wallet created:", result);
@@ -51,9 +52,10 @@ export default function SetupWalletPage() {
           setStatus("done");
           setMessage("✅ Wallet created! Your Circle MPC wallet is ready. Return to Telegram.");
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
         setStatus("error");
-        setMessage(`Unexpected error: ${err.message}`);
+        const errorObj = err as { message?: string };
+        setMessage(`Unexpected error: ${errorObj.message ?? String(err)}`);
       }
     }
 
@@ -99,5 +101,20 @@ export default function SetupWalletPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function SetupWalletPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center p-6">
+        <div className="flex items-center gap-3">
+          <span className="animate-spin">⟳</span>
+          <span>Loading...</span>
+        </div>
+      </main>
+    }>
+      <SetupWalletContent />
+    </Suspense>
   );
 }

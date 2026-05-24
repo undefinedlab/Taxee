@@ -1,0 +1,19 @@
+# Railway config for the @taxee/api service.
+# Set the service Root Directory to "backend" in the Railway dashboard.
+#
+# For worker services, create separate Railway services from the same repo
+# and override the start command:
+#   pnpm start:agent
+#   pnpm start:telegram-bot
+#   pnpm start:mcp-server
+
+[build]
+buildCommand = "pnpm turbo run build --filter=@taxee/api..."
+
+[deploy]
+startCommand = "pnpm start:api"
+preDeployCommand = ["pnpm db:migrate"]
+healthcheckPath = "/health"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

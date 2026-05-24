@@ -6,7 +6,7 @@ export const hero = {
   subtitle:
     "AI portfolio agent that optimizes after-tax return — not just the gross performance. Tax-loss harvesting, lot optimization, and long-term holding embedded into every rebalance.",
   ctaPrimary: "Register your agent",
-  ctaSecondary: "See demo dashboard",
+  ctaSecondary: "Check dashboard",
 } as const;
 
 export const heroStats = [
@@ -23,17 +23,17 @@ export const problem = {
     {
       icon: "chart-down" as const,
       title: "Every disposal is a taxable event",
-      body: "Rotations trigger gains without lot-level awareness. Each sale compounds at your highest marginal rate.",
+      body: "",
     },
     {
       icon: "layers" as const,
       title: "Every rebalance has a tax cost",
-      body: "Fixing portfolio drift can cost more in taxes than the drift itself. Gross-only agents never run that math.",
+      body: "",
     },
     {
       icon: "clock" as const,
       title: "Gains are left on the table",
-      body: "Every win held one day short of long-term treatment forfeits the lower rate. Precision lot tracking is required.",
+      body: "",
     },
   ],
 } as const;

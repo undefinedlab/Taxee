@@ -74,7 +74,7 @@ export function LandingPage() {
                     </span>
                   </Link>
                   <Link
-                    href="/dashboard/demo"
+                    href="/dashboard"
                     className="font-landing text-[14px] font-medium text-black underline-offset-4 hover:underline dark:text-[#f9fafb]"
                   >
                     {hero.ctaSecondary}

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
-export default function ExecutePage() {
+function ExecuteContent() {
   const params = useSearchParams();
   const [status, setStatus]   = useState<"loading" | "ready" | "done" | "error">("loading");
   const [message, setMessage] = useState("Preparing transaction…");
@@ -36,27 +36,30 @@ export default function ExecutePage() {
         setStatus("ready");
         setMessage("Confirm with your PIN to execute the tax action.");
 
-        sdk.execute(challengeId, async (err: any, result: any) => {
+        sdk.execute(challengeId, async (err: unknown, result: unknown) => {
           if (err) {
             console.error("[circle-sdk]", err);
             setStatus("error");
-            setMessage(`Execution failed [${err.code ?? "?"}]: ${err.message ?? JSON.stringify(err)}`);
+            const errorObj = err as { code?: string; message?: string };
+            setMessage(`Execution failed [${errorObj.code ?? "?"}]: ${errorObj.message ?? JSON.stringify(err)}`);
             return;
           }
           console.log("[circle-sdk] execution confirmed:", result);
+          const resultObj = result as { data?: { transaction?: { txHash?: string } } };
           try {
             await fetch(`${apiUrl}/actions/${oppId}/executed`, {
               method:  "POST",
               headers: { "Content-Type": "application/json" },
-              body:    JSON.stringify({ txHash: result?.data?.transaction?.txHash }),
+              body:    JSON.stringify({ txHash: resultObj?.data?.transaction?.txHash }),
             });
-          } catch { }
+          } catch { /* ignore */ }
           setStatus("done");
           setMessage("✅ Transaction submitted! Circle's MPC nodes co-signed and the transaction is on its way to the chain.");
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
         setStatus("error");
-        setMessage(`Unexpected error: ${err.message}`);
+        const errorObj = err as { message?: string };
+        setMessage(`Unexpected error: ${errorObj.message ?? String(err)}`);
       }
     }
 
@@ -96,5 +99,20 @@ export default function ExecutePage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function ExecutePage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center p-6">
+        <div className="flex items-center gap-3">
+          <span className="animate-spin">⟳</span>
+          <span>Loading...</span>
+        </div>
+      </main>
+    }>
+      <ExecuteContent />
+    </Suspense>
   );
 }

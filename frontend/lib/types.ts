@@ -20,7 +20,7 @@ export interface ApprovalSettings {
 }
 
 export interface UserPolicy {
-  jurisdiction: "US" | "OTHER";
+  jurisdiction: "US" | "UK" | "EU" | "BR" | "MX" | "IN" | "OTHER";
   harvestThresholdPct: number;
   maturationBufferDays: number;
   primaryObjective: "minimize_tax" | "maximize_return" | "balanced";

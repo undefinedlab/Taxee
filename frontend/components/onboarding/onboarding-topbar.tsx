@@ -22,15 +22,12 @@ export function OnboardingTopBar({
         </Link>
 
         <div className="flex shrink-0 items-center gap-2">
-          <span className="hidden text-xs text-zinc-500 sm:inline">
-            Onboarding
-          </span>
           <ThemeToggle />
         </div>
       </div>
 
       {/* Progress bar row */}
-      <div className="border-t border-[#e5e7eb] px-4 py-3 dark:border-[#1f2937] sm:px-5 lg:px-6">
+      <div className="px-4 py-3 sm:px-5 lg:px-6">
         <div className="flex items-center gap-2">
           {Array.from({ length: totalSteps }).map((_, index) => {
             const stepNumber = index + 1;
