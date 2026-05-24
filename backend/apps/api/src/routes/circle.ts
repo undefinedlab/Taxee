@@ -76,14 +76,10 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
   let [user] = await db.select().from(users).where(eq(users.id, userId));
   
   if (!user) {
-    // Create user on-the-fly for web onboarding
-    // This is safe because the userId is unguessable (generated client-side)
-    [user] = await db.insert(users).values({
-      id: userId,
-      walletAddress: null,
-      source: 'web_onboarding',
-      createdAt: new Date(),
-    }).returning();
+    // Create user on-the-fly for web onboarding (userId is client-generated UUID)
+    const [created] = await db.insert(users).values({ id: userId }).returning();
+    if (!created) return reply.code(500).send({ error: "Failed to create user" });
+    user = created;
   }
 
   const circle = getCircleClient();
@@ -121,12 +117,10 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
       return reply.send({ success: true, message: "User already exists", userId });
     }
 
-    // Create new user
+    // Create new user (wallet stored on users.address; agents hold per-wallet addresses)
     await db.insert(users).values({
       id: userId,
-      walletAddress: walletAddress || null,
-      source,
-      createdAt: new Date(),
+      address: walletAddress?.toLowerCase() ?? null,
     });
 
     return reply.send({ success: true, message: "User registered", userId });
@@ -156,12 +150,10 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
     const walletId = walletList[0].id;
     const circleWalletAddress = walletList[0].address;
 
-    // Update user with wallet addresses
-    await db.update(users)
-      .set({ 
-        walletAddress: walletAddress || circleWalletAddress || user.walletAddress,
-      })
-      .where(eq(users.id, userId));
+    const linkedAddress = (walletAddress ?? circleWalletAddress ?? user.address)?.toLowerCase();
+    if (linkedAddress) {
+      await db.update(users).set({ address: linkedAddress }).where(eq(users.id, userId));
+    }
 
     // Update any existing agents with this Circle wallet
     const userAgents = await db.select().from(agents).where(eq(agents.userId, userId));
