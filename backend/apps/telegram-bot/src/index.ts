@@ -396,19 +396,22 @@ bot.on("message:text", async (ctx) => {
     );
 
     if (isNew) {
-      try {
-        const apiKey    = process.env["CIRCLE_API_KEY"];
-        const circleEnv = (process.env["CIRCLE_ENVIRONMENT"] ?? "sandbox") as "sandbox" | "production";
-        const frontendUrl = process.env["FRONTEND_URL"] ?? "http://localhost:3000";
+      const apiKey    = process.env["CIRCLE_API_KEY"];
+      const circleEnv = (process.env["CIRCLE_ENVIRONMENT"] ?? "sandbox") as "sandbox" | "production";
+      const frontendUrl = process.env["FRONTEND_URL"] ?? "http://localhost:3000";
 
-        if (apiKey) {
+      if (apiKey) {
+        try {
           const circle = new CircleClient(apiKey, circleEnv);
-          try { await circle.createCircleUser(user.id); } catch { /* already exists */ }
+          try { await circle.createCircleUser(user.id); } catch (e: any) {
+            const code = e?.response?.data?.code;
+            if (code !== 155101) throw e;
+          }
           const { userToken, encryptionKey } = await circle.getUserToken(user.id);
           const blockchain = circleEnv === "production" ? "BASE" as const : "BASE-SEPOLIA" as const;
           const { challengeId } = await circle.createUserWallet({
             userToken,
-            idempotencyKey: `wallet-init-${user.id}`,
+            idempotencyKey: user.id,
             blockchains: [blockchain],
           });
           const setupUrl = `${frontendUrl}/setup-wallet?userToken=${encodeURIComponent(userToken)}&encryptionKey=${encodeURIComponent(encryptionKey)}&challengeId=${encodeURIComponent(challengeId)}`;
@@ -421,9 +424,11 @@ bot.on("message:text", async (ctx) => {
               reply_markup: new InlineKeyboard().url("🔑 Set Up PIN", setupUrl),
             }
           );
+        } catch (err: any) {
+          const detail = err?.response?.data ?? err?.message ?? String(err);
+          console.error("[bot] Circle PIN setup failed:", JSON.stringify(detail));
+          await ctx.reply(`⚠️ Circle PIN setup failed: ${JSON.stringify(detail)}\n\nYou can still use manual approval. Check backend logs.`);
         }
-      } catch (err: unknown) {
-        console.error("[bot] Circle user wallet init failed:", err);
       }
     }
 
