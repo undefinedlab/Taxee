@@ -24,6 +24,10 @@ function getCircleClient(): CircleClient {
  *   3. POST /circle/challenge/:oppId — create execution challenge
  *   4. Frontend completes SDK    — user confirms with PIN, tx submitted by Circle MPC
  */
+function uuidToBytes32(uuid: string): string {
+  return "0x" + uuid.replace(/-/g, "").padEnd(64, "0");
+}
+
 const circleRoutes: FastifyPluginAsync = async (app) => {
   /**
    * Register the current user with Circle and kick off wallet initialisation.
@@ -153,20 +157,61 @@ const circleRoutes: FastifyPluginAsync = async (app) => {
       const lotRegistryAddress = process.env["TAXEE_LOT_REGISTRY_ADDRESS"] ?? "";
       const { challengeId } = await circle.createUserContractExecution({
         userToken,
-        idempotencyKey:       `exec-${oppId}`,
+        idempotencyKey:       crypto.randomUUID(),
         walletId:             agent.circleWalletId,
         contractAddress:      lotRegistryAddress,
         abiFunctionSignature: "commitDisposal(bytes32,uint256,bytes32)",
         abiParameters:        [
-          candidate.lots?.[0]?.id ?? "",
-          candidate.proceedsUsdc ?? "0",
-          agent.id,
+          uuidToBytes32(candidate.lots?.[0]?.id ?? "00000000-0000-0000-0000-000000000000"),
+          String(candidate.proceedsUsdc ?? 0),
+          uuidToBytes32(agent.id),
         ],
       });
 
-      const frontendUrl = `${process.env["FRONTEND_URL"] ?? "http://localhost:3000"}/execute?challengeId=${challengeId}&oppId=${oppId}`;
+      const frontendUrl = `${process.env["FRONTEND_URL"] ?? "http://localhost:3000"}/execute?oppId=${oppId}`;
 
       return reply.send({ userToken, encryptionKey, challengeId, frontendUrl });
+    }
+  );
+
+  /**
+   * Called by the /execute frontend page after the Circle SDK confirms execution.
+   * Marks the opportunity as executed and sends a Telegram receipt.
+   */
+  app.post<{ Params: { oppId: string }; Body: { txHash?: string } }>(
+    "/executed/:oppId",
+    async (request, reply) => {
+      const { oppId } = request.params;
+      const { txHash } = (request.body as any) ?? {};
+
+      const [opp] = await db.select().from(opportunities).where(eq(opportunities.id, oppId));
+      if (!opp) return reply.code(404).send({ error: "Opportunity not found" });
+
+      await db.update(opportunities)
+        .set({ executedAt: new Date(), ...(txHash ? { txHash } : {}) })
+        .where(eq(opportunities.id, oppId));
+
+      const [agent] = await db.select().from(agents).where(eq(agents.id, opp.agentId));
+      if (agent) {
+        const [user]  = await db.select().from(users).where(eq(users.id, agent.userId));
+        const token   = process.env["TELEGRAM_BOT_TOKEN"];
+        const chatId  = user?.telegramId ?? null;
+        if (token && chatId) {
+          const explorerUrl = txHash ? `https://sepolia.basescan.org/tx/${txHash}` : null;
+          const msg =
+            `✅ *Tax action executed*\n\n` +
+            `Wallet: \`${agent.walletAddress?.slice(0, 10)}...\`\n` +
+            (txHash ? `Tx: [view on BaseScan](${explorerUrl})\n` : "") +
+            `\nThe lot disposal has been recorded on-chain.`;
+          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify({ chat_id: chatId, text: msg, parse_mode: "Markdown", disable_web_page_preview: true }),
+          });
+        }
+      }
+
+      return reply.send({ ok: true });
     }
   );
 };

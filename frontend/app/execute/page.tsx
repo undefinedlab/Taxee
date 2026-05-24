@@ -9,51 +9,58 @@ export default function ExecutePage() {
   const [message, setMessage] = useState("Preparing transaction…");
 
   useEffect(() => {
-    const userToken     = params.get("userToken");
-    const encryptionKey = params.get("encryptionKey");
-    const challengeId   = params.get("challengeId");
-    const oppId         = params.get("oppId");
-
-    if (!userToken || !encryptionKey || !challengeId || !oppId) {
+    const oppId = params.get("oppId");
+    if (!oppId) {
       setStatus("error");
-      setMessage("Missing parameters. Please tap Approve again in Telegram.");
+      setMessage("Missing oppId. Please tap Approve again in Telegram.");
       return;
     }
 
-    import("@circle-fin/w3s-pw-web-sdk").then(({ W3SSdk }) => {
-      const sdk = new W3SSdk();
-      sdk.setAppSettings({ appId: process.env.NEXT_PUBLIC_CIRCLE_APP_ID ?? "" });
-      sdk.setAuthentication({ userToken, encryptionKey });
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+    const appId  = "e88bd88e-6c02-5d2a-aa01-5e751f693e7f";
 
-      setStatus("ready");
-      setMessage("Confirm with your PIN to execute the tax action.");
+    setMessage("Fetching fresh credentials…");
 
-      sdk.execute(challengeId, async (err: any, result: any) => {
-        if (err) {
-          console.error("[circle-sdk]", err);
-          setStatus("error");
-          setMessage(`Execution failed: ${err.message ?? "unknown error"}`);
-          return;
-        }
+    async function run() {
+      try {
+        const res  = await fetch(`${apiUrl}/circle/challenge/${oppId}`, { method: "POST" });
+        const data = await res.json();
+        if (data.error) { setStatus("error"); setMessage(`API error: ${data.error}`); return; }
+        const { userToken, encryptionKey, challengeId } = data;
 
-        console.log("[circle-sdk] execution confirmed:", result);
+        const { W3SSdk } = await import("@circle-fin/w3s-pw-web-sdk");
+        const sdk = new W3SSdk();
+        sdk.setAppSettings({ appId });
+        sdk.setAuthentication({ userToken, encryptionKey });
 
-        try {
-          await fetch(`${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3001"}/actions/${oppId}/executed`, {
-            method:  "POST",
-            headers: { "Content-Type": "application/json" },
-            body:    JSON.stringify({ txHash: result?.data?.transaction?.txHash }),
-          });
-        } catch {
-        }
+        setStatus("ready");
+        setMessage("Confirm with your PIN to execute the tax action.");
 
-        setStatus("done");
-        setMessage("✅ Transaction submitted! Circle's MPC nodes co-signed and the transaction is on its way to the chain.");
-      });
-    }).catch((err) => {
-      setStatus("error");
-      setMessage(`Failed to load Circle SDK: ${err.message}`);
-    });
+        sdk.execute(challengeId, async (err: any, result: any) => {
+          if (err) {
+            console.error("[circle-sdk]", err);
+            setStatus("error");
+            setMessage(`Execution failed [${err.code ?? "?"}]: ${err.message ?? JSON.stringify(err)}`);
+            return;
+          }
+          console.log("[circle-sdk] execution confirmed:", result);
+          try {
+            await fetch(`${apiUrl}/actions/${oppId}/executed`, {
+              method:  "POST",
+              headers: { "Content-Type": "application/json" },
+              body:    JSON.stringify({ txHash: result?.data?.transaction?.txHash }),
+            });
+          } catch { }
+          setStatus("done");
+          setMessage("✅ Transaction submitted! Circle's MPC nodes co-signed and the transaction is on its way to the chain.");
+        });
+      } catch (err: any) {
+        setStatus("error");
+        setMessage(`Unexpected error: ${err.message}`);
+      }
+    }
+
+    run();
   }, [params]);
 
   return (
