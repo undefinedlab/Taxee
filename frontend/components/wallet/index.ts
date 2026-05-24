@@ -1,6 +1,7 @@
 // Wallet Components
 export { Providers } from './providers';
-export { WalletButton, useWalletStatus, WalletConnectionPrompt } from './wallet-button';
+export { WalletButton, WalletConnectionPrompt } from './wallet-button';
+export { useWalletStatus } from './use-wallet-status';
 export { WalletOnboardingStep } from './wallet-onboarding-step';
 
 // Hooks

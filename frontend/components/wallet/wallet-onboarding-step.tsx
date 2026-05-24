@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useAccount, useSignTypedData } from 'wagmi';
-import { WalletConnectionPrompt, useWalletStatus } from '@/components/wallet/wallet-button';
+import { WalletConnectionPrompt } from '@/components/wallet/wallet-button';
+import { useWalletStatus } from '@/components/wallet/use-wallet-status';
 import { useCreateDelegation, createPolicyHash, UserPolicy } from '@/components/wallet/use-taxee-contracts';
 import { baseSepolia } from 'wagmi/chains';
 
@@ -102,38 +103,44 @@ export function WalletOnboardingStep({ onComplete, onBack }: WalletOnboardingSte
         <div className="space-y-2">
           <h3 className="text-2xl font-display text-white">Delegation Created!</h3>
           <p className="text-white/60 max-w-sm mx-auto">
-            Your wallet is now connected and authorized. Taxee can autonomously optimize your portfolio within your set limits.
+            Your MetaMask wallet is now connected and authorized via EIP-7702. Taxee can autonomously optimize your portfolio within your set limits.
           </p>
         </div>
 
-        <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-left">
-          <h4 className="text-white font-medium mb-3">Your Policy</h4>
-          <ul className="space-y-2 text-sm text-white/60">
-            <li className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              Max $5,000 per transaction
-            </li>
-            <li className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              Max $20,000 per month
-            </li>
-            <li className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              Valid for 90 days
-            </li>
-            <li className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              Revocable anytime
-            </li>
-          </ul>
+        <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-left space-y-4">
+          <div>
+            <p className="text-white/50 text-xs uppercase tracking-wider mb-1">Connected Wallet</p>
+            <p className="text-white font-mono">{address ? `${address.slice(0, 8)}...${address.slice(-6)}` : '—'}</p>
+          </div>
+          <div>
+            <h4 className="text-white font-medium mb-3">Your Policy</h4>
+            <ul className="space-y-2 text-sm text-white/60">
+              <li className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Max $5,000 per transaction
+              </li>
+              <li className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Max $20,000 per month
+              </li>
+              <li className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Valid for 90 days
+              </li>
+              <li className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Revocable anytime
+              </li>
+            </ul>
+          </div>
         </div>
 
         <div className="flex gap-3 justify-center">
@@ -155,9 +162,9 @@ export function WalletOnboardingStep({ onComplete, onBack }: WalletOnboardingSte
     <div className="space-y-8">
       {/* Header */}
       <div className="text-center space-y-2">
-        <h2 className="text-3xl font-display text-white">Connect Wallet</h2>
+        <h2 className="text-3xl font-display text-white">Connect Self-Custody Wallet</h2>
         <p className="text-white/60">
-          Connect your wallet to enable Taxee&apos;s autonomous tax optimization
+          MetaMask, Rainbow, or any EIP-7702-compatible wallet. Your keys, your control.
         </p>
       </div>
 
@@ -181,7 +188,31 @@ export function WalletOnboardingStep({ onComplete, onBack }: WalletOnboardingSte
         </div>
         
         <div className="ml-11">
-          <WalletConnectionPrompt />
+          {canProceed && address ? (
+            <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-white font-medium">Wallet Connected</p>
+                  <p className="text-emerald-400/80 text-sm font-mono">{address.slice(0, 6)}...{address.slice(-4)}</p>
+                </div>
+              </div>
+              <div className="text-xs text-emerald-400/60 space-y-1">
+                <p className="flex items-center gap-2">
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                  Self-custody wallet via EIP-7702 delegation
+                </p>
+              </div>
+            </div>
+          ) : (
+            <WalletConnectionPrompt />
+          )}
         </div>
       </div>
 
@@ -245,13 +276,22 @@ export function WalletOnboardingStep({ onComplete, onBack }: WalletOnboardingSte
           <svg className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <div className="space-y-1">
-            <p className="text-white/90 font-medium">What is this authorization?</p>
-            <p className="text-white/60 text-sm">
-              You&apos;re granting Taxee limited authority to execute tax optimization transactions within strict limits 
-              ($5,000/tx, $20,000/month). Taxee cannot move funds outside your Circle Wallet or exceed these limits. 
-              You can revoke this anytime.
-            </p>
+          <div className="space-y-2">
+            <div>
+              <p className="text-white/90 font-medium">How does this work with MetaMask?</p>
+              <p className="text-white/60 text-sm">
+                You&apos;re using EIP-7702 delegation — a new Ethereum standard that lets you authorize Taxee 
+                to execute transactions on your behalf within strict limits. Your private key stays in MetaMask; 
+                Taxee gets a scoped session key that can only do what your policy allows.
+              </p>
+            </div>
+            <div className="pt-2 border-t border-blue-500/20">
+              <p className="text-white/50 text-xs">
+                <span className="text-blue-400">Alternative:</span> Prefer a custodial solution? 
+                You can also use a <a href="/setup-wallet" className="text-blue-400 hover:text-blue-300 underline">Circle MPC wallet</a> — 
+                your key is split across multiple secure enclaves and transactions are co-signed by Circle.
+              </p>
+            </div>
           </div>
         </div>
       </div>
