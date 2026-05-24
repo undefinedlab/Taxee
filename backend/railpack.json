@@ -3,6 +3,11 @@
   "packages": {
     "node": "22"
   },
+  "steps": {
+    "build": {
+      "commands": ["pnpm turbo run build --filter=@taxee/api..."]
+    }
+  },
   "deploy": {
     "startCommand": "node apps/api/dist/index.js"
   }

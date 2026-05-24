@@ -109,10 +109,12 @@ Redis from `docker-compose.yml` is optional locally; the app does not require it
 | Setting | Value |
 |---------|-------|
 | Root Directory | `backend` |
-| Config | default `railpack.json` / `railway.toml` |
-| Start Command | `node apps/api/dist/index.js` *(auto from `railpack.json`)* |
-| Pre-deploy | `pnpm db:migrate` |
-| Healthcheck | `/health` |
+| Config | default `backend/railpack.json` |
+| Start Command | `node apps/api/dist/index.js` *(from `railpack.json`)* |
+| Pre-deploy *(API only, set in Railway UI)* | `pnpm db:migrate` |
+| Healthcheck *(API only)* | `/health` |
+
+Do **not** put `startCommand` / `preDeploy` in `railway.toml` — that file applies to every service with Root Directory `backend` (including the Telegram bot).
 
 If Railpack still reports “No start command”, confirm Root Directory is `backend` (not the monorepo root) and redeploy after pulling these config files.
 

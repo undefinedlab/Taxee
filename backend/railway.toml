@@ -1,18 +1,18 @@
-# Railway config for the @taxee/api service.
-# Set the service Root Directory to "backend" in the Railway dashboard.
+# Shared backend folder — do NOT put start/build/preDeploy here.
+# Railway applies this file to EVERY service whose Root Directory is "backend".
 #
-# Worker services (same repo, root directory "backend"):
-#   RAILPACK_CONFIG_FILE=railpack.agent.json
+# Per-service config (set in Railway dashboard):
+#
+# API (default railpack.json):
+#   Pre-deploy:  pnpm db:migrate
+#   Healthcheck: /health
+#
+# Telegram bot:
 #   RAILPACK_CONFIG_FILE=railpack.telegram-bot.json
+#   No healthcheck (no HTTP server)
+#
+# Agent worker:
+#   RAILPACK_CONFIG_FILE=railpack.agent.json
+#
+# MCP server:
 #   RAILPACK_CONFIG_FILE=railpack.mcp-server.json
-
-[build]
-buildCommand = "pnpm turbo run build --filter=@taxee/api..."
-
-[deploy]
-startCommand = "node apps/api/dist/index.js"
-preDeployCommand = ["pnpm db:migrate"]
-healthcheckPath = "/health"
-healthcheckTimeout = 120
-restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 10

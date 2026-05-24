@@ -196,13 +196,6 @@ export default function OnboardingPage() {
                         </button>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => setWallet(DEMO_WALLET)}
-                        className="text-xs text-[#6b7280] underline hover:text-[#111827] dark:text-[#9ca3af] dark:hover:text-[#f9fafb]"
-                      >
-                        Use demo wallet ({truncateAddress(DEMO_WALLET)})
-                      </button>
                     </div>
                   </div>
                 )}
