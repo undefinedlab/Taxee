@@ -128,7 +128,7 @@ contract TaxeeManager {
         
         // Default allowed assets
         allowedAssets[0x0000000000000000000000000000000000000000] = true; // ETH
-        allowedAssets[0xA0b86a33E6441e0A421e56E4773C3C4b0Db7E5b5] = true; // USDC (Base)
+        allowedAssets[0xA0b86a33E6441E0a421E56E4773C3C4b0Db7e5B5] = true; // USDC (Base)
     }
     
     // ============ Admin Functions ============

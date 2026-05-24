@@ -37,6 +37,10 @@ async function main() {
     if (!user) continue;
 
     const walletAddress = TARGET_WALLET ?? user.address;
+    if (!walletAddress) {
+      console.log(`\n── Agent ${agent.id} · skipping (no wallet address) ──`);
+      continue;
+    }
     console.log(`\n── Agent ${agent.id} · wallet ${walletAddress} ────────────────`);
 
     const existingLots = await db
