@@ -6,6 +6,7 @@ import {
   fetchPrices,
   collectRegimeSignals,
   importLotsForWallet,
+  resolveAcquisitionPrice,
 } from "@taxee/aggregator";
 import {
   scanForHarvestOpportunities,
@@ -117,6 +118,25 @@ export async function runHeartbeat(agentId: string): Promise<{
 
   const assetIds = [...new Set(openLots.map((l) => l.assetId))];
   const prices   = await fetchPrices(assetIds, process.env["COINGECKO_API_KEY"]);
+
+  // Repair lots with missing cost basis using acquisition-date price (not spot)
+  const geckoKey = process.env["COINGECKO_API_KEY"];
+  for (const lot of openLots) {
+    const basis = parseFloat(lot.costBasisUsd);
+    if (basis > 0) continue;
+    const { price, source } = await resolveAcquisitionPrice(
+      lot.assetId,
+      lot.acquiredAt,
+      geckoKey,
+    );
+    if (price <= 0) continue;
+    const repaired = (parseFloat(lot.quantity) * price).toFixed(4);
+    await db.update(lots).set({ costBasisUsd: repaired }).where(eq(lots.id, lot.id));
+    lot.costBasisUsd = repaired;
+    console.log(
+      `[heartbeat] Repaired lot ${lot.id} using ${source} (${lot.acquiredAt.toISOString().slice(0, 10)} @ $${price}) → $${repaired}`,
+    );
+  }
 
   const now = Date.now();
 

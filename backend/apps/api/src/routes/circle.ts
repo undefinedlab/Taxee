@@ -64,38 +64,83 @@ const circleRoutes: FastifyPluginAsync = async (app) => {
     return reply.send({ userToken, encryptionKey, challengeId });
   });
 
-  /**
-   * Public endpoint — no JWT required.
-   * Called by the /setup-wallet frontend page on load to get fresh credentials.
-   * The userId from our DB is effectively a bearer token (unguessable UUID).
-   */
-  app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply) => {
-    const { userId } = request.params;
-    const [user] = await db.select().from(users).where(eq(users.id, userId));
-    if (!user) return reply.code(404).send({ error: "User not found" });
+/**
+ * Public endpoint — no JWT required.
+ * Called by the /setup-wallet frontend page on load to get fresh credentials.
+ * The userId from our DB is effectively a bearer token (unguessable UUID).
+ */
+app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply) => {
+  const { userId } = request.params;
+  
+  // Check if user exists, if not create them (for web onboarding)
+  let [user] = await db.select().from(users).where(eq(users.id, userId));
+  
+  if (!user) {
+    // Create user on-the-fly for web onboarding
+    // This is safe because the userId is unguessable (generated client-side)
+    [user] = await db.insert(users).values({
+      id: userId,
+      walletAddress: null,
+      source: 'web_onboarding',
+      createdAt: new Date(),
+    }).returning();
+  }
 
-    const circle = getCircleClient();
-    try { await circle.createCircleUser(userId); } catch (err: any) {
-      if (err?.response?.data?.code !== 155101) throw err;
+  const circle = getCircleClient();
+  try { await circle.createCircleUser(userId); } catch (err: any) {
+    if (err?.response?.data?.code !== 155101) throw err;
+  }
+
+  const { userToken, encryptionKey } = await circle.getUserToken(userId);
+  const blockchain = process.env["CIRCLE_ENVIRONMENT"] === "production" ? "BASE" as const : "BASE-SEPOLIA" as const;
+  const { challengeId } = await circle.initializeUser({
+    userToken,
+    idempotencyKey: userId,
+    blockchains: [blockchain],
+  });
+
+  return reply.send({ userToken, encryptionKey, challengeId });
+  });
+
+  /**
+   * Public endpoint for web onboarding.
+   * Registers a new web user before Circle wallet setup.
+   */
+  app.post<{
+    Body: { userId: string; walletAddress?: string; source?: string };
+  }>("/register-web-user", async (request, reply) => {
+    const { userId, walletAddress, source = 'web_onboarding' } = request.body;
+
+    if (!userId || !userId.startsWith('web_')) {
+      return reply.code(400).send({ error: "Invalid userId. Must start with 'web_'" });
     }
 
-    const { userToken, encryptionKey } = await circle.getUserToken(userId);
-    const blockchain = process.env["CIRCLE_ENVIRONMENT"] === "production" ? "BASE" as const : "BASE-SEPOLIA" as const;
-    const { challengeId } = await circle.initializeUser({
-      userToken,
-      idempotencyKey: userId,
-      blockchains: [blockchain],
+    // Check if user already exists
+    const [existing] = await db.select().from(users).where(eq(users.id, userId));
+    if (existing) {
+      return reply.send({ success: true, message: "User already exists", userId });
+    }
+
+    // Create new user
+    await db.insert(users).values({
+      id: userId,
+      walletAddress: walletAddress || null,
+      source,
+      createdAt: new Date(),
     });
 
-    return reply.send({ userToken, encryptionKey, challengeId });
+    return reply.send({ success: true, message: "User registered", userId });
   });
 
   /**
    * Called by the /setup-wallet page after the user successfully sets up their PIN.
-   * Fetches their Circle wallet(s) and stores the first wallet ID on all their agents.
+   * Fetches their Circle wallet(s) and stores the wallet info.
+   * Also updates user's wallet address if provided.
    */
-  app.post<{ Params: { userId: string } }>("/wallet-ready/:userId", async (request, reply) => {
+  app.post<{ Params: { userId: string }; Body: { walletAddress?: string } }>("/wallet-ready/:userId", async (request, reply) => {
     const { userId } = request.params;
+    const { walletAddress } = request.body ?? {};
+    
     const [user] = await db.select().from(users).where(eq(users.id, userId));
     if (!user) return reply.code(404).send({ error: "User not found" });
 
@@ -109,13 +154,29 @@ const circleRoutes: FastifyPluginAsync = async (app) => {
     if (walletList.length === 0) return reply.code(404).send({ error: "No wallets found for user" });
 
     const walletId = walletList[0].id;
+    const circleWalletAddress = walletList[0].address;
 
+    // Update user with wallet addresses
+    await db.update(users)
+      .set({ 
+        walletAddress: walletAddress || circleWalletAddress || user.walletAddress,
+      })
+      .where(eq(users.id, userId));
+
+    // Update any existing agents with this Circle wallet
     const userAgents = await db.select().from(agents).where(eq(agents.userId, userId));
-    await Promise.all(
-      userAgents.map((a) => db.update(agents).set({ circleWalletId: walletId }).where(eq(agents.id, a.id)))
-    );
+    if (userAgents.length > 0) {
+      await Promise.all(
+        userAgents.map((a) => db.update(agents).set({ circleWalletId: walletId }).where(eq(agents.id, a.id)))
+      );
+    }
 
-    return reply.send({ ok: true, walletId, agentsUpdated: userAgents.length });
+    return reply.send({ 
+      ok: true, 
+      walletId, 
+      walletAddress: circleWalletAddress,
+      agentsUpdated: userAgents.length 
+    });
   });
 
   /**

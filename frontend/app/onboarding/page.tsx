@@ -10,12 +10,13 @@ import { OnboardingTopBar } from "@/components/onboarding/onboarding-topbar";
 import { registerAgent } from "@/lib/agent-store";
 import { truncateAddress } from "@/lib/utils";
 import { SimpleWalletConnect } from "@/components/wallet/simple-wallet-connect";
+import { CircleWalletSetup } from "@/components/wallet/circle-wallet-setup";
 import { AgentActivation } from "@/components/wallet/agent-activation";
 import { useWalletData } from "@/hooks/use-wallet-data";
 
-type Step = "wallet-input" | "wallet-connect" | "import" | "policy" | "review" | "activate" | "done";
+type Step = "wallet-input" | "wallet-connect" | "circle-setup" | "import" | "policy" | "review" | "activate" | "done";
 
-const STEP_ORDER: Step[] = ["wallet-input", "wallet-connect", "import", "policy", "review", "activate", "done"];
+const STEP_ORDER: Step[] = ["wallet-input", "wallet-connect", "circle-setup", "import", "policy", "review", "activate", "done"];
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -153,7 +154,7 @@ export default function OnboardingPage() {
                         </div>
                       </button>
 
-                      {/* Option 2: Circle MPC Wallet - Via Telegram */}
+                      {/* Option 2: Circle MPC Wallet */}
                       <div className="relative">
                         <div className="absolute inset-0 flex items-center">
                           <div className="w-full border-t border-[#e5e7eb] dark:border-[#374151]" />
@@ -163,39 +164,30 @@ export default function OnboardingPage() {
                         </div>
                       </div>
 
-                      <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-6 dark:border-blue-900/30 dark:bg-blue-900/10">
-                        <div className="flex items-start gap-4">
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+                      <button
+                        type="button"
+                        onClick={() => setStep("circle-setup")}
+                        className="group w-full rounded-xl border border-[#e5e7eb] bg-white p-6 text-left transition-all hover:border-[#111827] hover:shadow-lg dark:border-[#374151] dark:bg-[#111827] dark:hover:border-[#f9fafb]"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white">
                             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                             </svg>
                           </div>
                           <div className="flex-1">
                             <h3 className="font-landing font-medium text-[#111827] dark:text-[#f9fafb]">
-                              Circle MPC Wallet
+                              Create Circle Wallet
                             </h3>
-                            <p className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af] mt-1">
-                              Custodial wallet with PIN protection and multi-party computation security.
+                            <p className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
+                              MPC-based wallet with PIN protection. No seed phrase needed.
                             </p>
-                            <div className="mt-3 p-3 rounded-lg bg-white dark:bg-[#111827]">
-                              <p className="font-landing text-xs text-[#6b7280] dark:text-[#9ca3af]">
-                                Available via Telegram bot. Start a chat with @taxee_bot and type /start to create your Circle wallet.
-                              </p>
-                            </div>
-                            <a
-                              href="https://t.me/taxee_bot"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                            >
-                              Open Telegram
-                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                              </svg>
-                            </a>
                           </div>
+                          <svg className="h-5 w-5 text-[#9ca3af] transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
                         </div>
-                      </div>
+                      </button>
 
                       {/* Option 3: Watch Address */}
                       <div className="relative">
@@ -248,6 +240,16 @@ export default function OnboardingPage() {
                 {step === "wallet-connect" && (
                   <SimpleWalletConnect 
                     onComplete={() => setStep("import")}
+                    onBack={() => setStep("wallet-input")}
+                  />
+                )}
+
+                {step === "circle-setup" && (
+                  <CircleWalletSetup
+                    onComplete={(circleWalletAddress) => {
+                      setWallet(circleWalletAddress);
+                      setStep("import");
+                    }}
                     onBack={() => setStep("wallet-input")}
                   />
                 )}

@@ -88,6 +88,8 @@ const GECKO_ID: Record<string, string> = {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export type CostBasisPriceSource = "acquisition_date" | "spot_fallback" | "none";
+
 export interface ImportedLot {
   assetId:      string;
   chainId:      number;
@@ -95,6 +97,31 @@ export interface ImportedLot {
   costBasisUsd: string;
   acquiredAt:   Date;
   txHash:       string;
+  /** How cost basis USD price was resolved */
+  priceSource:  CostBasisPriceSource;
+}
+
+/**
+ * Price for cost basis: acquisition-day USD from CoinGecko history first.
+ * Spot price is only used when history is unavailable (rate limit, API miss).
+ */
+export async function resolveAcquisitionPrice(
+  assetId: string,
+  acquiredAt: Date,
+  geckoKey?: string,
+): Promise<{ price: number; source: CostBasisPriceSource }> {
+  const historical = await getHistoricalPrice(assetId, acquiredAt, geckoKey);
+  if (historical > 0) {
+    return { price: historical, source: "acquisition_date" };
+  }
+  const spot = await getCurrentPrice(assetId, geckoKey);
+  if (spot > 0) {
+    console.warn(
+      `[lotImporter] Using spot fallback for ${assetId} on ${acquiredAt.toISOString().slice(0, 10)} (history unavailable)`,
+    );
+    return { price: spot, source: "spot_fallback" };
+  }
+  return { price: 0, source: "none" };
 }
 
 // ─── CoinGecko historical price ───────────────────────────────────────────────
@@ -123,6 +150,26 @@ async function getHistoricalPrice(
       { params: { date: dateStr, localization: false }, headers, timeout: 8000 },
     );
     return (res.data as any)?.market_data?.current_price?.usd ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function getCurrentPrice(assetId: string, geckoKey?: string): Promise<number> {
+  const geckoId = GECKO_ID[assetId];
+  if (!geckoId) return 0;
+
+  const headers: Record<string, string> = {};
+  if (geckoKey) {
+    headers[geckoKey.startsWith("CG-") ? "x-cg-demo-api-key" : "x-cg-pro-api-key"] = geckoKey;
+  }
+
+  try {
+    const res = await axios.get<Record<string, { usd: number }>>(
+      "https://api.coingecko.com/api/v3/simple/price",
+      { params: { ids: geckoId, vs_currencies: "usd" }, headers, timeout: 8000 },
+    );
+    return res.data[geckoId]?.usd ?? 0;
   } catch {
     return 0;
   }
@@ -231,8 +278,11 @@ export async function importLotsForWallet(
 
       const dateKey = `${assetId}:${acquiredAt.toISOString().slice(0, 10)}`;
       let price = priceCache.get(dateKey);
+      let priceSource: CostBasisPriceSource = "acquisition_date";
       if (price === undefined) {
-        price = await getHistoricalPrice(assetId, acquiredAt, geckoKey);
+        const resolved = await resolveAcquisitionPrice(assetId, acquiredAt, geckoKey);
+        price = resolved.price;
+        priceSource = resolved.source;
         priceCache.set(dateKey, price);
         await new Promise((r) => setTimeout(r, 250));
       }
@@ -240,13 +290,20 @@ export async function importLotsForWallet(
       const costBasisUsd = quantity * price;
       if (costBasisUsd < MIN_LOT_USD && price > 0) continue;
 
+      if (priceSource === "acquisition_date") {
+        console.log(
+          `[lotImporter] ${assetId} ${acquiredAt.toISOString().slice(0, 10)} @ $${price.toFixed(2)} → basis $${costBasisUsd.toFixed(4)}`,
+        );
+      }
+
       lots.push({
         assetId,
         chainId,
         quantity:     String(quantity),
-        costBasisUsd: price > 0 ? String(costBasisUsd) : "0",
+        costBasisUsd: price > 0 ? String(costBasisUsd.toFixed(4)) : "0",
         acquiredAt,
-        txHash: tx.hash,
+        txHash:       tx.hash,
+        priceSource,
       });
     }
   }
