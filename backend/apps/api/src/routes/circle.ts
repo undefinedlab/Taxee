@@ -754,13 +754,38 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
       // topic2 = recipient (address padded to 32 bytes)
       const transferTopic = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
       const recipientTopic = "0x000000000000000000000000" + address.slice(2).toLowerCase();
-      const logsRaw = await rpc("eth_getLogs", [{
-        fromBlock: "0x0",
-        toBlock:   "latest",
-        topics:    [transferTopic, null, recipientTopic],
-      }]) as Array<{ address: string }> | undefined;
+
+      // Cap block range to avoid "block range too large" errors on RPC nodes
+      const latestBlockHex = await rpc("eth_blockNumber", []) as string | undefined;
+      const latestBlock    = latestBlockHex ? Number(BigInt(latestBlockHex)) : 0;
+      const fromBlock      = Math.max(0, latestBlock - 100_000);
+      const fromBlockHex   = "0x" + fromBlock.toString(16);
+
+      request.log.info({ latestBlock, fromBlock }, "arc eth_getLogs range");
+
+      let logsRaw: Array<{ address: string }> | undefined;
+      try {
+        logsRaw = await rpc("eth_getLogs", [{
+          fromBlock: fromBlockHex,
+          toBlock:   "latest",
+          topics:    [transferTopic, null, recipientTopic],
+        }]) as Array<{ address: string }> | undefined;
+      } catch (logsErr) {
+        request.log.warn({ logsErr }, "arc eth_getLogs failed");
+      }
+
+      // If range still too large, fall back to last 10k blocks
+      if (!logsRaw) {
+        const smallFrom = "0x" + Math.max(0, latestBlock - 10_000).toString(16);
+        logsRaw = await rpc("eth_getLogs", [{
+          fromBlock: smallFrom,
+          toBlock:   "latest",
+          topics:    [transferTopic, null, recipientTopic],
+        }]).catch(() => undefined) as Array<{ address: string }> | undefined;
+      }
 
       const contractAddresses = [...new Set((logsRaw ?? []).map(l => l.address.toLowerCase()))];
+      request.log.info({ contractAddresses }, "arc discovered ERC-20 contracts");
 
       // ── 3. For each contract: call balanceOf, symbol, decimals ─────────────
       // selector for balanceOf(address) = 0x70a08231
