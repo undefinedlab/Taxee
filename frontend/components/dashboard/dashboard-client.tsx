@@ -199,6 +199,22 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
     [],
   );
 
+  // Poll while any opp is mid-flight (approved but not yet executed/failed).
+  // Without this, the user sees "Executing…" indefinitely because executeOpportunity
+  // can take 30–120 s on Sepolia and the single post-approve poll fires once at 3 s.
+  useEffect(() => {
+    const hasInflight = opportunities.some(
+      (o) => o.status === "approved" || o.status === "pending" && o.txHash,
+    );
+    if (!hasInflight) return;
+    const interval = window.setInterval(() => {
+      void reloadOpportunitiesFromServer().then((r) => {
+        if (r.opportunities.length > 0) applyServerOpportunities(r.opportunities);
+      });
+    }, 5000);
+    return () => window.clearInterval(interval);
+  }, [opportunities, applyServerOpportunities]);
+
   const handleApprove = useCallback(
     async (opp: Opportunity) => {
       if (connType === "watch") {

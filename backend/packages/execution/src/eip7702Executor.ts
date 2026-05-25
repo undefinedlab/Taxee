@@ -166,11 +166,16 @@ export async function checkActiveDelegation(userAddress: Address, chainId?: numb
 /**
  * Record an approved action on TaxeeManager for a MetaMask / EIP-7702 user.
  * Requires EIP7702_EXECUTOR_PRIVATE_KEY to be setAuthorizedExecutor on the manager.
+ *
+ * `onSubmitted` fires the moment `writeContract` returns a tx hash, *before*
+ * we wait for confirmation. Use it to persist the hash so the UI can show
+ * "submitted, awaiting confirmation" instead of "executing…" for 60+ seconds.
  */
 export async function executeApprovedActionEip7702(
   action: ApprovedAction,
   userWalletAddress: string,
   overrideChainId?: number,
+  onSubmitted?: (txHash: string) => void | Promise<void>,
 ): Promise<Eip7702ExecutionReceipt> {
   const pk = process.env["EIP7702_EXECUTOR_PRIVATE_KEY"];
   if (!pk?.startsWith("0x")) {
@@ -253,7 +258,24 @@ export async function executeApprovedActionEip7702(
     });
 
     const hash = await walletClient.writeContract(request);
-    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+    if (onSubmitted) {
+      try {
+        await onSubmitted(hash);
+      } catch (cbErr) {
+        // Persistence failures should not block the confirmation wait — we'll
+        // still write the final txHash on success.
+        console.error("[eip7702] onSubmitted callback failed", cbErr);
+      }
+    }
+
+    // 2-minute cap. If the chain is genuinely slow we'd rather release the
+    // mutex (so the next caller can broadcast on a fresh nonce) and let the
+    // tx hash sit on the row as "submitted" than hold the lock forever.
+    const receipt = await publicClient.waitForTransactionReceipt({
+      hash,
+      timeout: 120_000,
+    });
 
     if (receipt.status !== "success") {
       throw new Error(`TaxeeManager.${functionName} reverted (tx ${hash})`);

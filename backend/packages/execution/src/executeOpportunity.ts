@@ -148,7 +148,19 @@ export async function executeOpportunity(opportunityId: string): Promise<Execute
     }
 
     try {
-      const eipReceipt = await executeApprovedActionEip7702(approved, wallet, execChainId);
+      const eipReceipt = await executeApprovedActionEip7702(
+        approved,
+        wallet,
+        execChainId,
+        async (submittedHash) => {
+          // Persist as soon as the tx is in the mempool so the dashboard can
+          // show a hash + "Submitted" state instead of an indefinite spinner.
+          await db
+            .update(opportunities)
+            .set({ txHash: submittedHash })
+            .where(eq(opportunities.id, opportunityId));
+        },
+      );
       await db
         .update(opportunities)
         .set({
