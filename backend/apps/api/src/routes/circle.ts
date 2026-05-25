@@ -1,8 +1,12 @@
+import { randomUUID } from "node:crypto";
 import { type FastifyPluginAsync } from "fastify";
 import { db } from "../db/client.js";
 import { users, agents, opportunities } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { CircleClient } from "@taxee/aggregator";
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const auth = { preHandler: [async (req: any, reply: any) => {
   try { await req.jwtVerify(); } catch { reply.code(401).send({ error: "Unauthorized" }); }
@@ -71,12 +75,19 @@ const circleRoutes: FastifyPluginAsync = async (app) => {
  */
 app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply) => {
   const { userId } = request.params;
-  
-  // Check if user exists, if not create them (for web onboarding)
+
+  if (!UUID_RE.test(userId)) {
+    return reply.code(400).send({ error: "Invalid userId — expected UUID" });
+  }
+
   let [user] = await db.select().from(users).where(eq(users.id, userId));
   
   if (!user) {
-    // Create user on-the-fly for web onboarding (userId is client-generated UUID)
+    if (!UUID_RE.test(userId)) {
+      return reply.code(400).send({
+        error: "Invalid userId — use a UUID from POST /circle/register-web-user",
+      });
+    }
     const [created] = await db.insert(users).values({ id: userId }).returning();
     if (!created) return reply.code(500).send({ error: "Failed to create user" });
     user = created;
@@ -103,27 +114,26 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
    * Registers a new web user before Circle wallet setup.
    */
   app.post<{
-    Body: { userId: string; walletAddress?: string; source?: string };
+    Body: { userId?: string; walletAddress?: string; source?: string };
   }>("/register-web-user", async (request, reply) => {
-    const { userId, walletAddress, source = 'web_onboarding' } = request.body;
+    const { walletAddress, source = "web_onboarding" } = request.body;
+    let userId = request.body.userId?.trim();
 
-    if (!userId || !userId.startsWith('web_')) {
-      return reply.code(400).send({ error: "Invalid userId. Must start with 'web_'" });
+    if (!userId || !UUID_RE.test(userId)) {
+      userId = randomUUID();
     }
 
-    // Check if user already exists
     const [existing] = await db.select().from(users).where(eq(users.id, userId));
     if (existing) {
       return reply.send({ success: true, message: "User already exists", userId });
     }
 
-    // Create new user (wallet stored on users.address; agents hold per-wallet addresses)
     await db.insert(users).values({
-      id: userId,
+      id:      userId,
       address: walletAddress?.toLowerCase() ?? null,
     });
 
-    return reply.send({ success: true, message: "User registered", userId });
+    return reply.send({ success: true, message: "User registered", userId, source });
   });
 
   /**

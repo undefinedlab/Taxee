@@ -1,8 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import { useAccount } from 'wagmi';
 import { WalletConnectionPrompt } from '@/components/wallet/wallet-button';
 import { useWalletStatus } from '@/components/wallet/use-wallet-status';
+import { CircleWalletSetup } from '@/components/wallet/circle-wallet-setup';
+import { useHasCircleWallet } from '@/hooks/use-circle-wallet';
 
 interface SimpleWalletConnectProps {
   onComplete: () => void;
@@ -12,6 +15,21 @@ interface SimpleWalletConnectProps {
 export function SimpleWalletConnect({ onComplete, onBack }: SimpleWalletConnectProps) {
   const { isConnected, address } = useAccount();
   const { canProceed } = useWalletStatus();
+  const hasCircle = useHasCircleWallet();
+  const [showCircleSetup, setShowCircleSetup] = useState(false);
+
+  if (showCircleSetup) {
+    return (
+      <CircleWalletSetup
+        onComplete={(circleAddr) => {
+          setShowCircleSetup(false);
+          if (circleAddr) localStorage.setItem('taxee_primary_wallet', circleAddr);
+          onComplete();
+        }}
+        onBack={() => setShowCircleSetup(false)}
+      />
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -70,6 +88,30 @@ export function SimpleWalletConnect({ onComplete, onBack }: SimpleWalletConnectP
           )}
         </div>
       </div>
+
+      {/* Optional Circle PIN wallet for execution */}
+      {canProceed && (
+        <div className="ml-11 space-y-3">
+          <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+            <p className="text-white font-medium text-sm mb-1">Circle wallet (optional)</p>
+            <p className="text-white/50 text-xs mb-3">
+              MetaMask is for signing &amp; delegation. Add a Circle MPC wallet with PIN if you want
+              taxee to execute trades with gas sponsorship.
+            </p>
+            {hasCircle ? (
+              <p className="text-emerald-400 text-sm">Circle wallet already set up.</p>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowCircleSetup(true)}
+                className="text-sm font-medium text-blue-400 hover:text-blue-300"
+              >
+                Create Circle wallet + PIN →
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Continue Button */}
       {canProceed && (

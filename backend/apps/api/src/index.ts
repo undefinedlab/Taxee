@@ -14,9 +14,38 @@ const app = Fastify({
   },
 });
 
+function parseCorsOrigins(): Set<string> {
+  const parts: string[] = [];
+  for (const key of ["CORS_ORIGINS", "APP_URL", "FRONTEND_URL"] as const) {
+    const v = process.env[key];
+    if (v) parts.push(...v.split(",").map((s) => s.trim()).filter(Boolean));
+  }
+  const extras = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://taxee.io",
+    "https://www.taxee.io",
+  ];
+  return new Set([...parts, ...extras]);
+}
+
+const allowedOrigins = parseCorsOrigins();
+
 await app.register(cors, {
-  origin:      process.env["APP_URL"] ?? "http://localhost:3000",
+  origin: (origin, cb) => {
+    // Non-browser clients (curl, server-side) omit Origin
+    if (!origin) {
+      cb(null, true);
+      return;
+    }
+    if (allowedOrigins.has(origin)) {
+      cb(null, origin);
+      return;
+    }
+    cb(new Error(`CORS: origin not allowed: ${origin}`), false);
+  },
   credentials: true,
+  methods:     ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 });
 
 await app.register(jwt, {

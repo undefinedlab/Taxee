@@ -130,7 +130,10 @@ export function CircleWalletSetup({ onComplete, onBack }: CircleWalletSetupProps
             Back
           </button>
           <button
-            onClick={() => setShowInfo(false)}
+            onClick={() => {
+              setShowInfo(false);
+              void setupWallet();
+            }}
             className="inline-flex items-center gap-2 px-8 py-3 rounded-xl bg-white text-slate-950 font-medium hover:bg-white/90 transition-colors"
           >
             Create Wallet

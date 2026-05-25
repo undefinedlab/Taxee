@@ -2,6 +2,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { API_BASE_URL } from "@/lib/api";
 
 function ExecuteContent() {
   const params = useSearchParams();
@@ -16,7 +17,7 @@ function ExecuteContent() {
       return;
     }
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+    const apiUrl = API_BASE_URL;
     const appId  = "e88bd88e-6c02-5d2a-aa01-5e751f693e7f";
 
     setMessage("Fetching fresh credentials…");
