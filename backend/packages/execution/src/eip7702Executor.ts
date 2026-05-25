@@ -8,7 +8,7 @@ import {
   type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { base, baseSepolia } from "viem/chains";
+import { base, baseSepolia, mainnet, sepolia } from "viem/chains";
 import { getChainConfig, getExecutionChainId } from "./chainConfig.js";
 import { NATIVE_ETH, resolveTokenAddress, tokenDecimals } from "./assetAddresses.js";
 
@@ -102,8 +102,10 @@ function delegationRegistryAddress(): Address {
 }
 
 function viemChain(chainId: number) {
-  if (chainId === 8453) return base;
-  if (chainId === 84532) return baseSepolia;
+  if (chainId === 1)       return mainnet;
+  if (chainId === 11155111) return sepolia;
+  if (chainId === 8453)    return base;
+  if (chainId === 84532)   return baseSepolia;
   if (chainId === 5042002) return arcTestnet;
   throw new Error(`EIP-7702 execution unsupported chain ${chainId}`);
 }
