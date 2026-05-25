@@ -602,11 +602,22 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
       );
     }
 
-    return reply.send({ 
-      ok: true, 
-      walletId, 
+    // Fire-and-forget Telegram receipt with wallet details. Wrapped so a
+    // Telegram failure (e.g. user blocked the bot) never breaks setup.
+    void sendCircleWalletReadyTelegram({
+      telegramId:      user.telegramId,
+      walletId,
+      walletAddress:   circleWalletAddress,
+      blockchain:      walletList[0]?.blockchain ?? "unknown",
+      agentsUpdated:   userAgents.length,
+      walletAddressOf: linkedAddress ?? user.address ?? undefined,
+    });
+
+    return reply.send({
+      ok: true,
+      walletId,
       walletAddress: circleWalletAddress,
-      agentsUpdated: userAgents.length 
+      agentsUpdated: userAgents.length
     });
   });
 
@@ -728,5 +739,60 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
     }
   );
 };
+
+/**
+ * Send a Telegram message with Circle wallet details after PIN setup completes.
+ * Fire-and-forget — failures are logged but never thrown.
+ */
+async function sendCircleWalletReadyTelegram(opts: {
+  telegramId:      string | null;
+  walletId:        string;
+  walletAddress:   string;
+  blockchain:      string;
+  agentsUpdated:   number;
+  walletAddressOf?: string | undefined;
+}): Promise<void> {
+  const token  = process.env["TELEGRAM_BOT_TOKEN"];
+  const chatId = opts.telegramId;
+  if (!token || !chatId) return;
+
+  const shortAddr = `${opts.walletAddress.slice(0, 6)}…${opts.walletAddress.slice(-4)}`;
+  const lines: string[] = [
+    `🔵 *Circle wallet ready!*`,
+    ``,
+    `📬 *Address:* \`${opts.walletAddress}\``,
+    `🌐 *Network:* ${opts.blockchain}`,
+    `🆔 *Wallet ID:* \`${opts.walletId}\``,
+  ];
+  if (opts.walletAddressOf && opts.walletAddressOf.toLowerCase() !== opts.walletAddress.toLowerCase()) {
+    lines.push(`🔗 *Linked external:* \`${opts.walletAddressOf}\``);
+  }
+  lines.push(
+    ``,
+    opts.agentsUpdated > 0
+      ? `🤖 *${opts.agentsUpdated} agent${opts.agentsUpdated === 1 ? "" : "s"}* now connected — you can approve tax actions from chat.`
+      : `Send a wallet address (\`0x...\`) to create your first agent.`,
+    ``,
+    `💧 Need testnet USDC? Use Circle's faucet:`,
+    `https://faucet.circle.com/`,
+    ``,
+    `Use /wallet anytime to view live balances and \`${shortAddr}\`.`,
+  );
+
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        chat_id:                  chatId,
+        text:                     lines.join("\n"),
+        parse_mode:               "Markdown",
+        disable_web_page_preview: true,
+      }),
+    });
+  } catch (err) {
+    console.error("[circle/wallet-ready] Telegram notification failed:", err);
+  }
+}
 
 export default circleRoutes;

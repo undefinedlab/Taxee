@@ -108,7 +108,17 @@ export function setWalletConnectionType(chatId: string, type: WalletConnectionTy
   pendingByChat.set(chatId, { ...cur, walletConnectionType: type });
 }
 
-function walletTypeNextStep(type: WalletConnectionType): string {
+function setupLinkBase(): string | null {
+  const base = process.env["WALLET_SETUP_URL"] ?? process.env["FRONTEND_URL"] ?? "";
+  // Telegram only renders Markdown link previews/clicks for http(s) — bail if neither set.
+  if (!/^https?:\/\//.test(base)) return null;
+  return base.replace(/\/$/, "");
+}
+
+export function walletTypeNextStep(type: WalletConnectionType, userId?: string): string {
+  const base   = setupLinkBase();
+  const params = userId ? `?userId=${encodeURIComponent(userId)}` : "";
+
   switch (type) {
     case "watch":
       return (
@@ -116,18 +126,22 @@ function walletTypeNextStep(type: WalletConnectionType): string {
         "You sign and broadcast — taxee never executes on your behalf.\n\n" +
         "Send the wallet address to monitor (`0x...`)."
       );
-    case "external_eip7702":
+    case "external_eip7702": {
+      const link = base ? `[Sign delegation](${base}/tg/activate${params})` : "*Sign delegation*";
       return (
         "🦊 *Self-custody (EIP-7702)* — MetaMask, Rabby, etc.\n\n" +
         "1. Send your wallet address (`0x...`) in this chat.\n" +
-        "2. Tap *Sign delegation* below (opens inside Telegram — then you return here automatically)."
+        `2. Tap ${link} to sign the delegation on the web app.`
       );
-    case "circle":
+    }
+    case "circle": {
+      const link = base ? `[Set up Circle PIN](${base}/tg/circle${params})` : "*Set up Circle PIN*";
       return (
         "🔵 *Circle wallet* — hosted wallet with PIN + gas sponsorship.\n\n" +
-        "1. Tap *Set up Circle PIN* below (inside Telegram), or send `0x...` after setup.\n" +
-        "_Use the same flow after linking if you need to reset PIN._"
+        `1. Tap ${link} to set your PIN on the web app, then send your \`0x...\` address here.\n` +
+        "_Use the same link later if you need to reset PIN._"
       );
+    }
   }
 }
 
@@ -146,23 +160,30 @@ export function walletSetupKeyboard(
   frontendUrl: string,
   userId?: string,
 ): InlineKeyboard | undefined {
+  // Telegram rejects any non-HTTPS URL in inline keyboards. For local dev we
+  // fall back to WALLET_SETUP_URL (typically the deployed site like
+  // https://www.taxee.pro) so the PIN/delegation pages still work even when
+  // the rest of the stack points at http://localhost:3000.
+  const setupBase = process.env["WALLET_SETUP_URL"] ?? frontendUrl;
+  if (!setupBase.startsWith("https://")) return undefined;
+
   switch (type) {
     case "external_eip7702":
       return new InlineKeyboard().webApp(
         "🦊 Sign delegation",
-        tgWebAppUrl("activate", frontendUrl, userId),
+        tgWebAppUrl("activate", setupBase, userId),
       );
     case "circle":
       return new InlineKeyboard().webApp(
         "🔵 Set up Circle PIN",
-        tgWebAppUrl("circle", frontendUrl, userId),
+        tgWebAppUrl("circle", setupBase, userId),
       );
     default:
       return undefined;
   }
 }
 
-export function formatPolicySummary(p: PendingAgentPolicy): string {
+export function formatPolicySummary(p: PendingAgentPolicy, userId?: string): string {
   const walletLine = `🔗 Wallet mode: *${WALLET_CONNECTION_LABELS[p.walletConnectionType]}*`;
   return (
     `🌍 *${jurisdictionDisplay(p.jurisdiction)}*\n` +
@@ -170,7 +191,7 @@ export function formatPolicySummary(p: PendingAgentPolicy): string {
     `🌾 Harvest when loss ≥ *${Math.abs(p.harvestThresholdPct)}%*\n` +
     `💵 Min loss to act: *${p.minHarvestLossUsd === 0 ? "any" : `$${p.minHarvestLossUsd}`}*\n` +
     `${walletLine}\n\n` +
-    walletTypeNextStep(p.walletConnectionType)
+    walletTypeNextStep(p.walletConnectionType, userId)
   );
 }
 

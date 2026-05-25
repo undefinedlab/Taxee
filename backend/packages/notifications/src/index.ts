@@ -142,6 +142,37 @@ function buildOpportunityText(n: OpportunityNotification): string {
   return lines.join("\n");
 }
 
+/**
+ * Telegram caps each sendMessage at 4096 chars. Split a long Markdown text into
+ * chunks on line boundaries (so we don't break `*bold*` or `_italic_` markup
+ * mid-token, which would cause "Can't parse entities" errors).
+ */
+function splitForTelegram(text: string, maxLen = 3900): string[] {
+  if (text.length <= maxLen) return [text];
+  const lines  = text.split("\n");
+  const chunks: string[] = [];
+  let buf = "";
+  for (const line of lines) {
+    // A single line that exceeds maxLen — hard-split it to avoid an infinite stall.
+    if (line.length > maxLen) {
+      if (buf) { chunks.push(buf); buf = ""; }
+      for (let i = 0; i < line.length; i += maxLen) {
+        chunks.push(line.slice(i, i + maxLen));
+      }
+      continue;
+    }
+    const next = buf ? buf + "\n" + line : line;
+    if (next.length > maxLen) {
+      chunks.push(buf);
+      buf = line;
+    } else {
+      buf = next;
+    }
+  }
+  if (buf) chunks.push(buf);
+  return chunks;
+}
+
 async function sendTelegramOpportunity(
   n: OpportunityNotification,
   chatId: string
@@ -172,12 +203,27 @@ async function sendTelegramOpportunity(
         }
       : undefined;
 
-  await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
-    chat_id:    chatId,
-    text,
-    parse_mode: "Markdown",
-    ...(inlineKeyboard ? { reply_markup: inlineKeyboard } : {}),
-  });
+  const chunks = splitForTelegram(text);
+  // Buttons attach only to the final chunk so the user sees them next to the conclusion.
+  for (let i = 0; i < chunks.length; i++) {
+    const isLast = i === chunks.length - 1;
+    try {
+      await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
+        chat_id:    chatId,
+        text:       chunks[i],
+        parse_mode: "Markdown",
+        ...(isLast && inlineKeyboard ? { reply_markup: inlineKeyboard } : {}),
+      });
+    } catch (err) {
+      // If Markdown parsing fails (rare cross-chunk markup straddle), retry as plain text.
+      console.error(`[notifications] Telegram send failed for chunk ${i + 1}/${chunks.length}, retrying plain:`, err);
+      await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
+        chat_id: chatId,
+        text:    chunks[i],
+        ...(isLast && inlineKeyboard ? { reply_markup: inlineKeyboard } : {}),
+      });
+    }
+  }
 }
 
 async function sendTelegramReceipt(receipt: ActionReceipt, chatId: string): Promise<void> {

@@ -26,6 +26,7 @@ import axios from "axios";
 import {
   clearPendingPolicy,
   formatPolicySummary,
+  walletTypeNextStep,
   getPendingPolicy,
   harvestThresholdKeyboard,
   heartbeatKeyboard,
@@ -39,7 +40,6 @@ import {
   setWalletConnectionType,
   walletTypeKeyboard,
   walletConnectionHint,
-  walletSetupKeyboard,
   type PendingAgentPolicy,
 } from "./onboarding.js";
 
@@ -531,7 +531,6 @@ bot.on("message:text", async (ctx) => {
     );
     const isNew = !alreadyLinked;
     const connLabel = WALLET_CONNECTION_LABELS[walletConnectionType];
-    const frontendUrl = process.env["FRONTEND_URL"] ?? "http://localhost:3000";
 
     await ctx.reply(
       `${isNew ? "✅ *New wallet added!*" : "✅ *Wallet already linked — refreshing...*"}\n\n` +
@@ -545,12 +544,12 @@ bot.on("message:text", async (ctx) => {
     );
 
     const hint = walletConnectionHint(walletConnectionType);
-    const setupKb = walletSetupKeyboard(walletConnectionType, frontendUrl, user.id);
-    if (hint || setupKb) {
-      await ctx.reply(hint ?? "Setup next step:", {
-        parse_mode: "Markdown",
-        ...(setupKb ? { reply_markup: setupKb } : {}),
-      });
+    if (hint) {
+      await ctx.reply(hint, { parse_mode: "Markdown" });
+    }
+    const nextStep = walletTypeNextStep(walletConnectionType, user.id);
+    if (nextStep) {
+      await ctx.reply(nextStep, { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
     }
 
     const alchemyKey = process.env["ALCHEMY_API_KEY"];
@@ -737,12 +736,10 @@ bot.on("callback_query:data", async (ctx) => {
     await ctx.editMessageReplyMarkup(undefined);
     await ctx.answerCallbackQuery({ text: WALLET_CONNECTION_LABELS[type] });
     const pending = getPendingPolicy(chatId)! as PendingAgentPolicy;
-    const frontendUrl = process.env["FRONTEND_URL"] ?? "http://localhost:3000";
     const [user] = await db.select().from(users).where(eq(users.telegramId, chatId));
-    const setupKb = walletSetupKeyboard(type, frontendUrl, user?.id);
-    await ctx.reply(formatPolicySummary(pending), {
+    await ctx.reply(formatPolicySummary(pending, user?.id), {
       parse_mode: "Markdown",
-      ...(setupKb ? { reply_markup: setupKb } : {}),
+      link_preview_options: { is_disabled: true },
     });
     return;
   }
@@ -819,21 +816,19 @@ bot.on("callback_query:data", async (ctx) => {
         } catch (err: unknown) {
           console.error(`[bot] EIP-7702 approve failed for ${oppId}:`, err);
           await ctx.answerCallbackQuery({ text: "Execution failed" });
-          const setupKb = walletSetupKeyboard("external_eip7702", frontendUrl, user.id);
           await ctx.reply(
-            "⚠️ Could not start execution. Sign delegation first:",
-            { parse_mode: "Markdown", ...(setupKb ? { reply_markup: setupKb } : {}) },
+            `⚠️ Could not start execution. ${walletTypeNextStep("external_eip7702", user.id)}`,
+            { parse_mode: "Markdown", link_preview_options: { is_disabled: true } },
           );
         }
         return;
       }
       if (connType === "circle" && !agent?.circleWalletId) {
         await ctx.answerCallbackQuery({ text: "Circle setup required" });
-        const setupKb = walletSetupKeyboard("circle", frontendUrl, user.id);
-        await ctx.reply("🔵 Finish Circle wallet + PIN setup first:", {
-          parse_mode: "Markdown",
-          ...(setupKb ? { reply_markup: setupKb } : {}),
-        });
+        await ctx.reply(
+          `🔵 Finish Circle wallet + PIN setup first.\n\n${walletTypeNextStep("circle", user.id)}`,
+          { parse_mode: "Markdown", link_preview_options: { is_disabled: true } },
+        );
         return;
       }
       if (!agent?.circleWalletId) {
@@ -935,6 +930,20 @@ bot.on("message:web_app_data", async (ctx) => {
       break;
     default:
       await ctx.reply("✅ Setup step completed.");
+  }
+});
+
+// Global error handler — without this, any thrown error from a handler crashes
+// the entire bot process (grammY's default behavior). Log + answer the callback
+// query (so the user's tap UI doesn't spin forever) and keep running.
+bot.catch(async (err) => {
+  console.error("[telegram-bot] uncaught handler error:", err);
+  try {
+    if (err.ctx?.callbackQuery) {
+      await err.ctx.answerCallbackQuery({ text: "Something went wrong — try again." });
+    }
+  } catch {
+    // Best-effort recovery; ignore if even the callback ack fails.
   }
 });
 

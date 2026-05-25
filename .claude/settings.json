@@ -45,7 +45,8 @@
       "Bash(displayConnLabel)",
       "Bash(WalletPill)",
       "Bash(connection.*type.*circle)",
-      "Bash(\\\\\"Circle\\\\\"\" frontend/components/dashboard/dashboard-client.tsx 2>/dev/null | head -10)"
+      "Bash(\\\\\"Circle\\\\\"\" frontend/components/dashboard/dashboard-client.tsx 2>/dev/null | head -10)",
+      "Bash(PGPASSWORD=taxee psql -U taxee -d taxee -h localhost -P pager=off -c \"SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename;\")"
     ]
   }
 }
