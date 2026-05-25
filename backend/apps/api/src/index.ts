@@ -86,6 +86,13 @@ app.get("/health", async () => ({ ok: true, ts: new Date().toISOString() }));
 
 const port = parseInt(process.env["PORT"] ?? "3001", 10);
 
+const closeGracefully = async (signal: string) => {
+  await app.close();
+  process.exit(0);
+};
+process.on("SIGTERM", () => closeGracefully("SIGTERM"));
+process.on("SIGINT",  () => closeGracefully("SIGINT"));
+
 try {
   await app.listen({ port, host: "0.0.0.0" });
   console.log(`[api] taxee API running on port ${port}`);

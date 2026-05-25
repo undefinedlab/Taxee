@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import Script from "next/script";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { API_BASE_URL } from "@/lib/api";
 import {
   finishTelegramWebApp,
@@ -12,8 +12,10 @@ import {
 
 function ExecuteContent() {
   const params = useSearchParams();
+  const router = useRouter();
   const [status, setStatus]   = useState<"loading" | "ready" | "done" | "error">("loading");
   const [message, setMessage] = useState("Preparing transaction…");
+  const [txHash, setTxHash]   = useState<string | null>(null);
 
   useEffect(() => {
     initTelegramWebApp();
@@ -78,14 +80,31 @@ function ExecuteContent() {
             return;
           }
           console.log("[circle-sdk] execution confirmed:", result);
-          const resultObj = result as { data?: { transaction?: { txHash?: string } } };
+          const resultObj   = result as { data?: { transaction?: { txHash?: string } } };
+          const circleTxHash = resultObj?.data?.transaction?.txHash ?? null;
+          setTxHash(circleTxHash);
+
+          // Persist + trigger the Telegram receipt on the backend.
+          // The /circle/executed endpoint records executedAt + tx_hash and sends
+          // a Telegram message with a BaseScan link to the wallet's chat.
           try {
-            await fetch(`${apiUrl}/actions/${oppId}/executed`, {
+            const persistRes = await fetch(`${apiUrl}/circle/executed/${oppId}`, {
               method:  "POST",
               headers: { "Content-Type": "application/json" },
-              body:    JSON.stringify({ txHash: resultObj?.data?.transaction?.txHash }),
+              body:    JSON.stringify({ txHash: circleTxHash }),
             });
-          } catch { /* ignore */ }
+            if (!persistRes.ok) {
+              const errBody = await persistRes.json().catch(() => ({}));
+              setStatus("error");
+              setMessage(`Circle signed the transaction, but the server failed to record it: ${errBody?.error ?? `HTTP ${persistRes.status}`}.`);
+              return;
+            }
+          } catch (err) {
+            setStatus("error");
+            const eMsg = err instanceof Error ? err.message : String(err);
+            setMessage(`Circle signed the transaction, but the server is unreachable: ${eMsg}.`);
+            return;
+          }
           setStatus("done");
           setMessage("✅ Transaction submitted! Circle's MPC nodes co-signed and the transaction is on its way to the chain.");
           if (isTelegramWebApp()) {
@@ -136,10 +155,37 @@ function ExecuteContent() {
           )}
         </div>
 
+        {status === "done" && txHash && (
+          <div className="rounded-xl border border-gray-800 bg-gray-900/60 px-4 py-3 text-xs space-y-1.5">
+            <div className="text-gray-500">Transaction hash</div>
+            <a
+              href={`https://sepolia.basescan.org/tx/${txHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-blue-400 hover:text-blue-300 break-all underline-offset-2 hover:underline"
+            >
+              {txHash}
+            </a>
+            <div className="text-gray-500 pt-1">
+              ↗ View on BaseScan
+            </div>
+          </div>
+        )}
+
         {status === "done" && (
           <p className="text-center text-gray-500 text-xs">
             The Arc ledger record has been written. You can close this tab and return to Telegram.
           </p>
+        )}
+
+        {(status === "done" || status === "error") && (
+          <button
+            type="button"
+            onClick={() => router.push("/dashboard")}
+            className="w-full rounded-xl border border-gray-700 bg-gray-900 hover:bg-gray-800 transition px-4 py-3 text-sm font-medium text-gray-200"
+          >
+            ← Take me back to dashboard
+          </button>
         )}
       </div>
     </main>

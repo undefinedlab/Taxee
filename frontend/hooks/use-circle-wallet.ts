@@ -222,7 +222,21 @@ export function useCircleWalletSetup() {
             resultObj?.data?.wallets?.[0]?.address ??
             '';
 
-          const finalAddr = createdAddress || getCircleWalletAddress() || '';
+          let finalAddr = createdAddress || getCircleWalletAddress() || '';
+
+          // SDK doesn't always return the address — fetch from backend
+          if (!finalAddr) {
+            try {
+              const { res: wr, data: wrData } = await apiFetch(
+                `${apiUrl}/circle/wallet-ready/${resolvedUserId}`,
+                { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) },
+              );
+              if (wr.ok && wrData.walletAddress) {
+                finalAddr = String(wrData.walletAddress);
+              }
+            } catch { /* fall through */ }
+          }
+
           if (finalAddr) {
             await finishWithWallet(resolvedUserId, finalAddr, apiUrl);
           } else {

@@ -12,6 +12,15 @@ import { base, baseSepolia } from "viem/chains";
 import { getChainConfig, getExecutionChainId } from "./chainConfig.js";
 import { NATIVE_ETH, resolveTokenAddress, tokenDecimals } from "./assetAddresses.js";
 
+const arcTestnet = {
+  id: 5042002,
+  name: "Arc Testnet",
+  nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 6 },
+  rpcUrls: { default: { http: [process.env["ARC_RPC_URL"] ?? "https://rpc.testnet.arc.io"] } },
+  blockExplorers: { default: { name: "Arc Explorer", url: "https://explorer.testnet.arc.io" } },
+  testnet: true,
+} as const;
+
 const DEFAULT_TAXEE_MANAGER_SEPOLIA =
   "0xEE8DAE2D3f142052bDb704Ba0D94e04eC1680193" as const;
 const DEFAULT_DELEGATION_REGISTRY_SEPOLIA =
@@ -95,7 +104,8 @@ function delegationRegistryAddress(): Address {
 function viemChain(chainId: number) {
   if (chainId === 8453) return base;
   if (chainId === 84532) return baseSepolia;
-  throw new Error(`EIP-7702 execution only supported on Base / Base Sepolia (got ${chainId})`);
+  if (chainId === 5042002) return arcTestnet;
+  throw new Error(`EIP-7702 execution unsupported chain ${chainId}`);
 }
 
 function rpcUrl(chainId: number): string {

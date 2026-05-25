@@ -24,7 +24,28 @@
       "Bash(pnpm --filter @taxee/notifications build)",
       "Bash(awk '{print $2, $NF}')",
       "Bash(grep -rnE \"jurisdiction|US|365|wash.?sale|3000|3,000|\\\\\\\\\\\\$3000\" backend/packages/tax-engine/src backend/packages/compliance/src backend/packages/shared/src/types.ts)",
-      "Bash(pnpm --filter @taxee/tax-engine build)"
+      "Bash(pnpm --filter @taxee/tax-engine build)",
+      "Bash(lsof -iTCP:3000,3001 -sTCP:LISTEN -n -P)",
+      "Bash(ps -p 18442 -o pid,ppid,command)",
+      "Bash(kill 18442)",
+      "Bash(curl -s --max-time 3 http://localhost:3001/health)",
+      "Bash(PGPASSWORD=taxee psql -U taxee -d taxee -h localhost -P pager=off)",
+      "Bash(node --env-file=../../.env --import tsx src/trigger.ts)",
+      "Bash(node --env-file=../../.env --import tsx src/triggerOne.ts 0d4368eb-7f7c-4637-a73c-7e2a39708b6c skipSync)",
+      "Bash(PGPASSWORD=taxee psql -U taxee -d taxee -h localhost -P pager=off -c \"SELECT asset_id, quantity, cost_basis_usd, acquired_at::date, status, CASE WHEN tx_hash IS NULL THEN '\\(null\\)' ELSE substring\\(tx_hash, 1, 12\\) END as tx FROM lots WHERE agent_id = '0d4368eb-7f7c-4637-a73c-7e2a39708b6c' ORDER BY acquired_at;\")",
+      "Bash(PGPASSWORD=taxee psql -U taxee -d taxee -h localhost -P pager=off -c \"SELECT id, type, llm_decision, headline, tax_saving_estimate, execution_status, approved_at, executed_at FROM opportunities WHERE agent_id = '0d4368eb-7f7c-4637-a73c-7e2a39708b6c' AND executed_at IS NULL ORDER BY created_at DESC LIMIT 5;\")",
+      "Bash(PGPASSWORD=taxee psql -U taxee -d taxee -h localhost -P pager=off -c \"DELETE FROM opportunities WHERE id = 'af67f499-7ee8-4f06-9af2-7e88246f3a5d';\")",
+      "Bash(PGPASSWORD=taxee psql -U taxee -d taxee -h localhost -P pager=off -c \"SELECT id, type, execution_status, headline FROM opportunities WHERE agent_id = '0d4368eb-7f7c-4637-a73c-7e2a39708b6c' ORDER BY created_at DESC LIMIT 3;\")",
+      "Bash(PGPASSWORD=taxee psql -U taxee -d taxee -h localhost -P pager=off -c \"SELECT asset_id, quantity, cost_basis_usd, tx_hash IS NULL AS synthetic FROM lots WHERE agent_id = '0d4368eb-7f7c-4637-a73c-7e2a39708b6c' ORDER BY acquired_at;\")",
+      "Bash(python3 -c ' *)",
+      "Bash(PGPASSWORD=taxee psql -U taxee -d taxee -h localhost -P pager=off -c \"UPDATE opportunities SET execution_status = NULL, execution_error = NULL, failed_at = NULL, approved_at = NULL WHERE id = '64812064-7977-45a9-9406-2caf3dfcf506' RETURNING id, type, headline, execution_status;\")",
+      "Bash(PGPASSWORD=taxee psql -U taxee -d taxee -h localhost -P pager=off -c \"SELECT id, execution_status, executed_at, tx_hash, failed_at, execution_error FROM opportunities WHERE id = '64812064-7977-45a9-9406-2caf3dfcf506';\")",
+      "Bash(])",
+      "Bash(grep -nE \"Circle\\\\s*[\\\\\"`])",
+      "Bash(displayConnLabel)",
+      "Bash(WalletPill)",
+      "Bash(connection.*type.*circle)",
+      "Bash(\\\\\"Circle\\\\\"\" frontend/components/dashboard/dashboard-client.tsx 2>/dev/null | head -10)"
     ]
   }
 }

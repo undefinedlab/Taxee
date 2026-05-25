@@ -68,6 +68,16 @@ const CHAINS: Record<number, ChainConfig> = {
     cctpDomain:              3,
     rpcEnvVar:               "ARB_RPC_URL",
   },
+  // Arc Testnet — Circle's own L1, USDC is native gas token (chainId 5042002)
+  5042002: {
+    chainId:                 5042002,
+    name:                    "Arc Testnet",
+    circleBlockchain:        "ARC-TESTNET",
+    isTestnet:               true,
+    usdcAddress:             "0x0000000000000000000000000000000000000000", // USDC is native gas
+    cctpDomain:              7,  // Arc testnet CCTP domain (TBC)
+    rpcEnvVar:               "ARC_RPC_URL",
+  },
 };
 
 export function getChainConfig(chainId: number): ChainConfig {
@@ -82,9 +92,11 @@ export function isSupportedChain(chainId: number): boolean {
 
 /**
  * The chain where TaxeeLotRegistry + TaxeeExecutor + USYC are deployed.
- * Currently Base mainnet (or Base Sepolia for testnet flows).
+ * Arc Testnet for testnet flows, Base mainnet for production.
  */
 export function getExecutionChainId(): number {
+  const explicit = process.env["EXECUTION_CHAIN_ID"];
+  if (explicit) return parseInt(explicit, 10);
   const env = (process.env["CIRCLE_ENVIRONMENT"] ?? "sandbox").toLowerCase();
-  return env === "production" ? 8453 : 84532;
+  return env === "production" ? 8453 : 5042002;
 }

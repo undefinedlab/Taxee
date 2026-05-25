@@ -47,7 +47,9 @@ export async function provisionCircleWallet(params: {
 
   try {
     const circle = new CircleClient(apiKey, env, entitySecret);
-    const defaultChain: CircleBlockchain = env === "production" ? "BASE" : "BASE-SEPOLIA";
+    const defaultChain: CircleBlockchain = env === "production"
+      ? "BASE"
+      : (process.env["CIRCLE_WALLET_BLOCKCHAIN"] ?? "ARC-TESTNET") as CircleBlockchain;
     const wallet = await circle.createDeveloperWallet({
       idempotencyKey: toUUID(params.idempotencyKey),
       walletSetId,

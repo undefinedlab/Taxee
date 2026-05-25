@@ -76,7 +76,7 @@ const circleRoutes: FastifyPluginAsync = async (app) => {
 
     const blockchain = process.env["CIRCLE_ENVIRONMENT"] === "production"
       ? "BASE" as const
-      : "BASE-SEPOLIA" as const;
+      : (process.env["CIRCLE_WALLET_BLOCKCHAIN"] ?? "ARC-TESTNET") as "ARC-TESTNET" | "BASE-SEPOLIA";
 
     const { challengeId } = await circle.initializeUser({
       userToken,
@@ -130,7 +130,9 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
   }
 
   const { userToken, encryptionKey } = await circle.getUserToken(userId);
-  const blockchain = process.env["CIRCLE_ENVIRONMENT"] === "production" ? "BASE" as const : "BASE-SEPOLIA" as const;
+  const blockchain = process.env["CIRCLE_ENVIRONMENT"] === "production"
+    ? "BASE" as const
+    : (process.env["CIRCLE_WALLET_BLOCKCHAIN"] ?? "ARC-TESTNET") as "ARC-TESTNET" | "BASE-SEPOLIA";
 
   try {
     const { challengeId } = await circle.initializeUser({
@@ -561,13 +563,28 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
     if (!user) return reply.code(404).send({ error: "User not found" });
 
     const circle = getCircleClient();
-    const { userToken } = await circle.getUserToken(userId);
+    await circle.getUserToken(userId);
 
-    const walletsRes = await (circle as any).client.get("/wallets", {
-      params: { userId },
-    });
-    const walletList: any[] = walletsRes.data?.data?.wallets ?? [];
-    if (walletList.length === 0) return reply.code(404).send({ error: "No wallets found for user" });
+    // Circle's GET /wallets is eventually consistent — the SDK's execute()
+    // callback fires before the wallet is queryable here. Poll up to ~10s.
+    let walletList: any[] = [];
+    const MAX_ATTEMPTS = 10;
+    const DELAY_MS     = 1000;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const walletsRes = await (circle as any).client.get("/wallets", {
+        params: { userId },
+      });
+      walletList = walletsRes.data?.data?.wallets ?? [];
+      if (walletList.length > 0) break;
+      if (attempt < MAX_ATTEMPTS) await new Promise((r) => setTimeout(r, DELAY_MS));
+    }
+    if (walletList.length === 0) {
+      return reply.code(404).send({
+        error:   "No wallets found for user after polling",
+        hint:    "Circle wallet may still be propagating — wait a few seconds and retry.",
+        userId,
+      });
+    }
 
     const walletId = walletList[0].id;
     const circleWalletAddress = walletList[0].address;
@@ -641,17 +658,22 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
       }
 
       try {
+        // Deployed TaxeeLotRegistry signature is `commitDisposal(bytes32 lotId, bytes32 dataHash)`.
+        // Contract reverts if either arg is bytes32(0) or if lotId was previously committed.
+        // We derive both bytes32 values deterministically from the opportunity so the same
+        // approval can be retried idempotently (Circle returns the existing on-chain commit).
+        const lotIdBytes32 = uuidToBytes32(
+          candidate.lots?.[0]?.id ?? "00000000-0000-0000-0000-000000000000",
+        );
+        const dataHashBytes32 = uuidToBytes32(oppId);
+
         const { challengeId } = await circle.createUserContractExecution({
           userToken,
-          idempotencyKey:       crypto.randomUUID(),
+          idempotencyKey:       randomUUID(),
           walletId:             agent.circleWalletId,
           contractAddress:      lotRegistryAddress,
-          abiFunctionSignature: "commitDisposal(bytes32,uint256,bytes32)",
-          abiParameters:        [
-            uuidToBytes32(candidate.lots?.[0]?.id ?? "00000000-0000-0000-0000-000000000000"),
-            String(candidate.proceedsUsdc ?? 0),
-            uuidToBytes32(agent.id),
-          ],
+          abiFunctionSignature: "commitDisposal(bytes32,bytes32)",
+          abiParameters:        [lotIdBytes32, dataHashBytes32],
         });
 
         const frontendUrl = `${process.env["FRONTEND_URL"] ?? "http://localhost:3000"}/execute?oppId=${oppId}`;

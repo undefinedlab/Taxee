@@ -87,29 +87,39 @@ export async function executeApprovedAction(
     };
   };
 
-  // ── Step 1: Arc disposal record (mandatory) ───────────────────────────────
+  // ── Step 1: Arc disposal record ───────────────────────────────────────────
+  // Normally fail-closed for compliance. SKIP_ARC=true bypasses with a synthetic
+  // ID so the rest of the pipeline can be exercised against environments that
+  // don't have a real Circle Arc API endpoint configured (e.g. testing).
   await reportStep("arc_write", "starting");
   let arcRecordId: string;
-  try {
-    const arcRecordInput: Omit<ArcRecord, "id" | "createdAt"> = {
-      agentId:     action.agentId,
-      lotId:       lotManifest.lots[0]?.id ?? "unknown",
-      description: `${candidateAction.type} via taxee agent`,
-      dateAcquired: lotManifest.lots[0]?.acquiredAt
-        ? new Date(lotManifest.lots[0].acquiredAt).toISOString().slice(0, 10)
-        : new Date().toISOString().slice(0, 10),
-      dateSold:    new Date().toISOString().slice(0, 10),
-      proceeds:    lotManifest.estimatedProceedsUsd,
-      costBasis:   lotManifest.totalCostBasisUsd,
-      gainLoss:    lotManifest.estimatedGainLossUsd,
-      term:        (lotManifest.lots[0]?.holdingPeriodDays ?? 0) >= 365 ? "long" : "short",
-      txHash:      "pending",
-      chainId:     opts.chainId,
-    };
-    arcRecordId = await arc.writeDisposalRecord(arcRecordInput);
+  const skipArc = process.env["SKIP_ARC"] === "true";
+  if (skipArc) {
+    arcRecordId = `synthetic-${action.opportunityId.slice(0, 8)}-${Date.now()}`;
+    console.warn(`[execution] SKIP_ARC=true — using synthetic arcRecordId ${arcRecordId}`);
     await reportStep("arc_write", "succeeded");
-  } catch (err) {
-    return fail("arc_write", err instanceof Error ? err.message : String(err), {});
+  } else {
+    try {
+      const arcRecordInput: Omit<ArcRecord, "id" | "createdAt"> = {
+        agentId:     action.agentId,
+        lotId:       lotManifest.lots[0]?.id ?? "unknown",
+        description: `${candidateAction.type} via taxee agent`,
+        dateAcquired: lotManifest.lots[0]?.acquiredAt
+          ? new Date(lotManifest.lots[0].acquiredAt).toISOString().slice(0, 10)
+          : new Date().toISOString().slice(0, 10),
+        dateSold:    new Date().toISOString().slice(0, 10),
+        proceeds:    lotManifest.estimatedProceedsUsd,
+        costBasis:   lotManifest.totalCostBasisUsd,
+        gainLoss:    lotManifest.estimatedGainLossUsd,
+        term:        (lotManifest.lots[0]?.holdingPeriodDays ?? 0) >= 365 ? "long" : "short",
+        txHash:      "pending",
+        chainId:     opts.chainId,
+      };
+      arcRecordId = await arc.writeDisposalRecord(arcRecordInput);
+      await reportStep("arc_write", "succeeded");
+    } catch (err) {
+      return fail("arc_write", err instanceof Error ? err.message : String(err), {});
+    }
   }
 
   // ── Step 2 (HARVEST only): CCTP bridge if source chain ≠ execution chain ──

@@ -113,10 +113,12 @@ async function getOrCreateAgentForWallet(
 
   let circleWalletId: string | undefined;
   if (walletConnectionType === "circle") {
-    const blockchain = process.env["CIRCLE_ENVIRONMENT"] === "production" ? "BASE" : "BASE-SEPOLIA";
+    const blockchain = process.env["CIRCLE_ENVIRONMENT"] === "production"
+      ? "BASE"
+      : (process.env["CIRCLE_WALLET_BLOCKCHAIN"] ?? "ARC-TESTNET");
     const provision = await provisionCircleWallet({
       idempotencyKey: `agent-${userId}-${normalized}`,
-      blockchain:     blockchain as "BASE" | "BASE-SEPOLIA",
+      blockchain:     blockchain as "ARC-TESTNET" | "BASE-SEPOLIA" | "BASE",
     });
     if (provision.status === "provisioned" && provision.wallet) {
       circleWalletId = provision.wallet.id;

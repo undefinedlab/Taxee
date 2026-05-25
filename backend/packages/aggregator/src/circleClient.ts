@@ -9,7 +9,8 @@ export type CircleBlockchain =
   | "BASE"
   | "BASE-SEPOLIA"
   | "MATIC"
-  | "ARB";
+  | "ARB"
+  | "ARC-TESTNET";
 
 export interface CircleWallet {
   id: string;
