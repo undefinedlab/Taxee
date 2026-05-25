@@ -146,7 +146,10 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
   const { hasDelegation, isLoading: delegationLoading } = useDelegationStatus();
 
   const activeOpportunities = opportunities.filter(
-    (o) => o.status === "pending" || o.status === "approved",
+    (o) =>
+      o.status === "pending" ||
+      o.status === "approved" ||
+      o.status === "failed",
   );
   const pending = activeOpportunities;
   const history = opportunities
@@ -224,7 +227,10 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
         return;
       }
 
-      const result = await approveOpportunityOnServer(opp.id);
+      const result = await approveOpportunityOnServer(opp.id, {
+        preferredExecution:
+          connType === "external_eip7702" ? "eip7702" : undefined,
+      });
       if (!result.ok) {
         window.alert(result.error ?? "Approve failed");
         return;
@@ -925,6 +931,7 @@ const STATUS_LABELS: Record<Opportunity["status"], string> = {
   pending: "Pending",
   approved: "Approved",
   executed: "Executed",
+  failed: "Failed",
   deferred: "Deferred",
   skipped: "Skipped",
   auto_executed: "Auto-executed",
@@ -1038,6 +1045,11 @@ function OpportunityCard({
               Approved — waiting for on-chain execution (tx hash will show in History)
             </p>
           )}
+          {opportunity.status === "failed" && opportunity.executionError && (
+            <p className="mt-1 font-landing text-xs text-red-600 dark:text-red-400">
+              Execution failed: {opportunity.executionError}
+            </p>
+          )}
         </div>
 
         {/* Actions */}
@@ -1061,6 +1073,15 @@ function OpportunityCard({
         )}
         {opportunity.status === "approved" && (
           <span className="shrink-0 font-landing text-xs text-[#9ca3af]">Executing…</span>
+        )}
+        {opportunity.status === "failed" && (
+          <button
+            type="button"
+            onClick={() => void onApprove()}
+            className="shrink-0 rounded-lg border border-[#e5e7eb] px-3 py-1.5 font-landing text-xs text-[#6b7280] hover:bg-white/50 dark:border-[#374151] dark:hover:bg-white/10"
+          >
+            Retry
+          </button>
         )}
       </div>
     </div>

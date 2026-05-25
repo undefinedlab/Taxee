@@ -122,8 +122,21 @@ export async function executeOpportunity(opportunityId: string): Promise<Execute
   }
 
   // ── MetaMask / EIP-7702: TaxeeManager execution (no Circle MPC) ─────────────
-  if (!agent.circleWalletId && connType === "external_eip7702") {
-    const wallet = agent.walletAddress;
+  if (connType === "external_eip7702") {
+    let wallet = agent.walletAddress;
+    if (agent.circleWalletId) {
+      const siblings = await db
+        .select()
+        .from(agents)
+        .where(eq(agents.userId, agent.userId));
+      const metaMaskAgent = siblings.find((a) => {
+        const p = a.policy as { walletConnectionType?: string } | null;
+        return p?.walletConnectionType === "external_eip7702" && !a.circleWalletId && a.walletAddress;
+      });
+      if (metaMaskAgent?.walletAddress) {
+        wallet = metaMaskAgent.walletAddress;
+      }
+    }
     if (!wallet) {
       return finishFailure(undefined, "Agent has no wallet address", {});
     }
@@ -182,7 +195,9 @@ export async function executeOpportunity(opportunityId: string): Promise<Execute
 
   const arc = new ArcClient(
     process.env["ARC_API_KEY"] ?? "",
-    process.env["ARC_API_URL"] ?? "https://api.circle.com/arc/v1",
+    process.env["ARC_API_URL"] ??
+      process.env["ARC_BASE_URL"] ??
+      "https://api.circle.com/arc/v1",
   );
 
   // The execution chain (where commitDisposal + parkInUsyc live) is fixed by env;

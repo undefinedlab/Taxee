@@ -4,6 +4,7 @@ export type OpportunityStatus =
   | "pending"
   | "approved"
   | "executed"
+  | "failed"
   | "deferred"
   | "skipped"
   | "auto_executed";
@@ -88,6 +89,7 @@ export interface Opportunity {
   createdAt: string;
   resolvedAt?: string;
   txHash?: string;
+  executionError?: string;
   executedAutonomously?: boolean;
 }
 

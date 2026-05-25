@@ -301,10 +301,10 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
    */
   app.post<{
     Params: { oppId: string };
-    Body: { userId: string };
+    Body: { userId: string; preferredExecution?: "eip7702" | "circle" };
   }>("/opportunities/:oppId/approve", async (request, reply) => {
     const { oppId } = request.params;
-    const { userId } = request.body ?? {};
+    const { userId, preferredExecution } = request.body ?? {};
     const row = await assertOppOwnedByUser(oppId, userId);
     if (!row) return reply.code(404).send({ error: "Opportunity not found" });
 
@@ -314,22 +314,36 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
 
     await db
       .update(opportunities)
-      .set({ approvedAt: new Date() })
+      .set({
+        approvedAt:      new Date(),
+        failedAt:        null,
+        executionStatus: null,
+        executionError:  null,
+      })
       .where(eq(opportunities.id, oppId));
 
     if (row.opp.candidateAction) {
-      const connType =
+      const policyConn =
         (row.agent.policy as { walletConnectionType?: string } | null)
           ?.walletConnectionType ??
         (row.agent.circleWalletId ? "circle" : "external_eip7702");
+      const connType =
+        preferredExecution === "eip7702"
+          ? "external_eip7702"
+          : preferredExecution === "circle"
+            ? "circle"
+            : policyConn;
 
-      if (row.agent.circleWalletId || connType === "external_eip7702") {
+      const useEip7702 = connType === "external_eip7702";
+      const useCircle = !useEip7702 && !!row.agent.circleWalletId;
+
+      if (useEip7702 || useCircle) {
         void executeOpportunity(oppId).catch((err: unknown) =>
           request.log.error({ err, oppId }, "executeOpportunity failed"),
         );
         return reply.send({
           ok: true,
-          execution: row.agent.circleWalletId ? "circle_started" : "eip7702_started",
+          execution: useEip7702 ? "eip7702_started" : "circle_started",
         });
       }
     }
@@ -361,13 +375,20 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
   /**
    * Run heartbeat scan for all active agents owned by this web user (creates opportunities in DB).
    */
-  app.post<{ Params: { userId: string } }>("/run-scan/:userId", async (request, reply) => {
+  app.post<{
+    Params: { userId: string };
+    Querystring: { agentId?: string };
+  }>("/run-scan/:userId", async (request, reply) => {
     const { userId } = request.params;
+    const { agentId: scanAgentId } = request.query;
     if (!UUID_RE.test(userId)) {
       return reply.code(400).send({ error: "Invalid userId" });
     }
 
-    const userAgents = await db.select().from(agents).where(eq(agents.userId, userId));
+    let userAgents = await db.select().from(agents).where(eq(agents.userId, userId));
+    if (scanAgentId && UUID_RE.test(scanAgentId)) {
+      userAgents = userAgents.filter((a) => a.id === scanAgentId);
+    }
     if (userAgents.length === 0) {
       return reply.code(404).send({
         error:

@@ -49,11 +49,15 @@ export async function ensureWebUserRegistered(): Promise<string | null> {
 function mapDbOpportunity(row: Record<string, unknown>): Opportunity {
   const executedAt = row.executedAt as string | undefined;
   const approvedAt = row.approvedAt as string | undefined;
+  const failedAt = row.failedAt as string | undefined;
+  const executionStatus = String(row.executionStatus ?? '');
+  const executionError = row.executionError as string | undefined;
   const deferredUntil = row.deferredUntil as string | undefined;
   const llmDecision = String(row.llmDecision ?? '');
 
   let status: Opportunity['status'] = 'pending';
   if (executedAt) status = 'executed';
+  else if (failedAt || executionStatus === 'failed') status = 'failed';
   else if (deferredUntil) status = 'deferred';
   else if (llmDecision === 'SKIP') status = 'skipped';
   else if (approvedAt) status = 'approved';
@@ -67,8 +71,9 @@ function mapDbOpportunity(row: Record<string, unknown>): Opportunity {
     taxSavingEstimate: Number(row.taxSavingEstimate ?? 0),
     llmReasoning: String(row.llmReasoning ?? row.body ?? ''),
     createdAt: String(row.createdAt ?? new Date().toISOString()),
-    resolvedAt: executedAt ?? approvedAt,
+    resolvedAt: executedAt ?? failedAt ?? approvedAt,
     txHash: row.txHash as string | undefined,
+    executionError,
   };
 }
 
@@ -193,8 +198,13 @@ export async function runWebOpportunityScan(): Promise<{
   const userId = getTaxeeUserId();
   if (!userId) return { ok: false, error: 'Missing taxee_user_id' };
 
+  const backendAgentId = getBackendAgentId();
+  const scanUrl = backendAgentId
+    ? `${API_BASE_URL}/circle/run-scan/${userId}?agentId=${encodeURIComponent(backendAgentId)}`
+    : `${API_BASE_URL}/circle/run-scan/${userId}`;
+
   try {
-    const res = await fetch(`${API_BASE_URL}/circle/run-scan/${userId}`, {
+    const res = await fetch(scanUrl, {
       method: 'POST',
     });
     let data: Record<string, unknown> = {};
@@ -285,6 +295,7 @@ export function isServerExecutableOpportunity(opp: Opportunity): boolean {
 
 export async function approveOpportunityOnServer(
   oppId: string,
+  opts?: { preferredExecution?: 'eip7702' | 'circle' },
 ): Promise<{ ok: boolean; execution?: string; message?: string; error?: string }> {
   const userId = getTaxeeUserId();
   if (!userId) return { ok: false, error: 'Missing taxee_user_id' };
@@ -295,7 +306,12 @@ export async function approveOpportunityOnServer(
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify({
+          userId,
+          ...(opts?.preferredExecution
+            ? { preferredExecution: opts.preferredExecution }
+            : {}),
+        }),
       },
     );
     const data = (await res.json()) as Record<string, unknown>;
