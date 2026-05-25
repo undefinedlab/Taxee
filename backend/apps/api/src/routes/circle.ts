@@ -720,8 +720,9 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
   );
 
   /**
-   * Proxy: returns native USDC balance for a wallet on Arc testnet.
-   * The browser cannot call Arc RPC directly (CORS), so we proxy server-side.
+   * Proxy: returns native USDC + all ERC-20 token balances for a wallet on Arc testnet.
+   * Discovers ERC-20 tokens via Transfer event logs, then calls balanceOf + symbol/decimals.
+   * Browser cannot call Arc RPC directly (CORS), so we proxy server-side.
    */
   app.get<{ Params: { address: string } }>("/arc-balance/:address", async (request, reply) => {
     const { address } = request.params;
@@ -729,22 +730,88 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
       return reply.code(400).send({ error: "Invalid address" });
     }
     const rpcUrl = process.env["ARC_RPC_URL"];
-    if (!rpcUrl) return reply.send({ balance: 0, usd: 0 });
+    if (!rpcUrl) return reply.send({ balance: 0, usd: 0, tokens: [] });
 
-    try {
-      const res = await fetch(rpcUrl, {
+    async function rpc(method: string, params: unknown[]) {
+      const r = await fetch(rpcUrl!, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getBalance", params: [address, "latest"] }),
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
       });
-      const json = await res.json() as { result?: string };
-      const hex = json.result;
-      if (!hex || hex === "0x0" || hex === "0x") return reply.send({ balance: 0, usd: 0 });
-      const balance = Number(BigInt(hex)) / 1e18;
-      return reply.send({ balance, usd: balance }); // USDC = $1
+      const j = await r.json() as { result?: unknown };
+      return j.result;
+    }
+
+    try {
+      // ── 1. Native USDC balance ──────────────────────────────────────────────
+      const nativeHex = await rpc("eth_getBalance", [address, "latest"]) as string | undefined;
+      const nativeBalance = (nativeHex && nativeHex !== "0x0")
+        ? Number(BigInt(nativeHex)) / 1e18
+        : 0;
+
+      // ── 2. Discover ERC-20 tokens via Transfer(address,address,uint256) logs ─
+      // topic0 = keccak256("Transfer(address,address,uint256)")
+      // topic2 = recipient (address padded to 32 bytes)
+      const transferTopic = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+      const recipientTopic = "0x000000000000000000000000" + address.slice(2).toLowerCase();
+      const logsRaw = await rpc("eth_getLogs", [{
+        fromBlock: "0x0",
+        toBlock:   "latest",
+        topics:    [transferTopic, null, recipientTopic],
+      }]) as Array<{ address: string }> | undefined;
+
+      const contractAddresses = [...new Set((logsRaw ?? []).map(l => l.address.toLowerCase()))];
+
+      // ── 3. For each contract: call balanceOf, symbol, decimals ─────────────
+      // selector for balanceOf(address) = 0x70a08231
+      // selector for symbol()           = 0x95d89b41
+      // selector for decimals()         = 0x313ce567
+      const padAddr = (a: string) => "0x000000000000000000000000" + a.slice(2).toLowerCase();
+
+      interface TokenBalance { symbol: string; balance: number; usd: number; contractAddress: string }
+      const tokens: TokenBalance[] = [];
+
+      const STABLECOIN_SYMBOLS = new Set(["USDC", "EURC", "USDT", "DAI", "USDS"]);
+
+      for (const contractAddr of contractAddresses) {
+        try {
+          const [balHex, symbolHex, decimalsHex] = await Promise.all([
+            rpc("eth_call", [{ to: contractAddr, data: "0x70a08231" + padAddr(address).slice(2) }, "latest"]),
+            rpc("eth_call", [{ to: contractAddr, data: "0x95d89b41" }, "latest"]),
+            rpc("eth_call", [{ to: contractAddr, data: "0x313ce567" }, "latest"]),
+          ]) as [string | undefined, string | undefined, string | undefined];
+
+          if (!balHex || balHex === "0x" || BigInt(balHex) === 0n) continue;
+
+          const decimals = decimalsHex ? Number(BigInt(decimalsHex)) : 18;
+          const balance  = Number(BigInt(balHex)) / Math.pow(10, decimals);
+          if (balance < 0.001) continue;
+
+          // Decode symbol from ABI-encoded string
+          let symbol = "UNK";
+          if (symbolHex && symbolHex.length > 130) {
+            try {
+              const offset = parseInt(symbolHex.slice(2, 66), 16);
+              const len    = parseInt(symbolHex.slice(2 + offset * 2, 2 + offset * 2 + 64), 16);
+              const strHex = symbolHex.slice(2 + offset * 2 + 64, 2 + offset * 2 + 64 + len * 2);
+              symbol = Buffer.from(strHex, "hex").toString("utf8");
+            } catch { /* keep UNK */ }
+          }
+
+          const priceUsd = STABLECOIN_SYMBOLS.has(symbol.toUpperCase()) ? 1 : 0;
+          tokens.push({ symbol, balance, usd: balance * priceUsd, contractAddress: contractAddr });
+        } catch { /* skip bad contract */ }
+      }
+
+      return reply.send({
+        balance:  nativeBalance,
+        usd:      nativeBalance,
+        tokens,
+        totalUsd: nativeBalance + tokens.reduce((s, t) => s + t.usd, 0),
+      });
     } catch (err) {
       request.log.warn({ err }, "arc-balance fetch failed");
-      return reply.send({ balance: 0, usd: 0 });
+      return reply.send({ balance: 0, usd: 0, tokens: [], totalUsd: 0 });
     }
   });
 

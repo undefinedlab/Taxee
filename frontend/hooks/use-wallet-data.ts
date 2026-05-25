@@ -62,15 +62,21 @@ export interface WalletData {
   error: string | null;
 }
 
-async function fetchArcNativeUsdcBalance(address: string): Promise<number> {
+interface ArcBalanceResponse {
+  balance:  number;
+  usd:      number;
+  totalUsd: number;
+  tokens:   Array<{ symbol: string; balance: number; usd: number; contractAddress: string }>;
+}
+
+async function fetchArcBalances(address: string): Promise<ArcBalanceResponse> {
   const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'https://taxee-production.up.railway.app';
   try {
     const res = await fetch(`${apiBase}/circle/arc-balance/${address}`);
-    if (!res.ok) return 0;
-    const json = await res.json() as { balance?: number };
-    return json.balance ?? 0;
+    if (!res.ok) return { balance: 0, usd: 0, totalUsd: 0, tokens: [] };
+    return await res.json() as ArcBalanceResponse;
   } catch {
-    return 0;
+    return { balance: 0, usd: 0, totalUsd: 0, tokens: [] };
   }
 }
 
@@ -201,19 +207,31 @@ export function useWalletData(
           }
         }
 
-        // ── Arc testnet: USDC is the native gas token ────────────────────────
-        const arcUsdc = await fetchArcNativeUsdcBalance(address);
-        if (arcUsdc > 0.001) {
+        // ── Arc testnet: native USDC + ERC-20 tokens (e.g. EURC) ─────────────
+        const arcData = await fetchArcBalances(address);
+        if (arcData.balance > 0.001) {
           positions.push({
             asset:    'USDC',
             symbol:   'USDC',
-            quantity: arcUsdc.toFixed(6),
-            valueUsd: arcUsdc,
+            quantity: arcData.balance.toFixed(6),
+            valueUsd: arcData.usd,
             chain:    'Arc Testnet',
             address:  '0x0000000000000000000000000000000000000000',
             decimals: 18,
           });
-          totalValueUsd += arcUsdc;
+          totalValueUsd += arcData.usd;
+        }
+        for (const tok of arcData.tokens) {
+          positions.push({
+            asset:    tok.symbol,
+            symbol:   tok.symbol,
+            quantity: tok.balance.toFixed(6),
+            valueUsd: tok.usd,
+            chain:    'Arc Testnet',
+            address:  tok.contractAddress,
+            decimals: 18,
+          });
+          totalValueUsd += tok.usd;
         }
 
         setData({
