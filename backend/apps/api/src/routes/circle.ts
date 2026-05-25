@@ -80,7 +80,7 @@ const circleRoutes: FastifyPluginAsync = async (app) => {
 
     const { challengeId } = await circle.initializeUser({
       userToken,
-      idempotencyKey: userId,
+      idempotencyKey: randomUUID(),
       blockchains: [blockchain],
     });
 
@@ -137,7 +137,7 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
   try {
     const { challengeId } = await circle.initializeUser({
       userToken,
-      idempotencyKey: userId,
+      idempotencyKey: randomUUID(),
       blockchains: [blockchain],
     });
     return reply.send({ userToken, encryptionKey, challengeId });
@@ -742,11 +742,11 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
         const token   = process.env["TELEGRAM_BOT_TOKEN"];
         const chatId  = user?.telegramId ?? null;
         if (token && chatId) {
-          const explorerUrl = txHash ? `https://sepolia.basescan.org/tx/${txHash}` : null;
+          const explorerUrl = txHash ? `https://explorer.testnet.arc.io/tx/${txHash}` : null;
           const msg =
             `✅ *Tax action executed*\n\n` +
             `Wallet: \`${agent.walletAddress?.slice(0, 10)}...\`\n` +
-            (txHash ? `Tx: [view on BaseScan](${explorerUrl})\n` : "") +
+            (txHash ? `Tx: [view on Arc Explorer](${explorerUrl})\n` : "") +
             `\nThe lot disposal has been recorded on-chain.`;
           await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
             method:  "POST",

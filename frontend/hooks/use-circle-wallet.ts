@@ -214,9 +214,36 @@ export function useCircleWalletSetup() {
           }
 
           console.log('[circle-sdk] wallet created:', result);
+
+          // Circle's SDK calls back with err=null even when the challenge
+          // didn't complete (e.g. status: "EXPIRED" if the user took too long
+          // to set the PIN, or "FAILED" / "CANCELED"). We must inspect status
+          // before treating this as success — otherwise we silently hit the
+          // /wallet-ready endpoint that polls Circle for a non-existent wallet.
           const resultObj = result as {
-            data?: { wallet?: { address?: string }; wallets?: Array<{ address?: string }> };
+            status?: string;
+            data?: {
+              status?: string;
+              wallet?: { address?: string };
+              wallets?: Array<{ address?: string }>;
+            };
           };
+          const sdkStatus = String(
+            resultObj?.status ?? resultObj?.data?.status ?? '',
+          ).toUpperCase();
+          if (sdkStatus && sdkStatus !== 'COMPLETE' && sdkStatus !== 'COMPLETED') {
+            console.warn(`[circle-sdk] challenge did not complete (status=${sdkStatus})`);
+            setStatus('error');
+            const msg =
+              sdkStatus === 'EXPIRED'
+                ? 'PIN setup timed out. Tap Try Again — you have ~2 minutes to set a PIN.'
+                : sdkStatus === 'CANCELED'
+                  ? 'PIN setup was canceled. Tap Try Again to restart.'
+                  : `Circle PIN setup did not complete (status: ${sdkStatus}). Tap Try Again.`;
+            setMessage(msg);
+            return;
+          }
+
           let createdAddress =
             resultObj?.data?.wallet?.address ??
             resultObj?.data?.wallets?.[0]?.address ??
