@@ -38,36 +38,31 @@ export function LandingPage() {
                 className="landing-area-hero landing-grid-line flex flex-col justify-center border-b px-6 py-10 sm:px-8 sm:py-12 lg:border-b-0 lg:border-l lg:px-10 lg:py-10 xl:px-12"
               >
                 <div className="landing-animate-in landing-delay-3 flex items-center gap-2">
-                  <span className="inline-flex h-3 w-3 rounded-sm bg-landing-active" />
-                  <span className="inline-block h-3 w-3 rounded-sm bg-black/20 dark:bg-white/25" />
-                  <span className="font-landing text-[10px] font-bold uppercase tracking-[0.14em] text-black dark:text-[#f9fafb]">
+                 <span className="font-landing text-[10px] font-bold uppercase tracking-[0.14em] text-black dark:text-[#f9fafb]">
                     {hero.eyebrow}
                   </span>
                 </div>
-                <h1 className="landing-animate-in landing-delay-4 mt-5 font-serif text-[2rem] font-bold leading-[1.08] tracking-tight text-black dark:text-[#f9fafb] sm:text-[2.5rem] lg:text-[2.85rem] xl:text-[3rem]">
-                  <span className="text-[2.5rem] sm:text-[3rem] lg:text-[3.5rem] xl:text-[3.75rem]">{hero.title.charAt(0)}</span>
+                <h1 className="landing-animate-in landing-delay-4 mt-5 font-serif text-[2.35rem] font-bold leading-[1.06] tracking-tight text-black dark:text-[#f9fafb] sm:text-[2.85rem] lg:text-[3.2rem] xl:text-[3.45rem]">
+                  <span className="text-[2.85rem] sm:text-[3.4rem] lg:text-[3.9rem] xl:text-[4.15rem]">
+                    {hero.title.charAt(0)}
+                  </span>
                   {hero.title.slice(1)}
                 </h1>
                 <p className="landing-animate-in landing-delay-5 mt-5 max-w-lg font-landing text-[14px] leading-[1.7] text-[#4b5563] dark:text-[#9ca3af]">
                   {hero.subtitle}
                 </p>
                 <div className="landing-animate-in landing-delay-6 mt-9 flex flex-wrap items-center gap-5">
-                  <Link
-                    href="/onboarding"
-                    className="group inline-flex items-stretch overflow-hidden rounded-xl bg-black shadow-[0_4px_16px_rgba(0,0,0,0.12)] dark:bg-[#f9fafb] dark:shadow-none"
-                  >
-                    <span className="flex items-center px-6 py-3.5 font-landing text-[14px] font-medium text-white dark:text-[#111827]">
-                      {hero.ctaPrimary}
-                    </span>
-                    <span className="flex w-[52px] items-center justify-center rounded-r-xl bg-landing-action text-white transition-colors group-hover:bg-landing-action-hover">
+                  <Link href="/onboarding" className="landing-hero-cta group">
+                    <span className="landing-hero-cta-label">{hero.ctaPrimary}</span>
+                    <span className="landing-hero-cta-icon">
                       <svg
                         className="landing-cta-arrow"
-                        width="20"
-                        height="20"
+                        width="18"
+                        height="18"
                         viewBox="0 0 20 20"
                         fill="none"
                         stroke="currentColor"
-                        strokeWidth="2.2"
+                        strokeWidth="2"
                         aria-hidden
                       >
                         <path d="M5 10h10M11 6l4 4-4 4" />

@@ -527,6 +527,158 @@ html.dark .landing-glass-btn:hover {
   );
 }
 
+/* Hero primary CTA — refined glass pill */
+.landing-hero-cta {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  overflow: hidden;
+  border-radius: 9999px;
+  padding: 0.65rem 0.65rem 0.65rem 1.5rem;
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: #111827;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.82) 0%,
+    rgba(255, 255, 255, 0.52) 48%,
+    rgba(255, 255, 255, 0.68) 100%
+  );
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.5) inset,
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 8px 32px rgba(15, 23, 42, 0.08),
+    0 2px 8px rgba(74, 158, 237, 0.06);
+  transition:
+    background 0.3s ease,
+    border-color 0.3s ease,
+    box-shadow 0.3s ease,
+    transform 0.25s ease;
+}
+
+.landing-hero-cta::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    118deg,
+    rgba(255, 255, 255, 0.55) 0%,
+    transparent 42%,
+    transparent 58%,
+    rgba(74, 158, 237, 0.08) 100%
+  );
+}
+
+.landing-hero-cta:hover {
+  border-color: rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.65) inset,
+    0 1px 0 rgba(255, 255, 255, 1) inset,
+    0 12px 40px rgba(15, 23, 42, 0.1),
+    0 4px 16px rgba(74, 158, 237, 0.12);
+  transform: translateY(-1px);
+}
+
+html.dark .landing-hero-cta {
+  color: #f9fafb;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(255, 255, 255, 0.06) 45%,
+    rgba(255, 255, 255, 0.1) 100%
+  );
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+    0 1px 0 rgba(255, 255, 255, 0.12) inset,
+    0 12px 40px rgba(0, 0, 0, 0.35),
+    0 0 24px rgba(74, 158, 237, 0.08);
+}
+
+html.dark .landing-hero-cta::before {
+  background: linear-gradient(
+    118deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    transparent 40%,
+    transparent 60%,
+    rgba(74, 158, 237, 0.14) 100%
+  );
+}
+
+html.dark .landing-hero-cta:hover {
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.2) 0%,
+    rgba(255, 255, 255, 0.08) 45%,
+    rgba(255, 255, 255, 0.14) 100%
+  );
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.12) inset,
+    0 1px 0 rgba(255, 255, 255, 0.18) inset,
+    0 16px 48px rgba(0, 0, 0, 0.4),
+    0 0 32px rgba(74, 158, 237, 0.15);
+}
+
+.landing-hero-cta-label {
+  position: relative;
+  z-index: 1;
+}
+
+.landing-hero-cta-icon {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  height: 2.25rem;
+  width: 2.25rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: linear-gradient(
+    145deg,
+    rgba(74, 158, 237, 0.35) 0%,
+    rgba(45, 127, 212, 0.55) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.2) inset,
+    0 4px 12px rgba(74, 158, 237, 0.25);
+  color: #fff;
+  transition:
+    background 0.3s ease,
+    box-shadow 0.3s ease,
+    transform 0.25s ease;
+}
+
+.landing-hero-cta:hover .landing-hero-cta-icon {
+  background: linear-gradient(
+    145deg,
+    rgba(94, 179, 246, 0.5) 0%,
+    rgba(45, 127, 212, 0.7) 100%
+  );
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.3) inset,
+    0 6px 16px rgba(74, 158, 237, 0.35);
+}
+
+.landing-hero-cta .landing-cta-arrow {
+  animation: none;
+  transition: transform 0.25s ease;
+}
+
+.landing-hero-cta:hover .landing-cta-arrow {
+  transform: translateX(2px);
+}
+
 .landing-glass-menu {
   position: relative;
   isolation: isolate;
