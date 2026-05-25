@@ -144,8 +144,10 @@ export interface DelegationData {
 export function useDelegationStatus() {
   const { address, chainId } = useAccount();
   
-  const registryAddress = chainId === 84532 
-    ? CONTRACTS.baseSepolia.delegationRegistry 
+  const registryAddress = chainId === 11155111
+    ? CONTRACTS.ethSepolia.delegationRegistry
+    : chainId === 84532
+    ? CONTRACTS.baseSepolia.delegationRegistry
     : chainId === 8453
     ? CONTRACTS.base.delegationRegistry
     : '';
@@ -160,7 +162,7 @@ export function useDelegationStatus() {
     },
   });
 
-  const [hasDelegation, expiration] = data || [false, 0n];
+  const [hasDelegation, expiration] = data || [false, BigInt(0)];
 
   return {
     hasDelegation,
@@ -175,8 +177,10 @@ export function useDelegationStatus() {
 export function useMonthlyLimits() {
   const { address, chainId } = useAccount();
   
-  const registryAddress = chainId === 84532 
-    ? CONTRACTS.baseSepolia.delegationRegistry 
+  const registryAddress = chainId === 11155111
+    ? CONTRACTS.ethSepolia.delegationRegistry
+    : chainId === 84532
+    ? CONTRACTS.baseSepolia.delegationRegistry
     : chainId === 8453
     ? CONTRACTS.base.delegationRegistry
     : '';
@@ -191,7 +195,7 @@ export function useMonthlyLimits() {
     },
   });
 
-  const [remaining, monthStart] = data || [0n, 0n];
+  const [remaining, monthStart] = data || [BigInt(0), BigInt(0)];
 
   return {
     remaining: Number(formatUnits(remaining, 18)),
@@ -205,8 +209,10 @@ export function useMonthlyLimits() {
 export function useDelegationDetails() {
   const { address, chainId } = useAccount();
   
-  const registryAddress = chainId === 84532 
-    ? CONTRACTS.baseSepolia.delegationRegistry 
+  const registryAddress = chainId === 11155111
+    ? CONTRACTS.ethSepolia.delegationRegistry
+    : chainId === 84532
+    ? CONTRACTS.baseSepolia.delegationRegistry
     : chainId === 8453
     ? CONTRACTS.base.delegationRegistry
     : '';
@@ -288,14 +294,18 @@ export function useCreateDelegation() {
     hash,
   });
 
-  const registryAddress = chainId === 84532 
-    ? CONTRACTS.baseSepolia.delegationRegistry 
-    : chainId === 8453 
+  const registryAddress = chainId === 11155111
+    ? CONTRACTS.ethSepolia.delegationRegistry
+    : chainId === 84532
+    ? CONTRACTS.baseSepolia.delegationRegistry
+    : chainId === 8453
     ? CONTRACTS.base.delegationRegistry
     : '';
 
-  const managerAddress = chainId === 84532 
-    ? CONTRACTS.baseSepolia.taxeeManager 
+  const managerAddress = chainId === 11155111
+    ? CONTRACTS.ethSepolia.taxeeManager
+    : chainId === 84532
+    ? CONTRACTS.baseSepolia.taxeeManager
     : chainId === 8453
     ? CONTRACTS.base.taxeeManager
     : '';
@@ -327,7 +337,7 @@ export function useCreateDelegation() {
         maxPerTx,
         maxPerMonth,
         isActive: true,
-        createdAt: 0n,
+        createdAt: BigInt(0),
         signature,
       }],
     });
@@ -349,8 +359,10 @@ export function useRevokeDelegation() {
     hash,
   });
 
-  const registryAddress = chainId === 84532 
-    ? CONTRACTS.baseSepolia.delegationRegistry 
+  const registryAddress = chainId === 11155111
+    ? CONTRACTS.ethSepolia.delegationRegistry
+    : chainId === 84532
+    ? CONTRACTS.baseSepolia.delegationRegistry
     : chainId === 8453
     ? CONTRACTS.base.delegationRegistry
     : '';

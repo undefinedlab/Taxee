@@ -7,9 +7,9 @@ import {
   createPolicyHash,
   normalizeDelegationPolicy,
 } from '@/components/wallet/use-taxee-contracts';
+import { CONTRACTS } from '@/lib/wagmi';
 import type { UserPolicy } from '@/lib/types';
 import { parseUnits } from 'viem';
-import { baseSepolia } from 'wagmi/chains';
 
 interface AgentActivationProps {
   policy: UserPolicy;
@@ -17,13 +17,15 @@ interface AgentActivationProps {
   onBack: () => void;
 }
 
-// EIP-712 Domain for Taxee
-const EIP712_DOMAIN = {
-  name: 'Taxee',
-  version: '1',
-  chainId: baseSepolia.id,
-  verifyingContract: '0x403Fe0408976b518b2952BdF590135Ec6ba12ebc', // DelegationRegistry
-} as const;
+// Contract addresses per chain
+const REGISTRY_BY_CHAIN: Record<number, `0x${string}`> = {
+  11155111: CONTRACTS.ethSepolia.delegationRegistry as `0x${string}`,
+  84532:    CONTRACTS.baseSepolia.delegationRegistry as `0x${string}`,
+};
+const MANAGER_BY_CHAIN: Record<number, `0x${string}`> = {
+  11155111: CONTRACTS.ethSepolia.taxeeManager as `0x${string}`,
+  84532:    CONTRACTS.baseSepolia.taxeeManager as `0x${string}`,
+};
 
 // EIP-712 Types
 const EIP712_TYPES = {
@@ -38,7 +40,7 @@ const EIP712_TYPES = {
 } as const;
 
 export function AgentActivation({ policy, onSuccess, onBack }: AgentActivationProps) {
-  const { address } = useAccount();
+  const { address, chainId } = useAccount();
   const [isSigning, setIsSigning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -71,13 +73,24 @@ export function AgentActivation({ policy, onSuccess, onBack }: AgentActivationPr
       const maxPerMonth = parseUnits(delegation.maxPerMonth.toString(), 18);
       const nonce = BigInt(0);
 
+      const registryAddr = chainId ? REGISTRY_BY_CHAIN[chainId] : undefined;
+      const managerAddr  = chainId ? MANAGER_BY_CHAIN[chainId]  : undefined;
+      if (!registryAddr || !managerAddr) {
+        throw new Error(`Contracts not deployed on chain ${chainId ?? 'unknown'}. Switch to Ethereum Sepolia or Base Sepolia.`);
+      }
+
       // Sign EIP-712 delegation message
       const signature = await signTypedDataAsync({
-        domain: EIP712_DOMAIN,
+        domain: {
+          name: 'Taxee',
+          version: '1',
+          chainId: chainId!,
+          verifyingContract: registryAddr,
+        },
         types: EIP712_TYPES,
         primaryType: 'Delegation',
         message: {
-          delegate: '0xEE8DAE2D3f142052bDb704Ba0D94e04eC1680193', // TaxeeManager
+          delegate: managerAddr,
           policyHash,
           expiration,
           maxPerTx,
@@ -86,7 +99,7 @@ export function AgentActivation({ policy, onSuccess, onBack }: AgentActivationPr
         },
       });
 
-      createDelegation(delegation, signature);
+      await createDelegation(delegation, signature);
       
     } catch (err) {
       console.error('Failed to sign delegation:', err);

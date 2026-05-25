@@ -21,10 +21,17 @@ const arcTestnet = {
   testnet: true,
 } as const;
 
-const DEFAULT_TAXEE_MANAGER_SEPOLIA =
-  "0x919B8F07Ec889922AE08BA8CC64C43aaA9a34A37" as const;
-const DEFAULT_DELEGATION_REGISTRY_SEPOLIA =
-  "0x786D17590AF61F06d6BBc2B77621a72a25F4A527" as const;
+// Deployed contract addresses by chainId
+const DEPLOYED_CONTRACTS: Record<number, { taxeeManager: Address; delegationRegistry: Address }> = {
+  84532: {
+    taxeeManager:       "0xEE8DAE2D3f142052bDb704Ba0D94e04eC1680193",
+    delegationRegistry: "0x403Fe0408976b518b2952BdF590135Ec6ba12ebc",
+  },
+  11155111: {
+    taxeeManager:       "0x919B8F07Ec889922AE08BA8CC64C43aaA9a34A37",
+    delegationRegistry: "0x786D17590AF61F06d6BBc2B77621a72a25F4A527",
+  },
+};
 
 const DELEGATION_REGISTRY_ABI = [
   {
@@ -86,19 +93,20 @@ export interface Eip7702ExecutionReceipt {
   requestId?: Hex;
 }
 
-function taxeeManagerAddress(): Address {
+function taxeeManagerAddress(chainId: number): Address {
   const env = process.env["TAXEE_MANAGER_ADDRESS"];
   if (env?.startsWith("0x")) return env as Address;
-  return getExecutionChainId() === 8453
-    ? ((process.env["TAXEE_MANAGER_ADDRESS_MAINNET"] ??
-        "0x0000000000000000000000000000000000000000") as Address)
-    : DEFAULT_TAXEE_MANAGER_SEPOLIA;
+  const contracts = DEPLOYED_CONTRACTS[chainId];
+  if (contracts) return contracts.taxeeManager;
+  throw new Error(`No TaxeeManager deployed on chain ${chainId}`);
 }
 
-function delegationRegistryAddress(): Address {
+function delegationRegistryAddress(chainId: number): Address {
   const env = process.env["DELEGATION_REGISTRY_ADDRESS"];
   if (env?.startsWith("0x")) return env as Address;
-  return DEFAULT_DELEGATION_REGISTRY_SEPOLIA;
+  const contracts = DEPLOYED_CONTRACTS[chainId];
+  if (contracts) return contracts.delegationRegistry;
+  throw new Error(`No DelegationRegistry deployed on chain ${chainId}`);
 }
 
 function viemChain(chainId: number) {
@@ -126,7 +134,7 @@ export async function checkActiveDelegation(userAddress: Address, chainId?: numb
     transport: http(rpcUrl(effectiveChainId)),
   });
   const [hasDelegation] = await publicClient.readContract({
-    address: delegationRegistryAddress(),
+    address: delegationRegistryAddress(effectiveChainId),
     abi: DELEGATION_REGISTRY_ABI,
     functionName: "hasActiveDelegation",
     args: [userAddress],
@@ -183,7 +191,7 @@ export async function executeApprovedActionEip7702(
   const publicClient = createPublicClient({ chain, transport });
   const walletClient = createWalletClient({ account, chain, transport });
 
-  const manager = taxeeManagerAddress();
+  const manager = taxeeManagerAddress(chainId);
   let functionName: "executeHarvest" | "executeRebuy" | "executeYieldMove";
   let args: readonly unknown[];
 
