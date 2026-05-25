@@ -568,20 +568,41 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
     // Circle's GET /wallets is eventually consistent — the SDK's execute()
     // callback fires before the wallet is queryable here. Poll up to ~30s.
     let walletList: any[] = [];
+    let lastError: string | undefined;
     const MAX_ATTEMPTS = 30;
     const DELAY_MS     = 1000;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      const walletsRes = await (circle as any).client.get("/wallets", {
-        params: { userId },
-      });
-      walletList = walletsRes.data?.data?.wallets ?? [];
-      if (walletList.length > 0) break;
+      try {
+        const walletsRes = await (circle as any).client.get("/wallets", {
+          params: { userId },
+        });
+        walletList = walletsRes.data?.data?.wallets ?? [];
+        if (attempt === 1 || walletList.length > 0) {
+          console.log(
+            `[wallet-ready] userId=${userId} attempt=${attempt} wallets=${walletList.length}` +
+              (walletList[0] ? ` first=${walletList[0].id}/${walletList[0].custodyType}/${walletList[0].blockchain}` : ""),
+          );
+        }
+        if (walletList.length > 0) break;
+      } catch (err: any) {
+        lastError = err?.response?.data
+          ? JSON.stringify(err.response.data)
+          : err?.message ?? String(err);
+        console.error(
+          `[wallet-ready] userId=${userId} attempt=${attempt} circle error: ${lastError}`,
+        );
+      }
       if (attempt < MAX_ATTEMPTS) await new Promise((r) => setTimeout(r, DELAY_MS));
     }
     if (walletList.length === 0) {
+      console.error(
+        `[wallet-ready] FAIL userId=${userId} after ${MAX_ATTEMPTS} attempts. lastError=${lastError ?? "(none — Circle returned empty)"}`,
+      );
       return reply.code(404).send({
         error:   "No wallets found for user after polling",
-        hint:    "Circle wallet may still be propagating — wait a few seconds and retry.",
+        hint:    lastError
+          ? `Circle API error during polling: ${lastError}`
+          : "Circle returned an empty wallet list. The SDK may have failed silently — re-run setup or clear localStorage.",
         userId,
       });
     }
