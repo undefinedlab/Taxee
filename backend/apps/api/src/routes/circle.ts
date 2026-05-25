@@ -375,6 +375,64 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
   });
 
   /**
+   * Execute every still-pending opportunity for an agent.
+   *
+   * Used by the dashboard when the user flips Manual → Delegated: any opportunity
+   * that the heartbeat already saved (because the agent was in manual mode) needs
+   * to be auto-executed now. `executeOpportunity` is idempotent — it claims each
+   * row via `executionStatus = "executing"` so this is safe to call any time.
+   *
+   * Body: { userId }. Verifies the caller owns the agent before sweeping.
+   */
+  app.post<{
+    Params: { agentId: string };
+    Body: { userId: string };
+  }>("/agents/:agentId/execute-pending", async (request, reply) => {
+    const { agentId } = request.params;
+    const { userId } = request.body ?? {};
+    if (!UUID_RE.test(userId) || !UUID_RE.test(agentId)) {
+      return reply.code(400).send({ error: "Invalid userId / agentId" });
+    }
+
+    const [agent] = await db
+      .select()
+      .from(agents)
+      .where(and(eq(agents.id, agentId), eq(agents.userId, userId)));
+    if (!agent) return reply.code(404).send({ error: "Agent not found" });
+
+    if (agent.approvalMode !== "delegated") {
+      return reply.send({
+        ok: false,
+        started: 0,
+        reason: "Agent is not in delegated mode — sync mode first.",
+      });
+    }
+
+    const pending = await db
+      .select()
+      .from(opportunities)
+      .where(eq(opportunities.agentId, agentId));
+
+    const now = Date.now();
+    const eligible = pending.filter(
+      (o) =>
+        o.executedAt === null &&
+        o.failedAt === null &&
+        o.executionStatus !== "executing" &&
+        o.candidateAction !== null &&
+        (!o.deferredUntil || o.deferredUntil.getTime() <= now),
+    );
+
+    for (const opp of eligible) {
+      void executeOpportunity(opp.id).catch((err: unknown) =>
+        request.log.error({ err, oppId: opp.id }, "execute-pending failed"),
+      );
+    }
+
+    return reply.send({ ok: true, started: eligible.length });
+  });
+
+  /**
    * Run heartbeat scan for all active agents owned by this web user (creates opportunities in DB).
    */
   app.post<{

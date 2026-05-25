@@ -14,7 +14,9 @@ import {
 } from "@/lib/agent-store";
 import {
   approveOpportunityOnServer,
+  executePendingForAgent,
   fetchWebOpportunities,
+  getBackendAgentId,
   reloadOpportunitiesFromServer,
   runWebOpportunityScan,
   skipOpportunityOnServer,
@@ -68,6 +70,7 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
   const [refreshingOpps, setRefreshingOpps] = useState(false);
   const [oppsRefreshNote, setOppsRefreshNote] = useState<string | null>(null);
   const [showActivation, setShowActivation] = useState(false);
+  const [modeSyncing, setModeSyncing] = useState(false);
 
   useEffect(() => {
     setHydrated(true);
@@ -372,6 +375,91 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
     setSettingsOpen(false);
     router.push("/onboarding");
   }, [router]);
+
+  const handleApprovalModeToggle = useCallback(async () => {
+    if (modeSyncing) return;
+    const next: ApprovalSettings = {
+      ...displayApproval,
+      mode: displayApprovalMode === "manual" ? "delegated" : "manual",
+    };
+    setApproval(next);
+    updateAgentApproval(next);
+
+    if (!walletValid) {
+      setOppsRefreshNote(
+        "Mode saved locally. Connect a wallet to sync with the agent worker.",
+      );
+      return;
+    }
+
+    setModeSyncing(true);
+    setOppsRefreshNote(null);
+    try {
+      const synced = await syncWebAgentToBackend(
+        wallet,
+        { ...displayAgent.policy, walletConnectionType: connType },
+        next,
+      );
+      if (!synced) {
+        setOppsRefreshNote(
+          "Mode changed locally but the API didn't accept the sync — heartbeat will keep using the old mode.",
+        );
+        return;
+      }
+
+      if (next.mode !== "delegated") {
+        setOppsRefreshNote("Switched to manual mode.");
+        return;
+      }
+
+      if (connType === "external_eip7702" && !delegationLoading && !hasDelegation) {
+        setOppsRefreshNote(
+          "Delegated saved. Sign the EIP-7702 delegation (Activate) so the agent can execute on your behalf.",
+        );
+        return;
+      }
+
+      const agentId = synced.agentId ?? getBackendAgentId();
+      if (!agentId) {
+        setOppsRefreshNote("Delegated saved. Run a scan to start auto-executing new opportunities.");
+        return;
+      }
+
+      const sweep = await executePendingForAgent(agentId);
+      if (!sweep.ok) {
+        setOppsRefreshNote(
+          sweep.error ?? sweep.reason ?? "Couldn't kick off pending executions.",
+        );
+        return;
+      }
+      if (sweep.started === 0) {
+        setOppsRefreshNote("Delegated active — no pending opportunities to sweep.");
+        return;
+      }
+      setOppsRefreshNote(
+        `Delegated active — auto-executing ${sweep.started} pending opportunit${sweep.started === 1 ? "y" : "ies"}. Tx hashes will appear in History.`,
+      );
+
+      window.setTimeout(() => {
+        void reloadOpportunitiesFromServer().then((r) => {
+          if (r.opportunities.length > 0) applyServerOpportunities(r.opportunities);
+        });
+      }, 4000);
+    } finally {
+      setModeSyncing(false);
+    }
+  }, [
+    modeSyncing,
+    displayApproval,
+    displayApprovalMode,
+    walletValid,
+    wallet,
+    displayAgent.policy,
+    connType,
+    delegationLoading,
+    hasDelegation,
+    applyServerOpportunities,
+  ]);
 
   const handleResyncAgent = useCallback(async () => {
     const policy = {
@@ -690,16 +778,9 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
 
                     <button
                       type="button"
-                      onClick={() => {
-                        const next: ApprovalSettings = {
-                          ...displayApproval,
-                          mode:
-                            displayApprovalMode === "manual" ? "delegated" : "manual",
-                        };
-                        setApproval(next);
-                        updateAgentApproval(next);
-                      }}
-                      className="relative flex h-8 w-full items-center rounded-full bg-white/50 p-1 dark:bg-white/10"
+                      onClick={() => void handleApprovalModeToggle()}
+                      disabled={modeSyncing}
+                      className="relative flex h-8 w-full items-center rounded-full bg-white/50 p-1 disabled:opacity-60 dark:bg-white/10"
                     >
                       <div
                         className={`absolute h-6 w-1/2 rounded-full bg-[#111827] transition-all duration-200 dark:bg-[#f9fafb] ${

@@ -356,3 +356,51 @@ export async function skipOpportunityOnServer(
 export async function reloadOpportunitiesFromServer(): Promise<FetchOpportunitiesResult> {
   return fetchWebOpportunities();
 }
+
+/**
+ * Fire delegated execution for every still-pending opportunity on the agent.
+ * Called after Manual → Delegated toggle so opportunities saved while in manual
+ * mode don't sit idle waiting for a button press.
+ *
+ * Requires the backend agent's approvalMode to already be "delegated" — call
+ * syncWebAgentToBackend first so the DB matches.
+ */
+export async function executePendingForAgent(
+  agentId: string,
+): Promise<{ ok: boolean; started: number; reason?: string; error?: string }> {
+  const userId = getTaxeeUserId();
+  if (!userId) return { ok: false, started: 0, error: 'Missing taxee_user_id' };
+  if (!UUID_RE.test(agentId)) {
+    return { ok: false, started: 0, error: 'Local-only agent — sync first' };
+  }
+
+  try {
+    const res = await fetch(
+      `${API_BASE_URL}/circle/agents/${agentId}/execute-pending`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      },
+    );
+    const data = (await res.json()) as Record<string, unknown>;
+    if (!res.ok) {
+      return {
+        ok: false,
+        started: 0,
+        error: String(data.error ?? data.message ?? `HTTP ${res.status}`),
+      };
+    }
+    return {
+      ok: Boolean(data.ok),
+      started: Number(data.started ?? 0),
+      reason: data.reason as string | undefined,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      started: 0,
+      error: e instanceof Error ? e.message : 'execute-pending failed',
+    };
+  }
+}
