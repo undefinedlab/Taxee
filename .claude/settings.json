@@ -57,7 +57,8 @@
       "Bash(curl -si -X OPTIONS -H \"Origin: http://localhost:3000\" -H \"Access-Control-Request-Method: POST\" http://localhost:3001/circle/register-web-user)",
       "Bash(python3 -c \"import json,sys; p=json.load\\(sys.stdin\\); print\\('start:', p['scripts'].get\\('start'\\)\\); print\\('build:', p['scripts'].get\\('build'\\)\\); print\\('cors dep:', p['dependencies'].get\\('@fastify/cors'\\)\\); print\\('main:', p.get\\('main'\\)\\)\")",
       "Bash(curl -si -X OPTIONS -H \"Origin: https://taxee-nine.vercel.app\" -H \"Access-Control-Request-Method: POST\" https://taxee-production.up.railway.app/circle/register-web-user)",
-      "Bash(curl -si -X OPTIONS -H \"Origin: https://taxee.pro\" -H \"Access-Control-Request-Method: POST\" https://taxee-production.up.railway.app/circle/register-web-user)"
+      "Bash(curl -si -X OPTIONS -H \"Origin: https://taxee.pro\" -H \"Access-Control-Request-Method: POST\" https://taxee-production.up.railway.app/circle/register-web-user)",
+      "Bash(pnpm --filter @taxee/execution exec tsc --noEmit)"
     ]
   }
 }

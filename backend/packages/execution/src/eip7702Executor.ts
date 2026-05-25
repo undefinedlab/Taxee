@@ -93,6 +93,27 @@ export interface Eip7702ExecutionReceipt {
   requestId?: Hex;
 }
 
+/**
+ * Process-wide mutex around the executor EOA's writeContract calls.
+ *
+ * The executor key is a single EOA — viem reads its "pending" nonce just
+ * before broadcasting, so two concurrent callers (sweep loop, heartbeat cron,
+ * manual approve) all see the same value and the second submission is rejected
+ * by the node with "replacement transaction underpriced". Chaining onto a
+ * single promise serialises submissions so each call sees a fresh nonce.
+ *
+ * Note: per-process. If the API and agent workers both run on Railway as
+ * separate services, they still race across processes. Fix that later by
+ * moving execution dispatch onto a single worker (e.g. the agent) or by
+ * fetching + passing an explicit nonce per call.
+ */
+let executorChain: Promise<unknown> = Promise.resolve();
+function withExecutorLock<T>(fn: () => Promise<T>): Promise<T> {
+  const next = executorChain.catch(() => null).then(fn);
+  executorChain = next;
+  return next;
+}
+
 function taxeeManagerAddress(chainId: number): Address {
   const env = process.env["TAXEE_MANAGER_ADDRESS"];
   if (env?.startsWith("0x")) return env as Address;
@@ -218,20 +239,26 @@ export async function executeApprovedActionEip7702(
       throw new Error(`Action type ${candidateAction.type} is not executable via EIP-7702`);
   }
 
-  const { request } = await publicClient.simulateContract({
-    address: manager,
-    abi: TAXEE_MANAGER_ABI,
-    functionName,
-    args: args as never,
-    account,
+  // Serialize the simulate → write → wait sequence on the shared executor EOA
+  // so concurrent callers don't collide on nonce. Simulate is inside the lock
+  // because viem populates the nonce on simulateContract for the writeContract
+  // payload; doing it outside would still race.
+  return withExecutorLock(async () => {
+    const { request } = await publicClient.simulateContract({
+      address: manager,
+      abi: TAXEE_MANAGER_ABI,
+      functionName,
+      args: args as never,
+      account,
+    });
+
+    const hash = await walletClient.writeContract(request);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+    if (receipt.status !== "success") {
+      throw new Error(`TaxeeManager.${functionName} reverted (tx ${hash})`);
+    }
+
+    return { txHash: hash };
   });
-
-  const hash = await walletClient.writeContract(request);
-  const receipt = await publicClient.waitForTransactionReceipt({ hash });
-
-  if (receipt.status !== "success") {
-    throw new Error(`TaxeeManager.${functionName} reverted (tx ${hash})`);
-  }
-
-  return { txHash: hash };
 }

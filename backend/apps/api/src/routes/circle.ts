@@ -423,11 +423,19 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
         (!o.deferredUntil || o.deferredUntil.getTime() <= now),
     );
 
-    for (const opp of eligible) {
-      void executeOpportunity(opp.id).catch((err: unknown) =>
-        request.log.error({ err, oppId: opp.id }, "execute-pending failed"),
-      );
-    }
+    // Serialize the sweep so the executor EOA doesn't race on its own nonce.
+    // viem's writeContract auto-reads pending nonce at call time; firing N
+    // parallel calls all read the same number → "replacement transaction
+    // underpriced" on every call after the first.
+    void (async () => {
+      for (const opp of eligible) {
+        try {
+          await executeOpportunity(opp.id);
+        } catch (err: unknown) {
+          request.log.error({ err, oppId: opp.id }, "execute-pending failed");
+        }
+      }
+    })();
 
     return reply.send({ ok: true, started: eligible.length });
   });
