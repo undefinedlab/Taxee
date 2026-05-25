@@ -1,0 +1,218 @@
+import type { ApprovedAction } from "@taxee/shared";
+import {
+  createPublicClient,
+  createWalletClient,
+  http,
+  parseUnits,
+  type Address,
+  type Hex,
+} from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import { base, baseSepolia } from "viem/chains";
+import { getChainConfig, getExecutionChainId } from "./chainConfig.js";
+import { NATIVE_ETH, resolveTokenAddress, tokenDecimals } from "./assetAddresses.js";
+
+const DEFAULT_TAXEE_MANAGER_SEPOLIA =
+  "0xEE8DAE2D3f142052bDb704Ba0D94e04eC1680193" as const;
+const DEFAULT_DELEGATION_REGISTRY_SEPOLIA =
+  "0x403Fe0408976b518b2952BdF590135Ec6ba12ebc" as const;
+
+const DELEGATION_REGISTRY_ABI = [
+  {
+    inputs: [{ name: "user", type: "address" }],
+    name: "hasActiveDelegation",
+    outputs: [
+      { name: "hasDelegation", type: "bool" },
+      { name: "expiration", type: "uint256" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+] as const;
+
+const TAXEE_MANAGER_ABI = [
+  {
+    inputs: [
+      { name: "user", type: "address" },
+      { name: "asset", type: "address" },
+      { name: "amount", type: "uint256" },
+      { name: "estimatedProceeds", type: "uint256" },
+      { name: "lotId", type: "string" },
+    ],
+    name: "executeHarvest",
+    outputs: [{ name: "requestId", type: "bytes32" }],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { name: "user", type: "address" },
+      { name: "asset", type: "address" },
+      { name: "amount", type: "uint256" },
+      { name: "estimatedCost", type: "uint256" },
+      { name: "originalLotId", type: "string" },
+    ],
+    name: "executeRebuy",
+    outputs: [{ name: "requestId", type: "bytes32" }],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { name: "user", type: "address" },
+      { name: "fromAsset", type: "address" },
+      { name: "toAsset", type: "address" },
+      { name: "amount", type: "uint256" },
+      { name: "estimatedValue", type: "uint256" },
+    ],
+    name: "executeYieldMove",
+    outputs: [{ name: "requestId", type: "bytes32" }],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+] as const;
+
+export interface Eip7702ExecutionReceipt {
+  txHash: string;
+  requestId?: Hex;
+}
+
+function taxeeManagerAddress(): Address {
+  const env = process.env["TAXEE_MANAGER_ADDRESS"];
+  if (env?.startsWith("0x")) return env as Address;
+  return getExecutionChainId() === 8453
+    ? ((process.env["TAXEE_MANAGER_ADDRESS_MAINNET"] ??
+        "0x0000000000000000000000000000000000000000") as Address)
+    : DEFAULT_TAXEE_MANAGER_SEPOLIA;
+}
+
+function delegationRegistryAddress(): Address {
+  const env = process.env["DELEGATION_REGISTRY_ADDRESS"];
+  if (env?.startsWith("0x")) return env as Address;
+  return DEFAULT_DELEGATION_REGISTRY_SEPOLIA;
+}
+
+function viemChain(chainId: number) {
+  if (chainId === 8453) return base;
+  if (chainId === 84532) return baseSepolia;
+  throw new Error(`EIP-7702 execution only supported on Base / Base Sepolia (got ${chainId})`);
+}
+
+function rpcUrl(chainId: number): string {
+  const cfg = getChainConfig(chainId);
+  const url = process.env[cfg.rpcEnvVar];
+  if (!url) {
+    throw new Error(`${cfg.rpcEnvVar} is required for EIP-7702 execution`);
+  }
+  return url;
+}
+
+export async function checkActiveDelegation(userAddress: Address): Promise<boolean> {
+  const chainId = getExecutionChainId();
+  const publicClient = createPublicClient({
+    chain: viemChain(chainId),
+    transport: http(rpcUrl(chainId)),
+  });
+  const [hasDelegation] = await publicClient.readContract({
+    address: delegationRegistryAddress(),
+    abi: DELEGATION_REGISTRY_ABI,
+    functionName: "hasActiveDelegation",
+    args: [userAddress],
+  });
+  return hasDelegation;
+}
+
+/**
+ * Record an approved action on TaxeeManager for a MetaMask / EIP-7702 user.
+ * Requires EIP7702_EXECUTOR_PRIVATE_KEY to be setAuthorizedExecutor on the manager.
+ */
+export async function executeApprovedActionEip7702(
+  action: ApprovedAction,
+  userWalletAddress: string,
+): Promise<Eip7702ExecutionReceipt> {
+  const pk = process.env["EIP7702_EXECUTOR_PRIVATE_KEY"];
+  if (!pk?.startsWith("0x")) {
+    throw new Error(
+      "EIP7702_EXECUTOR_PRIVATE_KEY not configured — set the deployer/executor key authorized on TaxeeManager",
+    );
+  }
+
+  const chainId = getExecutionChainId();
+  const user = userWalletAddress as Address;
+  const { candidateAction, lotManifest } = action;
+  const firstLot = lotManifest.lots[0] ?? candidateAction.lots[0];
+  if (!firstLot) {
+    throw new Error("No lots in approved action");
+  }
+
+  const lotChainId = firstLot.chainId;
+  if (lotChainId !== chainId) {
+    throw new Error(
+      `Lot chain ${lotChainId} does not match execution chain ${chainId}. Bridge via Circle or move lots to Base Sepolia.`,
+    );
+  }
+
+  const hasDelegation = await checkActiveDelegation(user);
+  if (!hasDelegation) {
+    throw new Error(
+      "No active EIP-7702 delegation on-chain. Complete Agent Activation in onboarding first.",
+    );
+  }
+
+  const assetAddr = resolveTokenAddress(firstLot.assetId, chainId);
+  if (!assetAddr) {
+    throw new Error(`Unsupported asset ${firstLot.assetId} on chain ${chainId}`);
+  }
+
+  const decimals = tokenDecimals(firstLot.assetId);
+  const quantity = lotManifest.lots.reduce((s, l) => s + parseFloat(l.quantity), 0);
+  const amount = parseUnits(quantity.toFixed(decimals > 8 ? 8 : decimals), decimals);
+  const estimatedUsd = BigInt(Math.round(lotManifest.estimatedProceedsUsd * 1e6));
+  const lotId = firstLot.id;
+
+  const account = privateKeyToAccount(pk as Hex);
+  const chain = viemChain(chainId);
+  const transport = http(rpcUrl(chainId));
+  const publicClient = createPublicClient({ chain, transport });
+  const walletClient = createWalletClient({ account, chain, transport });
+
+  const manager = taxeeManagerAddress();
+  let functionName: "executeHarvest" | "executeRebuy" | "executeYieldMove";
+  let args: readonly unknown[];
+
+  switch (candidateAction.type) {
+    case "HARVEST":
+    case "REBALANCE":
+      functionName = "executeHarvest";
+      args = [user, assetAddr, amount, estimatedUsd, lotId];
+      break;
+    case "PARK": {
+      const usyc = process.env["USYC_TOKEN_ADDRESS"] as Address | undefined;
+      if (!usyc?.startsWith("0x")) {
+        throw new Error("USYC_TOKEN_ADDRESS not set — required for PARK / yield moves");
+      }
+      functionName = "executeYieldMove";
+      args = [user, assetAddr, usyc, amount, estimatedUsd];
+      break;
+    }
+    default:
+      throw new Error(`Action type ${candidateAction.type} is not executable via EIP-7702`);
+  }
+
+  const { request } = await publicClient.simulateContract({
+    address: manager,
+    abi: TAXEE_MANAGER_ABI,
+    functionName,
+    args: args as never,
+    account,
+  });
+
+  const hash = await walletClient.writeContract(request);
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+  if (receipt.status !== "success") {
+    throw new Error(`TaxeeManager.${functionName} reverted (tx ${hash})`);
+  }
+
+  return { txHash: hash };
+}

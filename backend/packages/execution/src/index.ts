@@ -266,4 +266,5 @@ export async function executeApprovedAction(
 
 export { CircleClient, ArcClient };
 export { executeOpportunity } from "./executeOpportunity.js";
+export { executeApprovedActionEip7702, checkActiveDelegation } from "./eip7702Executor.js";
 export { buildWatchTxPlan, formatWatchTxPlanTelegram } from "./watchTxPlan.js";

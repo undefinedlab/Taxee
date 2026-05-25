@@ -317,18 +317,28 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
       .set({ approvedAt: new Date() })
       .where(eq(opportunities.id, oppId));
 
-    if (row.agent.circleWalletId && row.opp.candidateAction) {
-      void executeOpportunity(oppId).catch((err: unknown) =>
-        request.log.error({ err, oppId }, "executeOpportunity failed"),
-      );
-      return reply.send({ ok: true, execution: "circle_started" });
+    if (row.opp.candidateAction) {
+      const connType =
+        (row.agent.policy as { walletConnectionType?: string } | null)
+          ?.walletConnectionType ??
+        (row.agent.circleWalletId ? "circle" : "external_eip7702");
+
+      if (row.agent.circleWalletId || connType === "external_eip7702") {
+        void executeOpportunity(oppId).catch((err: unknown) =>
+          request.log.error({ err, oppId }, "executeOpportunity failed"),
+        );
+        return reply.send({
+          ok: true,
+          execution: row.agent.circleWalletId ? "circle_started" : "eip7702_started",
+        });
+      }
     }
 
     return reply.send({
       ok: true,
       execution: "recorded",
       message:
-        "Approval saved. On-chain execution uses Circle MPC or EIP-7702 delegation when configured; tx hash appears in History after execution.",
+        "Approval saved. Watch-only mode does not auto-execute; use your wallet for swaps.",
     });
   });
 

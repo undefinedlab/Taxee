@@ -54,10 +54,16 @@ export const actionRoutes: FastifyPluginAsync = async (app) => {
       .where(eq(opportunities.id, request.params.id))
       .returning();
 
-    if (agent.circleWalletId && (opp as any).candidateAction) {
-      executeOpportunity(opp.id).catch((err: unknown) =>
-        console.error(`[action] Execution failed for opportunity ${opp.id}:`, err)
-      );
+    const connType =
+      (agent.policy as { walletConnectionType?: string } | null)?.walletConnectionType ??
+      (agent.circleWalletId ? "circle" : "external_eip7702");
+
+    if ((opp as { candidateAction?: unknown }).candidateAction) {
+      if (agent.circleWalletId || connType === "external_eip7702") {
+        executeOpportunity(opp.id).catch((err: unknown) =>
+          console.error(`[action] Execution failed for opportunity ${opp.id}:`, err),
+        );
+      }
     }
 
     return updated;

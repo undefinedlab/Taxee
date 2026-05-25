@@ -2,10 +2,11 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db, agents, opportunities, users } from "@taxee/db";
 import { CircleClient, ArcClient, fetchPrices } from "@taxee/aggregator";
 import { validateForExecution } from "@taxee/compliance";
-import type { CandidateAction, UserPolicy } from "@taxee/shared";
+import type { CandidateAction, UserPolicy, WalletConnectionType } from "@taxee/shared";
 import axios from "axios";
 import { executeApprovedAction, type ExecutionStep } from "./index.js";
 import { getChainConfig, getExecutionChainId } from "./chainConfig.js";
+import { executeApprovedActionEip7702 } from "./eip7702Executor.js";
 
 const DEFAULT_POLICY: UserPolicy = {
   primaryObjective:        "minimize_tax",
@@ -95,9 +96,6 @@ export async function executeOpportunity(opportunityId: string): Promise<Execute
   if (!agent) {
     return finishFailure(undefined, "Agent not found", {});
   }
-  if (!agent.circleWalletId) {
-    return finishFailure(undefined, "Agent has no Circle wallet — provisioning may have failed at agent setup", {});
-  }
 
   const [owner] = await db.select().from(users).where(eq(users.id, agent.userId));
   const jurisdiction = (owner?.jurisdiction === "UK" ? "UK" : "US") as "US" | "UK";
@@ -109,6 +107,10 @@ export async function executeOpportunity(opportunityId: string): Promise<Execute
     jurisdiction,
   };
 
+  const connType: WalletConnectionType =
+    policy.walletConnectionType ??
+    (agent.circleWalletId ? "circle" : "external_eip7702");
+
   const assetIds = [...new Set(candidate.lots.map((l) => l.assetId))];
   const prices   = await fetchPrices(assetIds, process.env["COINGECKO_API_KEY"]);
 
@@ -117,6 +119,59 @@ export async function executeOpportunity(opportunityId: string): Promise<Execute
     approved = validateForExecution(candidate, policy, prices);
   } catch (err) {
     return finishFailure(undefined, `Guardrail blocked: ${err instanceof Error ? err.message : String(err)}`, {});
+  }
+
+  // ── MetaMask / EIP-7702: TaxeeManager execution (no Circle MPC) ─────────────
+  if (!agent.circleWalletId && connType === "external_eip7702") {
+    const wallet = agent.walletAddress;
+    if (!wallet) {
+      return finishFailure(undefined, "Agent has no wallet address", {});
+    }
+
+    try {
+      const eipReceipt = await executeApprovedActionEip7702(approved, wallet);
+      await db
+        .update(opportunities)
+        .set({
+          executedAt:      new Date(),
+          executionStatus: "succeeded",
+          txHash:          eipReceipt.txHash,
+        })
+        .where(eq(opportunities.id, opportunityId));
+
+      await sendTelegramReceipt(claimed.agentId, opportunityId, {
+        ok:     true,
+        txHash: eipReceipt.txHash,
+        executionChainName: getChainConfig(getExecutionChainId()).name,
+      });
+
+      console.log(
+        `[executeOpportunity] ${opportunityId} EIP-7702 succeeded — tx ${eipReceipt.txHash}`,
+      );
+
+      return {
+        success:      true,
+        arcRecordId:  undefined,
+        txHash:       eipReceipt.txHash,
+        parkTxHash:   undefined,
+        bridgeTxHash: undefined,
+        failedStep:   undefined,
+        error:        undefined,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return finishFailure(undefined, msg, {});
+    }
+  }
+
+  if (!agent.circleWalletId) {
+    return finishFailure(
+      undefined,
+      connType === "watch"
+        ? "Watch-only wallet — approve records intent only; sign swaps in your wallet"
+        : "Agent has no Circle wallet and is not configured for EIP-7702 execution",
+      {},
+    );
   }
 
   const circle = new CircleClient(

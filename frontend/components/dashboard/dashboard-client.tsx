@@ -37,6 +37,7 @@ import { useWalletData } from "@/hooks/use-wallet-data";
 import { truncateAddress, opportunitySummary } from "@/lib/utils";
 import type { ApprovalSettings } from "@/lib/types";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
+import { useDelegationStatus } from "@/components/wallet/use-taxee-contracts";
 
 interface DashboardClientProps {
   agentId: string;
@@ -142,6 +143,8 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
     fallbackToConnected: connType === "external_eip7702",
   });
 
+  const { hasDelegation, isLoading: delegationLoading } = useDelegationStatus();
+
   const activeOpportunities = opportunities.filter(
     (o) => o.status === "pending" || o.status === "approved",
   );
@@ -203,6 +206,14 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
         return;
       }
 
+      if (connType === "external_eip7702" && !delegationLoading && !hasDelegation) {
+        const goOnboarding = window.confirm(
+          "EIP-7702 delegation is not active on-chain. Complete Agent Activation in onboarding before approving executions.\n\nOpen onboarding now?",
+        );
+        if (goOnboarding) router.push("/onboarding");
+        return;
+      }
+
       if (connType === "circle") {
         const approved = await approveOpportunityOnServer(opp.id);
         if (!approved.ok) {
@@ -224,21 +235,27 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
         applyServerOpportunities(remote.opportunities);
       }
 
-      if (result.execution === "circle_started") {
+      if (result.execution === "eip7702_started") {
+        setOppsRefreshNote(
+          "Executing via EIP-7702 on Base Sepolia — tx hash will appear in History shortly.",
+        );
+      } else if (result.execution === "circle_started") {
         setOppsRefreshNote("Executing on-chain via Circle — check History for tx hash.");
       } else {
         setOppsRefreshNote(
-          "Approved on server. Tx hash appears in History after the agent executes (Circle MPC or EIP-7702).",
+          result.message ??
+            "Approved on server. Tx hash appears in History after execution completes.",
         );
       }
 
+      const pollMs = result.execution === "eip7702_started" ? 3000 : 4000;
       window.setTimeout(() => {
         void reloadOpportunitiesFromServer().then((r) => {
           if (r.opportunities.length > 0) applyServerOpportunities(r.opportunities);
         });
-      }, 4000);
+      }, pollMs);
     },
-    [connType, router, applyServerOpportunities],
+    [connType, router, applyServerOpportunities, hasDelegation, delegationLoading],
   );
 
   const handleSkip = useCallback(
