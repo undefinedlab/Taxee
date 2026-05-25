@@ -39,6 +39,7 @@ import {
   setWalletConnectionType,
   walletTypeKeyboard,
   walletConnectionHint,
+  walletSetupKeyboard,
   type PendingAgentPolicy,
 } from "./onboarding.js";
 
@@ -541,28 +542,13 @@ bot.on("message:text", async (ctx) => {
       { parse_mode: "Markdown" }
     );
 
-    const hint = walletConnectionHint(walletConnectionType, frontendUrl, user.id);
-    if (hint) {
-      await ctx.reply(hint, { parse_mode: "Markdown" });
-    }
-
-    if (isNew && walletConnectionType === "circle") {
-      const apiKey = process.env["CIRCLE_API_KEY"];
-      if (apiKey) {
-        try {
-          const setupUrl = `${frontendUrl}/setup-wallet?userId=${encodeURIComponent(user.id)}`;
-          await ctx.reply(
-            "🔐 *Circle PIN setup*\n\n" +
-              "Open this link to create your PIN (required before taxee can execute on your behalf):\n" +
-              setupUrl,
-            { parse_mode: "Markdown" },
-          );
-        } catch (err: unknown) {
-          const detail = err instanceof Error ? err.message : String(err);
-          console.error("[bot] Circle PIN setup failed:", detail);
-          await ctx.reply(`⚠️ Circle PIN setup failed: ${detail}`);
-        }
-      }
+    const hint = walletConnectionHint(walletConnectionType);
+    const setupKb = walletSetupKeyboard(walletConnectionType, frontendUrl, user.id);
+    if (hint || setupKb) {
+      await ctx.reply(hint ?? "Setup next step:", {
+        parse_mode: "Markdown",
+        ...(setupKb ? { reply_markup: setupKb } : {}),
+      });
     }
 
     const alchemyKey = process.env["ALCHEMY_API_KEY"];
@@ -749,7 +735,13 @@ bot.on("callback_query:data", async (ctx) => {
     await ctx.editMessageReplyMarkup(undefined);
     await ctx.answerCallbackQuery({ text: WALLET_CONNECTION_LABELS[type] });
     const pending = getPendingPolicy(chatId)! as PendingAgentPolicy;
-    await ctx.reply(formatPolicySummary(pending), { parse_mode: "Markdown" });
+    const frontendUrl = process.env["FRONTEND_URL"] ?? "http://localhost:3000";
+    const [user] = await db.select().from(users).where(eq(users.telegramId, chatId));
+    const setupKb = walletSetupKeyboard(type, frontendUrl, user?.id);
+    await ctx.reply(formatPolicySummary(pending), {
+      parse_mode: "Markdown",
+      ...(setupKb ? { reply_markup: setupKb } : {}),
+    });
     return;
   }
 
@@ -803,20 +795,43 @@ bot.on("callback_query:data", async (ctx) => {
         }
         return;
       }
-      if (connType === "external_eip7702" && !agent?.circleWalletId) {
-        await ctx.answerCallbackQuery({ text: "Delegation required" });
-        await ctx.reply(
-          `🦊 Sign EIP-7702 delegation in the app before on-chain execution:\n${frontendUrl}/onboarding`,
-          { parse_mode: "Markdown" },
-        );
+      if (connType === "external_eip7702") {
+        if (!(opp as { candidateAction?: unknown }).candidateAction) {
+          await ctx.answerCallbackQuery({ text: "Missing snapshot" });
+          await ctx.reply("⚠️ Wait for a fresh scan opportunity.");
+          return;
+        }
+        const apiUrl = process.env["API_URL"] ?? "http://localhost:3001";
+        try {
+          await axios.post(`${apiUrl}/circle/opportunities/${oppId}/approve`, {
+            userId: user.id,
+            preferredExecution: "eip7702",
+          });
+          await ctx.answerCallbackQuery({ text: "Executing via EIP-7702" });
+          await ctx.editMessageReplyMarkup(undefined);
+          await ctx.reply(
+            "✅ *Approved* — executing on Base Sepolia via your delegation.\n" +
+              "_Tx hash will appear when the on-chain step completes._",
+            { parse_mode: "Markdown" },
+          );
+        } catch (err: unknown) {
+          console.error(`[bot] EIP-7702 approve failed for ${oppId}:`, err);
+          await ctx.answerCallbackQuery({ text: "Execution failed" });
+          const setupKb = walletSetupKeyboard("external_eip7702", frontendUrl, user.id);
+          await ctx.reply(
+            "⚠️ Could not start execution. Sign delegation first:",
+            { parse_mode: "Markdown", ...(setupKb ? { reply_markup: setupKb } : {}) },
+          );
+        }
         return;
       }
       if (connType === "circle" && !agent?.circleWalletId) {
         await ctx.answerCallbackQuery({ text: "Circle setup required" });
-        await ctx.reply(
-          `🔵 Finish Circle wallet + PIN setup first:\n${frontendUrl}/setup-wallet`,
-          { parse_mode: "Markdown" },
-        );
+        const setupKb = walletSetupKeyboard("circle", frontendUrl, user.id);
+        await ctx.reply("🔵 Finish Circle wallet + PIN setup first:", {
+          parse_mode: "Markdown",
+          ...(setupKb ? { reply_markup: setupKb } : {}),
+        });
         return;
       }
       if (!agent?.circleWalletId) {
@@ -845,11 +860,17 @@ bot.on("callback_query:data", async (ctx) => {
           { headers: { Authorization: `Bearer ${jwtSecret}` } }
         );
 
-        const link = `${frontendUrl}/execute?userToken=${encodeURIComponent(data.userToken)}&encryptionKey=${encodeURIComponent(data.encryptionKey)}&challengeId=${encodeURIComponent(data.challengeId)}&oppId=${encodeURIComponent(oppId)}`;
+        const executeUrl =
+          `${frontendUrl}/execute?userToken=${encodeURIComponent(data.userToken)}` +
+          `&encryptionKey=${encodeURIComponent(data.encryptionKey)}` +
+          `&challengeId=${encodeURIComponent(data.challengeId)}` +
+          `&oppId=${encodeURIComponent(oppId)}`;
+
+        const execKb = new InlineKeyboard().webApp("🔐 Confirm with PIN", executeUrl);
 
         await ctx.reply(
-          `🔐 *Confirm your tax action*\n\nOpen this link to authorise the transaction with your Circle PIN. Circle's MPC nodes co-sign — your key never leaves your device.\n\n${link}`,
-          { parse_mode: "Markdown" }
+          "🔐 *Confirm your tax action*\n\nTap below to authorise with your Circle PIN (inside Telegram).",
+          { parse_mode: "Markdown", reply_markup: execKb },
         );
       } catch (err: unknown) {
         console.error(`[bot] Failed to create Circle challenge for ${oppId}:`, err);
@@ -872,6 +893,46 @@ bot.on("callback_query:data", async (ctx) => {
     await ctx.answerCallbackQuery({ text: labels[action] ?? "Done" });
   } catch {
     await ctx.answerCallbackQuery({ text: "Error processing action." });
+  }
+});
+
+/** User closed a Telegram Mini App and sent payload back to the bot */
+bot.on("message:web_app_data", async (ctx) => {
+  const raw = ctx.message.web_app_data?.data;
+  if (!raw) return;
+
+  let payload: { type?: string };
+  try {
+    payload = JSON.parse(raw) as { type?: string };
+  } catch {
+    await ctx.reply("⚠️ Could not read app response. Try again from the button.");
+    return;
+  }
+
+  switch (payload.type) {
+    case "delegation_complete":
+      await ctx.reply(
+        "✅ *Delegation signed* — you’re back in Telegram.\n\n" +
+          "Approve opportunities here; execution uses your EIP-7702 policy on-chain.",
+        { parse_mode: "Markdown" },
+      );
+      break;
+    case "circle_setup_complete":
+      await ctx.reply(
+        "✅ *Circle wallet ready* — PIN set.\n\n" +
+          "Send your Circle wallet `0x...` if you haven’t, or wait for the next scan.",
+        { parse_mode: "Markdown" },
+      );
+      break;
+    case "circle_execute_complete":
+      await ctx.reply(
+        "✅ *Transaction submitted* — back in Telegram.\n\n" +
+          "_Check /opportunities or wait for the execution receipt._",
+        { parse_mode: "Markdown" },
+      );
+      break;
+    default:
+      await ctx.reply("✅ Setup step completed.");
   }
 });
 

@@ -1,8 +1,14 @@
 "use client";
 
 import { useEffect, useState, Suspense } from "react";
+import Script from "next/script";
 import { useSearchParams } from "next/navigation";
 import { API_BASE_URL } from "@/lib/api";
+import {
+  finishTelegramWebApp,
+  initTelegramWebApp,
+  isTelegramWebApp,
+} from "@/lib/telegram-webapp";
 
 function ExecuteContent() {
   const params = useSearchParams();
@@ -10,6 +16,7 @@ function ExecuteContent() {
   const [message, setMessage] = useState("Preparing transaction…");
 
   useEffect(() => {
+    initTelegramWebApp();
     const oppId = params.get("oppId");
     if (!oppId) {
       setStatus("error");
@@ -81,6 +88,12 @@ function ExecuteContent() {
           } catch { /* ignore */ }
           setStatus("done");
           setMessage("✅ Transaction submitted! Circle's MPC nodes co-signed and the transaction is on its way to the chain.");
+          if (isTelegramWebApp()) {
+            finishTelegramWebApp({
+              type: "circle_execute_complete",
+              oppId: oppId ?? undefined,
+            });
+          }
         });
       } catch (err: unknown) {
         setStatus("error");
@@ -93,7 +106,12 @@ function ExecuteContent() {
   }, [params]);
 
   return (
-    <main className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center p-6">
+    <>
+      <Script
+        src="https://telegram.org/js/telegram-web-app.js"
+        strategy="beforeInteractive"
+      />
+      <main className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center p-6">
       <div className="max-w-md w-full space-y-6">
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-bold">Confirm Tax Action</h1>
@@ -125,6 +143,7 @@ function ExecuteContent() {
         )}
       </div>
     </main>
+    </>
   );
 }
 

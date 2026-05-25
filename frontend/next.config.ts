@@ -24,6 +24,8 @@ const nextConfig: NextConfig = {
       "@safe-global/safe-apps-sdk": false,
       "@safe-global/safe-apps-provider": false,
       "@walletconnect/ethereum-provider": false,
+      // MetaMask SDK optional React Native peer (web builds only)
+      "@react-native-async-storage/async-storage": false,
     };
     config.ignoreWarnings = [
       { module: /@wagmi\/connectors/ },

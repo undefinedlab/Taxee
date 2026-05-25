@@ -108,7 +108,7 @@ export function setWalletConnectionType(chatId: string, type: WalletConnectionTy
   pendingByChat.set(chatId, { ...cur, walletConnectionType: type });
 }
 
-function walletTypeNextStep(type: WalletConnectionType, frontendUrl: string): string {
+function walletTypeNextStep(type: WalletConnectionType): string {
   switch (type) {
     case "watch":
       return (
@@ -118,25 +118,51 @@ function walletTypeNextStep(type: WalletConnectionType, frontendUrl: string): st
       );
     case "external_eip7702":
       return (
-        "🦊 *Self-custody (EIP-7702)* — MetaMask, Rabby, etc.\n" +
-        "1. Send your wallet address (`0x...`).\n" +
-        "2. Open the app to sign a one-time delegation so taxee can act within your policy:\n" +
-        `${frontendUrl}/onboarding`
+        "🦊 *Self-custody (EIP-7702)* — MetaMask, Rabby, etc.\n\n" +
+        "1. Send your wallet address (`0x...`) in this chat.\n" +
+        "2. Tap *Sign delegation* below (opens inside Telegram — then you return here automatically)."
       );
     case "circle":
       return (
-        "🔵 *Circle wallet* — hosted wallet with PIN + gas sponsorship.\n" +
-        "1. Send your wallet address (`0x...`) after setup, or open Circle setup first:\n" +
-        `${frontendUrl}/setup-wallet\n\n` +
-        "_You can paste the address once your Circle wallet is created._"
+        "🔵 *Circle wallet* — hosted wallet with PIN + gas sponsorship.\n\n" +
+        "1. Tap *Set up Circle PIN* below (inside Telegram), or send `0x...` after setup.\n" +
+        "_Use the same flow after linking if you need to reset PIN._"
       );
   }
 }
 
-export function formatPolicySummary(
-  p: PendingAgentPolicy,
-  frontendUrl = process.env["FRONTEND_URL"] ?? "https://taxee.app",
+/** Mini App URLs — must be HTTPS and registered in @BotFather → Bot Settings → Menu Button / Domain */
+export function tgWebAppUrl(
+  path: "activate" | "circle",
+  frontendUrl: string,
+  userId?: string,
 ): string {
+  const base = `${frontendUrl.replace(/\/$/, "")}/tg/${path}`;
+  return userId ? `${base}?userId=${encodeURIComponent(userId)}` : base;
+}
+
+export function walletSetupKeyboard(
+  type: WalletConnectionType,
+  frontendUrl: string,
+  userId?: string,
+): InlineKeyboard | undefined {
+  switch (type) {
+    case "external_eip7702":
+      return new InlineKeyboard().webApp(
+        "🦊 Sign delegation",
+        tgWebAppUrl("activate", frontendUrl, userId),
+      );
+    case "circle":
+      return new InlineKeyboard().webApp(
+        "🔵 Set up Circle PIN",
+        tgWebAppUrl("circle", frontendUrl, userId),
+      );
+    default:
+      return undefined;
+  }
+}
+
+export function formatPolicySummary(p: PendingAgentPolicy): string {
   const walletLine = `🔗 Wallet mode: *${WALLET_CONNECTION_LABELS[p.walletConnectionType]}*`;
   return (
     `🌍 *${jurisdictionDisplay(p.jurisdiction)}*\n` +
@@ -144,27 +170,17 @@ export function formatPolicySummary(
     `🌾 Harvest when loss ≥ *${Math.abs(p.harvestThresholdPct)}%*\n` +
     `💵 Min loss to act: *${p.minHarvestLossUsd === 0 ? "any" : `$${p.minHarvestLossUsd}`}*\n` +
     `${walletLine}\n\n` +
-    walletTypeNextStep(p.walletConnectionType, frontendUrl)
+    walletTypeNextStep(p.walletConnectionType)
   );
 }
 
-export function walletConnectionHint(
-  type: WalletConnectionType,
-  frontendUrl: string,
-  userId?: string,
-): string | null {
+export function walletConnectionHint(type: WalletConnectionType): string | null {
   switch (type) {
     case "watch":
       return "👀 *Watch mode* — each opportunity includes copy-paste tx steps for your wallet.";
     case "external_eip7702":
-      return (
-        `🦊 *Next:* sign EIP-7702 delegation in the app:\n${frontendUrl}/onboarding` +
-        (userId ? `?userId=${encodeURIComponent(userId)}` : "")
-      );
+      return "🦊 *Next:* tap *Sign delegation* below (opens in Telegram, then you’re back here).";
     case "circle":
-      return (
-        `🔵 *Next:* set up Circle PIN (if new):\n${frontendUrl}/setup-wallet` +
-        (userId ? `?userId=${encodeURIComponent(userId)}` : "")
-      );
+      return "🔵 *Next:* tap *Set up Circle PIN* below if you haven’t already.";
   }
 }
