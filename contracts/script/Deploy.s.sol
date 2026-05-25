@@ -163,6 +163,73 @@ contract DeployArc is Script {
     }
 }
 
+/**
+ * Deploy Taxee contracts to Ethereum Sepolia (chainId 11155111).
+ * Run:
+ *   forge script script/Deploy.s.sol:DeployEthSepolia \
+ *     --rpc-url eth_sepolia \
+ *     --broadcast \
+ *     --private-key $DEPLOYER_PRIVATE_KEY \
+ *     -vvvv
+ */
+contract DeployEthSepolia is Script {
+    function run() public {
+        address executor = vm.envOr("EXECUTOR_ADDRESS", msg.sender);
+
+        vm.startBroadcast();
+
+        console.log("Deploying to Ethereum Sepolia (chainId 11155111)...");
+        console.log("Deployer / executor:", msg.sender);
+
+        // 1. DelegationRegistry
+        DelegationRegistry registry = new DelegationRegistry();
+        console.log("DelegationRegistry:", address(registry));
+
+        // 2. TaxeeManager
+        TaxeeManager manager = new TaxeeManager(address(registry));
+        console.log("TaxeeManager:", address(manager));
+
+        // 3. Wire
+        registry.setTaxeeManager(address(manager));
+        manager.setAuthorizedExecutor(executor, true);
+
+        // 4. Allowed assets — ETH native + USDC on Eth Sepolia
+        address usdcSepolia = 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238;
+        address wethSepolia  = 0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14;
+        manager.setAllowedAsset(address(0),   true); // native ETH
+        manager.setAllowedAsset(usdcSepolia,  true); // USDC
+        manager.setAllowedAsset(wethSepolia,  true); // WETH (harvest rebuy target)
+
+        manager.setSlippageTolerance(100); // 1%
+        manager.setRebuyCooldown(300);     // 5 min
+
+        vm.stopBroadcast();
+
+        console.log("\n=== Eth Sepolia Deployment ===");
+        console.log("DelegationRegistry:", address(registry));
+        console.log("TaxeeManager:      ", address(manager));
+        console.log("Executor:          ", executor);
+        console.log("==============================");
+        console.log("Add to Railway:");
+        console.log("  TAXEE_MANAGER_ADDRESS=      ", address(manager));
+        console.log("  DELEGATION_REGISTRY_ADDRESS=", address(registry));
+
+        // Write addresses JSON
+        string memory json = string.concat(
+            '{\n',
+            '  "network": "eth_sepolia",\n',
+            '  "chainId": 11155111,\n',
+            '  "delegationRegistry": "', vm.toString(address(registry)), '",\n',
+            '  "taxeeManager": "', vm.toString(address(manager)), '",\n',
+            '  "executor": "', vm.toString(executor), '",\n',
+            '  "deployer": "', vm.toString(msg.sender), '",\n',
+            '  "timestamp": ', vm.toString(block.timestamp), '\n',
+            '}'
+        );
+        vm.writeFile("deployments/eth_sepolia.json", json);
+    }
+}
+
 contract DeployTestnet is Script {
     function run() public {
         // Use Base Sepolia testnet addresses
