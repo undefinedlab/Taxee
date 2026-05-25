@@ -39,6 +39,7 @@ import type { ApprovalSettings } from "@/lib/types";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { LandingMorphBackground } from "@/components/landing/landing-morph-background";
 import { useDelegationStatus } from "@/components/wallet/use-taxee-contracts";
+import { AgentActivation } from "@/components/wallet/agent-activation";
 
 interface DashboardClientProps {
   agentId: string;
@@ -66,6 +67,7 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
   );
   const [refreshingOpps, setRefreshingOpps] = useState(false);
   const [oppsRefreshNote, setOppsRefreshNote] = useState<string | null>(null);
+  const [showActivation, setShowActivation] = useState(false);
 
   useEffect(() => {
     setHydrated(true);
@@ -144,7 +146,7 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
     fallbackToConnected: connType === "external_eip7702",
   });
 
-  const { hasDelegation, isLoading: delegationLoading } = useDelegationStatus();
+  const { hasDelegation, isLoading: delegationLoading, refetch: refetchDelegation } = useDelegationStatus();
 
   const activeOpportunities = opportunities.filter(
     (o) =>
@@ -211,10 +213,7 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
       }
 
       if (connType === "external_eip7702" && !delegationLoading && !hasDelegation) {
-        const goOnboarding = window.confirm(
-          "EIP-7702 delegation is not active on-chain. Complete Agent Activation in onboarding before approving executions.\n\nOpen onboarding now?",
-        );
-        if (goOnboarding) router.push("/onboarding");
+        setShowActivation(true);
         return;
       }
 
@@ -554,6 +553,40 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
                       </div>
                     )}
                   </div>
+
+                  {/* ── Delegation activation banner ──────────────────── */}
+                  {connType === "external_eip7702" && !delegationLoading && !hasDelegation && (
+                    <div className="mb-4 landing-glass rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+                      {showActivation ? (
+                        <AgentActivation
+                          policy={displayAgent.policy as Parameters<typeof AgentActivation>[0]["policy"]}
+                          onSuccess={() => {
+                            setShowActivation(false);
+                            void refetchDelegation();
+                          }}
+                          onBack={() => setShowActivation(false)}
+                        />
+                      ) : (
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <p className="font-landing text-sm font-medium text-amber-400">
+                              Agent activation required
+                            </p>
+                            <p className="font-landing text-xs text-[#9ca3af] mt-0.5">
+                              Sign a one-time EIP-7702 delegation so Taxee can execute on your behalf.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowActivation(true)}
+                            className="shrink-0 rounded-lg bg-amber-500 px-4 py-2 font-landing text-sm font-medium text-white hover:bg-amber-400 transition-colors"
+                          >
+                            Activate
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div className="mb-4 inline-flex rounded-lg border border-[#e5e7eb] bg-white/50 p-1 dark:border-[#2a2a2a] dark:bg-white/5">
                     <button
