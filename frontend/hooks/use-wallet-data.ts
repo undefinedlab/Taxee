@@ -62,6 +62,24 @@ export interface WalletData {
   error: string | null;
 }
 
+async function fetchArcNativeUsdcBalance(address: string): Promise<number> {
+  const rpcUrl = process.env.NEXT_PUBLIC_ARC_RPC_URL;
+  if (!rpcUrl) return 0;
+  try {
+    const res = await fetch(rpcUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getBalance', params: [address, 'latest'] }),
+    });
+    const json = await res.json() as { result?: string };
+    const hex = json.result;
+    if (!hex || hex === '0x0' || hex === '0x') return 0;
+    return Number(BigInt(hex)) / 1e18;
+  } catch {
+    return 0;
+  }
+}
+
 // Helper to create public client
 function createClient(chainId: number) {
   const chain = chainId === 8453 ? base : baseSepolia;
@@ -187,6 +205,21 @@ export function useWalletData(
           } catch (err) {
             console.warn(`Failed to fetch balance for ${token.symbol}:`, err);
           }
+        }
+
+        // ── Arc testnet: USDC is the native gas token ────────────────────────
+        const arcUsdc = await fetchArcNativeUsdcBalance(address);
+        if (arcUsdc > 0.001) {
+          positions.push({
+            asset:    'USDC',
+            symbol:   'USDC',
+            quantity: arcUsdc.toFixed(6),
+            valueUsd: arcUsdc,
+            chain:    'Arc Testnet',
+            address:  '0x0000000000000000000000000000000000000000',
+            decimals: 18,
+          });
+          totalValueUsd += arcUsdc;
         }
 
         setData({
