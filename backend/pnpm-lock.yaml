@@ -78,6 +78,9 @@ importers:
       '@fastify/jwt':
         specifier: ^8.0.1
         version: 8.0.1
+      '@taxee/agent':
+        specifier: workspace:*
+        version: link:../agent
       '@taxee/aggregator':
         specifier: workspace:*
         version: link:../../packages/aggregator
