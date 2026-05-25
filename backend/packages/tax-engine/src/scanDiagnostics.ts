@@ -11,6 +11,15 @@ export interface ScanDiagnostics {
   openLotCount: number;
 }
 
+/** Why a tax-engine candidate did or did not become a user-facing opportunity */
+export interface CandidateOutcome {
+  type: string;
+  assetId?: string;
+  status: "saved" | "notified" | "duplicate" | "llm_skip" | "error" | "executed";
+  llmDecision?: string;
+  detail: string;
+}
+
 /**
  * Explain why harvest / park / rebalance did or did not fire — for empty-state UX.
  */
@@ -179,6 +188,26 @@ export function formatScanDiagnosticsTelegram(d: ScanDiagnostics): string {
     );
   }
 
+  return lines.join("\n");
+}
+
+export function formatCandidateOutcomesTelegram(outcomes: CandidateOutcome[]): string {
+  if (outcomes.length === 0) return "";
+
+  const lines = ["", "📋 *Decisions this scan*", ""];
+  for (const o of outcomes) {
+    const icon =
+      o.status === "saved" || o.status === "notified" || o.status === "executed"
+        ? "✅"
+        : o.status === "duplicate"
+          ? "⏳"
+          : o.status === "llm_skip"
+            ? "⏭"
+            : "⚠️";
+    const asset = o.assetId ? ` *${o.assetId}*` : "";
+    lines.push(`  ${icon} *${o.type}*${asset}: ${o.detail}`);
+  }
+  lines.push("", "Use /opportunities to approve, defer, or skip pending actions.");
   return lines.join("\n");
 }
 

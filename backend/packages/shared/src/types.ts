@@ -37,6 +37,9 @@ export interface ApprovalSettings {
 
 export type JurisdictionCode = "US" | "UK" | "EU" | "BR" | "MX" | "IN" | "OTHER";
 
+/** How the user connects a wallet to taxee (Telegram + web onboarding). */
+export type WalletConnectionType = "watch" | "external_eip7702" | "circle";
+
 export interface UserPolicy {
   primaryObjective: PrimaryObjective;
   /** Negative % — e.g. -8 means harvest when loss exceeds 8% */
@@ -52,6 +55,7 @@ export interface UserPolicy {
   heartbeatIntervalMinutes?: number;
   telegramChatId?: string;
   lastHeartbeatAt?: string;
+  walletConnectionType?: WalletConnectionType;
 }
 
 export interface WalletBinding {
@@ -240,6 +244,30 @@ export interface ExplanationOutput {
   promptVersion: string;
 }
 
+// ─── Watch mode (user signs txs in their own wallet) ─────────────────────────
+
+export interface WatchTxStep {
+  order: number;
+  title: string;
+  detail: string;
+  walletHint?: string;
+}
+
+export interface WatchTxPlan {
+  actionType: ActionType;
+  chainId: number;
+  chainName: string;
+  walletAddress: string;
+  assetSymbol: string;
+  quantity: number;
+  estimatedProceedsUsd: number;
+  estimatedCostBasisUsd: number;
+  estimatedGainLossUsd: number;
+  replacementAsset?: string;
+  steps: WatchTxStep[];
+  openInAppUrl?: string;
+}
+
 // ─── Notifications ────────────────────────────────────────────────────────────
 
 export interface OpportunityNotification {
@@ -269,6 +297,8 @@ export interface OpportunityNotification {
   currentAllocationPct?: number;
   targetAllocationPct?: number;
   regime?: string;
+  /** Prefilled manual steps when walletConnectionType is watch */
+  watchTxPlan?: WatchTxPlan;
 }
 
 export interface ActionReceipt {

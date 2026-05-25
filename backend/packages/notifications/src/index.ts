@@ -1,4 +1,5 @@
 import type { OpportunityNotification, ActionReceipt, NotificationChannel } from "@taxee/shared";
+import { formatWatchTxPlanTelegram } from "@taxee/execution";
 import axios from "axios";
 
 /**
@@ -134,6 +135,10 @@ function buildOpportunityText(n: OpportunityNotification): string {
     lines.push(``, `⏱ _Auto-executes ${n.autoExecuteAt.toISOString()} unless deferred_`);
   }
 
+  if (n.watchTxPlan) {
+    lines.push(formatWatchTxPlanTelegram(n.watchTxPlan));
+  }
+
   return lines.join("\n");
 }
 
@@ -146,21 +151,23 @@ async function sendTelegramOpportunity(
 
   const text = buildOpportunityText(n);
 
+  const labels: Record<string, string> = n.watchTxPlan
+    ? { approve: "📋 Get tx steps", execute: "📋 Get tx steps", defer: "⏰ Defer", skip: "❌ Skip" }
+    : { approve: "✅ Approve", execute: "✅ Approve", defer: "⏰ Defer", skip: "❌ Skip" };
+
   const inlineKeyboard =
     n.approvalMode === "manual" && n.buttons
       ? {
           inline_keyboard: [
-            n.buttons.map((btn: string) => {
-              const labels: Record<string, string> = {
-                execute: "✅ Approve",
-                defer:   "⏰ Defer",
-                skip:    "❌ Skip",
-              };
-              return {
-                text:          labels[btn] ?? btn,
-                callback_data: `action:${n.actionId}:${btn}`,
-              };
-            }),
+            [
+              ...n.buttons.map((btn: string) => ({
+                text: labels[btn] ?? btn,
+                callback_data: `action:${n.actionId}:${btn === "execute" ? "approve" : btn}`,
+              })),
+              ...(n.watchTxPlan?.openInAppUrl
+                ? [{ text: "🌐 Open in app", url: n.watchTxPlan.openInAppUrl }]
+                : []),
+            ],
           ],
         }
       : undefined;

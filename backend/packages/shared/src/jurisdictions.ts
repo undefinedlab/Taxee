@@ -1,4 +1,6 @@
-import type { ActionType, JurisdictionCode, UserPolicy } from "./types.js";
+import type { ActionType, JurisdictionCode, UserPolicy, WalletConnectionType } from "./types.js";
+
+export type { WalletConnectionType };
 
 export const JURISDICTION_CODES: JurisdictionCode[] = [
   "US",
@@ -130,10 +132,17 @@ export interface AgentPolicyOverrides {
   minHarvestLossUsd?: number;
   heartbeatIntervalMinutes?: number;
   telegramChatId?: string;
+  walletConnectionType?: WalletConnectionType;
   primaryObjective?: UserPolicy["primaryObjective"];
   rebalanceAggressiveness?: UserPolicy["rebalanceAggressiveness"];
   lastHeartbeatAt?: string;
 }
+
+export const WALLET_CONNECTION_LABELS: Record<WalletConnectionType, string> = {
+  watch:             "Watch only",
+  external_eip7702:  "Self-custody (EIP-7702)",
+  circle:            "Circle wallet",
+};
 
 /** Build persisted agent.policy JSON from jurisdiction + user choices */
 export function buildAgentPolicy(
@@ -156,6 +165,9 @@ export function buildAgentPolicy(
       : {}),
     ...(overrides.lastHeartbeatAt !== undefined
       ? { lastHeartbeatAt: overrides.lastHeartbeatAt }
+      : {}),
+    ...(overrides.walletConnectionType !== undefined
+      ? { walletConnectionType: overrides.walletConnectionType }
       : {}),
   };
 }

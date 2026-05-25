@@ -1,16 +1,27 @@
 import { Bot, InlineKeyboard } from "grammy";
 import { eq, and, inArray } from "drizzle-orm";
 import { runHeartbeat } from "@taxee/agent/heartbeat";
-import { buildAgentPolicy, jurisdictionDisplay, normalizeJurisdiction } from "@taxee/shared";
-import type { JurisdictionCode, UserPolicy } from "@taxee/shared";
+import {
+  buildAgentPolicy,
+  jurisdictionDisplay,
+  normalizeJurisdiction,
+  WALLET_CONNECTION_LABELS,
+} from "@taxee/shared";
+import type { JurisdictionCode, UserPolicy, WalletConnectionType } from "@taxee/shared";
 import { db, users, wallets, agents, opportunities, lots } from "@taxee/db";
 import {
   syncAgentLotsFromChain,
   fetchWalletPositions,
+  fetchPrices,
   provisionCircleWallet,
   CircleClient,
 } from "@taxee/aggregator";
-import { formatScanDiagnosticsTelegram } from "@taxee/tax-engine";
+import { buildWatchTxPlan, formatWatchTxPlanTelegram } from "@taxee/execution";
+import type { CandidateAction } from "@taxee/shared";
+import {
+  formatScanDiagnosticsTelegram,
+  formatCandidateOutcomesTelegram,
+} from "@taxee/tax-engine";
 import axios from "axios";
 import {
   clearPendingPolicy,
@@ -25,6 +36,9 @@ import {
   setHeartbeat,
   setJurisdiction,
   setMinLoss,
+  setWalletConnectionType,
+  walletTypeKeyboard,
+  walletConnectionHint,
   type PendingAgentPolicy,
 } from "./onboarding.js";
 
@@ -60,6 +74,9 @@ function policyFromPending(
   if (pending?.heartbeatIntervalMinutes != null) {
     overrides.heartbeatIntervalMinutes = pending.heartbeatIntervalMinutes;
   }
+  if (pending?.walletConnectionType) {
+    overrides.walletConnectionType = pending.walletConnectionType;
+  }
   return buildAgentPolicy(userJurisdiction, overrides);
 }
 
@@ -69,6 +86,7 @@ async function getOrCreateAgentForWallet(
   telegramChatId: string,
   walletLabel: string,
   userJurisdiction: string | null | undefined,
+  walletConnectionType: WalletConnectionType,
 ) {
   const normalized = walletAddress.toLowerCase();
   const agentPolicy = policyFromPending(userJurisdiction, telegramChatId);
@@ -85,21 +103,26 @@ async function getOrCreateAgentForWallet(
           ...(existingAgent.policy as object),
           ...agentPolicy,
           telegramChatId,
+          walletConnectionType,
         },
       })
       .where(eq(agents.id, existingAgent.id));
     return { ...existingAgent, policy: agentPolicy };
   }
 
-  const blockchain = process.env["CIRCLE_ENVIRONMENT"] === "production" ? "BASE" : "BASE-SEPOLIA";
-  const provision = await provisionCircleWallet({
-    idempotencyKey: `agent-${userId}-${normalized}`,
-    blockchain:     blockchain as "BASE" | "BASE-SEPOLIA",
-  });
-  if (provision.status === "provisioned" && provision.wallet) {
-    console.log(`[bot] Created Circle wallet ${provision.wallet.id} for user ${userId}`);
-  } else if (provision.status === "failed") {
-    console.error(`[bot] Circle wallet provisioning failed for user ${userId}: ${provision.reason}`);
+  let circleWalletId: string | undefined;
+  if (walletConnectionType === "circle") {
+    const blockchain = process.env["CIRCLE_ENVIRONMENT"] === "production" ? "BASE" : "BASE-SEPOLIA";
+    const provision = await provisionCircleWallet({
+      idempotencyKey: `agent-${userId}-${normalized}`,
+      blockchain:     blockchain as "BASE" | "BASE-SEPOLIA",
+    });
+    if (provision.status === "provisioned" && provision.wallet) {
+      circleWalletId = provision.wallet.id;
+      console.log(`[bot] Created Circle wallet ${provision.wallet.id} for user ${userId}`);
+    } else if (provision.status === "failed") {
+      console.error(`[bot] Circle wallet provisioning failed for user ${userId}: ${provision.reason}`);
+    }
   }
 
   const [created] = await db
@@ -110,8 +133,8 @@ async function getOrCreateAgentForWallet(
       name:          walletLabel,
       status:        "active",
       approvalMode:  "manual",
-      policy:        agentPolicy,
-      ...(provision.wallet ? { circleWalletId: provision.wallet.id } : {}),
+      policy:        { ...agentPolicy, walletConnectionType },
+      ...(circleWalletId ? { circleWalletId } : {}),
     })
     .returning();
   if (!created) throw new Error(`Agent insert returned undefined for userId=${userId}`);
@@ -147,6 +170,13 @@ async function promptPolicySetup(ctx: { reply: Function; chat?: { id: number } }
       "💵 *Minimum loss (USD) before suggesting a harvest trade:*\n_Skip tiny trades below this amount._",
       { parse_mode: "Markdown", reply_markup: minLossKeyboard() },
     );
+    return;
+  }
+  if (!pending.walletConnectionType) {
+    await ctx.reply(
+      "🔗 *How do you want to connect this wallet?*",
+      { parse_mode: "Markdown", reply_markup: walletTypeKeyboard() },
+    );
   }
 }
 
@@ -159,7 +189,8 @@ bot.command("start", async (ctx) => {
       "👋 Welcome to *taxee* — your AI tax-routing agent.\n\n" +
       "Step 1: pick your tax jurisdiction (US, UK, EU, Mexico, etc.).\n" +
       "Step 2: set scan rhythm + harvest rules.\n" +
-      "Step 3: send your wallet (0x...).",
+      "Step 3: choose wallet type (watch / MetaMask+EIP-7702 / Circle).\n" +
+      "Step 4: send your wallet (0x...).",
       { parse_mode: "Markdown", reply_markup: jurisdictionKeyboard() },
     );
     return;
@@ -179,7 +210,7 @@ bot.command("start", async (ctx) => {
     `👋 Welcome back to *taxee*.\n\n` +
     `🌍 ${jurisdictionDisplay(user.jurisdiction)}\n\n` +
     "Send a wallet (0x...) or use /policy to change scan rhythm & harvest rules.\n\n" +
-    "Commands: /wallets · /opportunities · /status · /policy · /region · /mode",
+    "Commands: /wallets · /opportunities · /status · /policy · /wallettype · /region · /mode",
     { parse_mode: "Markdown" },
   );
 });
@@ -191,6 +222,18 @@ bot.command("region", async (ctx) => {
   await ctx.reply(
     "🌍 Choose your tax jurisdiction:",
     { parse_mode: "Markdown", reply_markup: jurisdictionKeyboard() },
+  );
+});
+
+bot.command("wallettype", async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  await getOrCreateUser(chatId);
+  await ctx.reply(
+    "🔗 *Choose how you want to connect your next wallet:*\n\n" +
+      "• *Watch* — alerts only, you trade manually\n" +
+      "• *MetaMask / EIP-7702* — your wallet, sign delegation in the app\n" +
+      "• *Circle* — hosted wallet + PIN",
+    { parse_mode: "Markdown", reply_markup: walletTypeKeyboard() },
   );
 });
 
@@ -227,11 +270,16 @@ bot.command("wallets", async (ctx) => {
     })
   );
 
-  const lines = oppCounts.map(({ agent: a, pending }, i) =>
-    `${i + 1}. \`${a.walletAddress ?? "unknown"}\`\n` +
-    `   _${a.name}_ · ${a.status} · ${a.approvalMode}\n` +
-    `   ${pending > 0 ? `🔔 ${pending} pending action(s)` : "✅ No pending actions"}`
-  ).join("\n\n");
+  const lines = oppCounts.map(({ agent: a, pending }, i) => {
+    const conn = (a.policy as { walletConnectionType?: WalletConnectionType } | undefined)
+      ?.walletConnectionType;
+    const connLabel = conn ? WALLET_CONNECTION_LABELS[conn] : "not set";
+    return (
+      `${i + 1}. \`${a.walletAddress ?? "unknown"}\`\n` +
+      `   _${a.name}_ · ${connLabel} · ${a.status} · ${a.approvalMode}\n` +
+      `   ${pending > 0 ? `🔔 ${pending} pending action(s)` : "✅ No pending actions"}`
+    );
+  }).join("\n\n");
 
   await ctx.reply(
     `👛 *Your Linked Wallets (${agentList.length})*\n\n${lines}\n\nSend another 0x... address to add a wallet.`,
@@ -458,44 +506,61 @@ bot.on("message:text", async (ctx) => {
       await db.insert(wallets).values({ userId: user.id, address: normalized, label: walletLabel });
     }
 
+    const pending = getPendingPolicy(chatId) as PendingAgentPolicy | undefined;
+    const [priorAgent] = await db
+      .select({ policy: agents.policy })
+      .from(agents)
+      .where(and(eq(agents.userId, user.id), eq(agents.walletAddress, normalized)))
+      .limit(1);
+    const walletConnectionType: WalletConnectionType =
+      pending?.walletConnectionType ??
+      (priorAgent?.policy as { walletConnectionType?: WalletConnectionType } | undefined)
+        ?.walletConnectionType ??
+      "external_eip7702";
+
     const agent = await getOrCreateAgentForWallet(
       user.id,
       normalized,
       chatId,
       walletLabel,
       user.jurisdiction,
+      walletConnectionType,
     );
     const isNew = !alreadyLinked;
+    const connLabel = WALLET_CONNECTION_LABELS[walletConnectionType];
+    const frontendUrl = process.env["FRONTEND_URL"] ?? "http://localhost:3000";
 
     await ctx.reply(
       `${isNew ? "✅ *New wallet added!*" : "✅ *Wallet already linked — refreshing...*"}\n\n` +
       `• Address: \`${normalized}\`\n` +
       `• Agent: *${agent.name}* (${agent.status})\n` +
-      `• Mode: ${agent.approvalMode}\n` +
+      `• Connection: *${connLabel}*\n` +
+      `• Approval: ${agent.approvalMode}\n` +
       `• Total wallets: ${walletNumber}\n\n` +
       `/wallets — see all linked wallets`,
       { parse_mode: "Markdown" }
     );
 
-    if (isNew) {
-      const apiKey    = process.env["CIRCLE_API_KEY"];
-      const circleEnv = (process.env["CIRCLE_ENVIRONMENT"] ?? "sandbox") as "sandbox" | "production";
-      const frontendUrl = process.env["FRONTEND_URL"] ?? "http://localhost:3000";
+    const hint = walletConnectionHint(walletConnectionType, frontendUrl, user.id);
+    if (hint) {
+      await ctx.reply(hint, { parse_mode: "Markdown" });
+    }
 
+    if (isNew && walletConnectionType === "circle") {
+      const apiKey = process.env["CIRCLE_API_KEY"];
       if (apiKey) {
         try {
           const setupUrl = `${frontendUrl}/setup-wallet?userId=${encodeURIComponent(user.id)}`;
           await ctx.reply(
-            "🔐 *One more step — set up your Circle PIN*\n\n" +
-            "This secures your execution wallet. Nobody (not Circle, not Taxee) can execute transactions without your PIN.\n\n" +
-            "Open this link to create your PIN (takes ~30 seconds):\n" +
-            setupUrl,
-            { parse_mode: "Markdown" }
+            "🔐 *Circle PIN setup*\n\n" +
+              "Open this link to create your PIN (required before taxee can execute on your behalf):\n" +
+              setupUrl,
+            { parse_mode: "Markdown" },
           );
-        } catch (err: any) {
-          const detail = err?.response?.data ?? err?.message ?? String(err);
-          console.error("[bot] Circle PIN setup failed:", JSON.stringify(detail));
-          await ctx.reply(`⚠️ Circle PIN setup failed: ${JSON.stringify(detail)}\n\nYou can still use manual approval. Check backend logs.`);
+        } catch (err: unknown) {
+          const detail = err instanceof Error ? err.message : String(err);
+          console.error("[bot] Circle PIN setup failed:", detail);
+          await ctx.reply(`⚠️ Circle PIN setup failed: ${detail}`);
         }
       }
     }
@@ -573,23 +638,30 @@ bot.on("message:text", async (ctx) => {
     );
 
     // ── Step 3: run tax scan (harvest / park / rebalance) + notify via Telegram ─
-    void runHeartbeat(agent.id, { skipLotSync: true })
+    void runHeartbeat(agent.id, { skipLotSync: true, notificationChatId: chatId })
       .then(async (result) => {
         console.log(
           `[bot] heartbeat agent=${agent.id} saved=${result.opportunitiesSaved} candidates=${result.candidatesFound} executed=${result.actionsExecuted}`,
         );
-        if (result.opportunitiesSaved === 0) {
-          let body = formatScanDiagnosticsTelegram(result.scanDiagnostics);
-          if (sync.closed > 0 || sync.inserted > 0) {
-            body +=
-              `\n\n🔄 *Lot sync:* +${sync.inserted} new, ${sync.closed} removed from chain.`;
-          }
-          try {
-            await ctx.reply(body, { parse_mode: "Markdown" });
-          } catch (replyErr) {
-            console.error("[bot] diagnostics reply failed (Markdown):", replyErr);
-            await ctx.reply(body.replace(/\*/g, ""));
-          }
+        if (result.opportunitiesSaved > 0) {
+          await ctx.reply(
+            `✅ *${result.opportunitiesSaved} opportunity(ies)* ready — see the message(s) above with *Approve / Defer / Skip* buttons.`,
+            { parse_mode: "Markdown" },
+          );
+          return;
+        }
+
+        let body = formatScanDiagnosticsTelegram(result.scanDiagnostics);
+        body += formatCandidateOutcomesTelegram(result.candidateOutcomes);
+        if (sync.closed > 0 || sync.inserted > 0) {
+          body +=
+            `\n\n🔄 *Lot sync:* +${sync.inserted} new, ${sync.closed} removed from chain.`;
+        }
+        try {
+          await ctx.reply(body, { parse_mode: "Markdown" });
+        } catch (replyErr) {
+          console.error("[bot] diagnostics reply failed (Markdown):", replyErr);
+          await ctx.reply(body.replace(/\*/g, ""));
         }
       })
       .catch(async (err) => {
@@ -660,6 +732,22 @@ bot.on("callback_query:data", async (ctx) => {
     setMinLoss(chatId, usd);
     await ctx.editMessageReplyMarkup(undefined);
     await ctx.answerCallbackQuery({ text: usd === 0 ? "Any size" : `≥ $${usd}` });
+    await ctx.reply(
+      "🔗 *How do you want to connect your wallet?*",
+      { parse_mode: "Markdown", reply_markup: walletTypeKeyboard() },
+    );
+    return;
+  }
+
+  if (data.startsWith("wallet:type:")) {
+    const type = data.split(":")[2] as WalletConnectionType;
+    if (type !== "watch" && type !== "external_eip7702" && type !== "circle") {
+      await ctx.answerCallbackQuery({ text: "Unknown wallet type" });
+      return;
+    }
+    setWalletConnectionType(chatId, type);
+    await ctx.editMessageReplyMarkup(undefined);
+    await ctx.answerCallbackQuery({ text: WALLET_CONNECTION_LABELS[type] });
     const pending = getPendingPolicy(chatId)! as PendingAgentPolicy;
     await ctx.reply(formatPolicySummary(pending), { parse_mode: "Markdown" });
     return;
@@ -677,13 +765,64 @@ bot.on("callback_query:data", async (ctx) => {
 
     if (action === "approve") {
       const [agent] = await db.select().from(agents).where(eq(agents.id, opp.agentId));
+      const connType = (agent?.policy as { walletConnectionType?: WalletConnectionType } | undefined)
+        ?.walletConnectionType;
+      const frontendUrl = process.env["FRONTEND_URL"] ?? "http://localhost:3000";
 
-      if (!agent?.circleWalletId) {
-        await ctx.answerCallbackQuery({ text: "⚠️ No Circle wallet — can't execute" });
+      if (connType === "watch") {
+        const candidate = (opp as { candidateAction?: CandidateAction }).candidateAction;
+        if (!candidate || !agent?.walletAddress) {
+          await ctx.answerCallbackQuery({ text: "Missing trade details" });
+          await ctx.reply("⚠️ No transaction snapshot for this opportunity. Wait for a fresh scan.");
+          return;
+        }
+        const assetIds = [...new Set(candidate.lots.map((l) => l.assetId))];
+        const prices =
+          assetIds.length > 0
+            ? await fetchPrices(assetIds, process.env["COINGECKO_API_KEY"])
+            : {};
+        const plan = buildWatchTxPlan(candidate, prices, {
+          walletAddress: agent.walletAddress,
+          openInAppUrl: `${frontendUrl}/watch?oppId=${encodeURIComponent(oppId)}&wallet=${encodeURIComponent(agent.walletAddress)}`,
+        });
+        await db.update(opportunities).set({ approvedAt: new Date() }).where(eq(opportunities.id, oppId));
+        await ctx.answerCallbackQuery({ text: "Tx steps ready" });
+        if (plan) {
+          const kb = plan.openInAppUrl
+            ? new InlineKeyboard().url("🌐 Open in taxee app", plan.openInAppUrl)
+            : undefined;
+          await ctx.reply(formatWatchTxPlanTelegram(plan), {
+            parse_mode: "Markdown",
+            ...(kb ? { reply_markup: kb } : {}),
+          });
+        } else {
+          await ctx.reply(
+            "👀 Watch mode — execute the harvest in your wallet using the amounts in the opportunity message above.",
+            { parse_mode: "Markdown" },
+          );
+        }
+        return;
+      }
+      if (connType === "external_eip7702" && !agent?.circleWalletId) {
+        await ctx.answerCallbackQuery({ text: "Delegation required" });
         await ctx.reply(
-          "⚠️ This agent has no Circle wallet provisioned yet, so I can't execute on-chain.\n\n" +
-          "Re-link the wallet (send the 0x... address again) and I'll create the Circle wallet during setup. " +
-          "If that still fails, check the backend logs for the provisioning error.",
+          `🦊 Sign EIP-7702 delegation in the app before on-chain execution:\n${frontendUrl}/onboarding`,
+          { parse_mode: "Markdown" },
+        );
+        return;
+      }
+      if (connType === "circle" && !agent?.circleWalletId) {
+        await ctx.answerCallbackQuery({ text: "Circle setup required" });
+        await ctx.reply(
+          `🔵 Finish Circle wallet + PIN setup first:\n${frontendUrl}/setup-wallet`,
+          { parse_mode: "Markdown" },
+        );
+        return;
+      }
+      if (!agent?.circleWalletId) {
+        await ctx.answerCallbackQuery({ text: "No execution wallet" });
+        await ctx.reply(
+          "⚠️ No execution wallet linked. Re-run setup with /wallettype and send your address again.",
         );
         return;
       }

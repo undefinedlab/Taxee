@@ -14,14 +14,14 @@ import {
   computeRebalanceCandidates,
   buildScanDiagnostics,
 } from "@taxee/tax-engine";
-import type { ScanDiagnostics } from "@taxee/tax-engine";
+import type { ScanDiagnostics, CandidateOutcome } from "@taxee/tax-engine";
 import {
   classifyRegime,
   reasonAboutAction,
   generateExplanation,
 } from "@taxee/llm";
 import { validateForExecution, isWashSaleSafe } from "@taxee/compliance";
-import { executeApprovedAction } from "@taxee/execution";
+import { executeApprovedAction, buildWatchTxPlan } from "@taxee/execution";
 import { sendOpportunityNotification, sendActionReceipt } from "@taxee/notifications";
 import type {
   UserPolicy,
@@ -29,6 +29,7 @@ import type {
   PortfolioSnapshot,
   RealizedYtd,
   NotificationChannel,
+  WalletConnectionType,
 } from "@taxee/shared";
 import { buildAgentPolicy, normalizeJurisdiction } from "@taxee/shared";
 
@@ -60,6 +61,8 @@ const arc = new ArcClient(
 export interface RunHeartbeatOptions {
   /** Skip on-chain lot sync when the caller already synced (e.g. Telegram wallet handler). */
   skipLotSync?: boolean;
+  /** Telegram chat to notify (used when agent.policy.telegramChatId is missing). */
+  notificationChatId?: string;
 }
 
 export async function runHeartbeat(
@@ -73,6 +76,7 @@ export async function runHeartbeat(
   actionsExecuted: number;
   /** Per-strategy explanation (harvest / park / rebalance) */
   scanDiagnostics: ScanDiagnostics;
+  candidateOutcomes: CandidateOutcome[];
   lotSync?: { inserted: number; closed: number; basisRefreshed: number };
 }> {
   console.log(`[heartbeat] Starting for agent ${agentId}`);
@@ -89,6 +93,27 @@ export async function runHeartbeat(
     openLotCount: 0,
   };
 
+  if (
+    options.notificationChatId &&
+    agent &&
+    !(agent.policy as { telegramChatId?: string } | null)?.telegramChatId
+  ) {
+    await db
+      .update(agents)
+      .set({
+        policy: {
+          ...(agent.policy as object),
+          telegramChatId: options.notificationChatId,
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(agents.id, agentId));
+    agent.policy = {
+      ...(agent.policy as object),
+      telegramChatId: options.notificationChatId,
+    };
+  }
+
   if (!agent || agent.status !== "active") {
     console.log(`[heartbeat] Agent ${agentId} is not active, skipping`);
     return {
@@ -96,6 +121,7 @@ export async function runHeartbeat(
       opportunitiesSaved: 0,
       actionsExecuted: 0,
       scanDiagnostics: emptyDiagnostics,
+      candidateOutcomes: [],
     };
   }
 
@@ -248,10 +274,14 @@ export async function runHeartbeat(
 
   let actionsExecuted = 0;
   let opportunitiesSaved = 0;
+  const candidateOutcomes: CandidateOutcome[] = [];
 
   const channels: NotificationChannel[] = [];
-  if (agent.policy && (agent.policy as any).telegramChatId) {
-    channels.push({ type: "telegram", chatId: (agent.policy as any).telegramChatId });
+  const policyChatId =
+    (agent.policy as { telegramChatId?: string } | null)?.telegramChatId ??
+    options.notificationChatId;
+  if (policyChatId) {
+    channels.push({ type: "telegram", chatId: policyChatId });
   }
 
   // ── Dedup setup: collect signatures of pending (un-actioned, not in defer cooldown)
@@ -284,19 +314,46 @@ export async function runHeartbeat(
   };
 
   for (const candidate of allCandidates) {
+    const assetId = candidate.lots[0]?.assetId;
     try {
       const sig = candidateSig(candidate);
       if (sig && activeSigs.has(sig)) {
         console.log(
           `[heartbeat] Skip duplicate ${candidate.type} for ${candidate.lots.length} lot(s) — already pending`,
         );
+        candidateOutcomes.push({
+          type: candidate.type,
+          ...(assetId !== undefined ? { assetId } : {}),
+          status: "duplicate",
+          detail: "Already pending — use /opportunities to approve, defer, or skip.",
+        });
         continue;
       }
 
-      const decision = await reasonAboutAction(candidate, policy, realizedYtd);
+      let decision = await reasonAboutAction(candidate, policy, realizedYtd);
+
+      if (
+        candidate.type === "HARVEST" &&
+        candidate.deterministicRecommendation === "EXECUTE" &&
+        decision.decision === "SKIP"
+      ) {
+        decision = {
+          ...decision,
+          decision: "EXECUTE",
+          reasoning: `${decision.reasoning} The tax engine flagged this loss for harvest; showing for your approval.`,
+        };
+        console.log(`[heartbeat] HARVEST engine EXECUTE overrides LLM SKIP for ${assetId ?? "?"}`);
+      }
 
       if (decision.decision === "SKIP") {
         console.log(`[heartbeat] LLM SKIP ${candidate.type}: ${decision.reasoning.slice(0, 120)}`);
+        candidateOutcomes.push({
+          type: candidate.type,
+          ...(assetId !== undefined ? { assetId } : {}),
+          status: "llm_skip",
+          llmDecision: "SKIP",
+          detail: decision.reasoning.slice(0, 200),
+        });
         continue;
       }
 
@@ -356,6 +413,13 @@ export async function runHeartbeat(
 
         actionsExecuted++;
         opportunitiesSaved++;
+        candidateOutcomes.push({
+          type: candidate.type,
+          ...(assetId !== undefined ? { assetId } : {}),
+          status: "executed",
+          llmDecision: "EXECUTE",
+          detail: "Executed automatically (delegated mode).",
+        });
       } else {
         const [opp] = await db.insert(opportunities).values({
           agentId,
@@ -374,7 +438,7 @@ export async function runHeartbeat(
             : {}),
         } as any).returning();
 
-        if (opp && agent.approvalMode === "manual") {
+        if (opp && agent.approvalMode === "manual" && channels.length > 0) {
           const lot0       = candidate.lots[0];
           const assetId    = lot0?.assetId ?? candidate.type;
           const price      = prices[assetId] ?? 0;
@@ -387,6 +451,17 @@ export async function runHeartbeat(
           const avgDaysHeld = candidate.lots.length > 0
             ? Math.round(candidate.lots.reduce((s, l) => s + (l.holdingPeriodDays ?? 0), 0) / candidate.lots.length)
             : 0;
+
+          const connType = (policy as UserPolicy & { walletConnectionType?: WalletConnectionType })
+            .walletConnectionType;
+          const frontendUrl = process.env["FRONTEND_URL"] ?? "http://localhost:3000";
+          const watchTxPlan =
+            connType === "watch" && agent.walletAddress
+              ? buildWatchTxPlan(candidate, prices, {
+                  walletAddress: agent.walletAddress,
+                  openInAppUrl: `${frontendUrl}/watch?oppId=${encodeURIComponent(opp.id)}&wallet=${encodeURIComponent(agent.walletAddress)}`,
+                }) ?? undefined
+              : undefined;
 
           await sendOpportunityNotification(
             {
@@ -411,16 +486,43 @@ export async function runHeartbeat(
               ...(candidate.replacementAsset ? { replacementAsset: candidate.replacementAsset } : {}),
               ...(candidate.washSaleDaysRemaining !== undefined ? { washSaleDaysRemaining: candidate.washSaleDaysRemaining } : {}),
               regime:               regime.regime.label,
+              ...(watchTxPlan !== undefined ? { watchTxPlan } : {}),
             },
             channels
           );
         }
-        if (opp) opportunitiesSaved++;
+        if (opp) {
+          opportunitiesSaved++;
+          const notified = agent.approvalMode === "manual" && channels.length > 0;
+          candidateOutcomes.push({
+            type: candidate.type,
+            ...(assetId !== undefined ? { assetId } : {}),
+            status: notified ? "notified" : "saved",
+            llmDecision: decision.decision,
+            detail: notified
+              ? `${decision.decision} — check the message above for Approve / Defer / Skip.`
+              : `${decision.decision} — saved (no Telegram chat linked on agent).`,
+          });
+        } else if (agent.approvalMode === "manual" && channels.length === 0) {
+          candidateOutcomes.push({
+            type: candidate.type,
+            ...(assetId !== undefined ? { assetId } : {}),
+            status: "error",
+            detail: "No Telegram chat on file — resend your wallet to link notifications.",
+          });
+        }
       }
 
       if (sig) activeSigs.add(sig);
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       console.error(`[heartbeat] Error processing candidate ${candidate.id}:`, err);
+      candidateOutcomes.push({
+        type: candidate.type,
+        ...(assetId !== undefined ? { assetId } : {}),
+        status: "error",
+        detail: msg.slice(0, 200),
+      });
     }
   }
 
@@ -439,6 +541,7 @@ export async function runHeartbeat(
     opportunitiesSaved,
     actionsExecuted,
     scanDiagnostics,
+    candidateOutcomes,
     ...(lotSync !== undefined ? { lotSync } : {}),
   };
 }

@@ -266,3 +266,4 @@ export async function executeApprovedAction(
 
 export { CircleClient, ArcClient };
 export { executeOpportunity } from "./executeOpportunity.js";
+export { buildWatchTxPlan, formatWatchTxPlanTelegram } from "./watchTxPlan.js";

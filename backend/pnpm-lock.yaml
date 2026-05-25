@@ -308,6 +308,9 @@ importers:
 
   packages/notifications:
     dependencies:
+      '@taxee/execution':
+        specifier: workspace:*
+        version: link:../execution
       '@taxee/shared':
         specifier: workspace:*
         version: link:../shared
