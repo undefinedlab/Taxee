@@ -8,6 +8,43 @@
  */
 import axios from "axios";
 
+// ─── Arc testnet — direct RPC (not Alchemy) ─────────────────────────────────
+
+const ARC_CHAIN_ID   = 5042002;
+const ARC_CHAIN_LABEL = "Arc Testnet";
+
+async function fetchArcPositions(walletAddress: string): Promise<TokenPosition[]> {
+  const rpcUrl = process.env["ARC_RPC_URL"];
+  if (!rpcUrl) return [];
+
+  try {
+    const res = await axios.post(
+      rpcUrl,
+      { jsonrpc: "2.0", id: 1, method: "eth_getBalance", params: [walletAddress, "latest"] },
+      { timeout: 8000 },
+    );
+    const hexBal = res.data?.result as string | undefined;
+    if (!hexBal || hexBal === "0x0" || hexBal === "0x") return [];
+
+    // USDC is the native gas token on Arc — denomination follows EVM convention (18 decimals)
+    const balance = Number(BigInt(hexBal)) / 1e18;
+    if (balance < 0.001) return [];
+
+    return [{
+      assetId:    "USDC",
+      chainId:    ARC_CHAIN_ID,
+      chainLabel: ARC_CHAIN_LABEL,
+      balance,
+      priceUsd:   1,
+      valueUsd:   balance,
+      isStable:   true,
+    }];
+  } catch (err) {
+    console.warn(`[balanceReader] arc-testnet: ${(err as Error).message}`);
+    return [];
+  }
+}
+
 // ─── Networks ─────────────────────────────────────────────────────────────────
 
 const NETWORKS: Array<{ alchemyNetwork: string; chainId: number; label: string }> = [
@@ -211,6 +248,10 @@ export async function fetchWalletPositions(
     pos.priceUsd = prices[pos.assetId] ?? 0;
     pos.valueUsd = pos.balance * pos.priceUsd;
   }
+
+  // ── Arc testnet — native USDC via direct RPC ─────────────────────────────
+  const arcPositions = await fetchArcPositions(walletAddress);
+  positions.push(...arcPositions);
 
   return positions.filter((p) => p.valueUsd > 0.01 || p.isStable || p.priceUsd === 0);
 }
