@@ -720,6 +720,35 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
   );
 
   /**
+   * Proxy: returns native USDC balance for a wallet on Arc testnet.
+   * The browser cannot call Arc RPC directly (CORS), so we proxy server-side.
+   */
+  app.get<{ Params: { address: string } }>("/arc-balance/:address", async (request, reply) => {
+    const { address } = request.params;
+    if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+      return reply.code(400).send({ error: "Invalid address" });
+    }
+    const rpcUrl = process.env["ARC_RPC_URL"];
+    if (!rpcUrl) return reply.send({ balance: 0, usd: 0 });
+
+    try {
+      const res = await fetch(rpcUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getBalance", params: [address, "latest"] }),
+      });
+      const json = await res.json() as { result?: string };
+      const hex = json.result;
+      if (!hex || hex === "0x0" || hex === "0x") return reply.send({ balance: 0, usd: 0 });
+      const balance = Number(BigInt(hex)) / 1e18;
+      return reply.send({ balance, usd: balance }); // USDC = $1
+    } catch (err) {
+      request.log.warn({ err }, "arc-balance fetch failed");
+      return reply.send({ balance: 0, usd: 0 });
+    }
+  });
+
+  /**
    * Called by the /execute frontend page after the Circle SDK confirms execution.
    * Marks the opportunity as executed and sends a Telegram receipt.
    */
@@ -817,3 +846,6 @@ async function sendCircleWalletReadyTelegram(opts: {
 }
 
 export default circleRoutes;
+
+// Re-export the balance helper so it can be used server-side
+export { sendCircleWalletReadyTelegram };

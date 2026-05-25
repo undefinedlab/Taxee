@@ -63,18 +63,12 @@ export interface WalletData {
 }
 
 async function fetchArcNativeUsdcBalance(address: string): Promise<number> {
-  const rpcUrl = process.env.NEXT_PUBLIC_ARC_RPC_URL;
-  if (!rpcUrl) return 0;
+  const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'https://taxee-production.up.railway.app';
   try {
-    const res = await fetch(rpcUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getBalance', params: [address, 'latest'] }),
-    });
-    const json = await res.json() as { result?: string };
-    const hex = json.result;
-    if (!hex || hex === '0x0' || hex === '0x') return 0;
-    return Number(BigInt(hex)) / 1e18;
+    const res = await fetch(`${apiBase}/circle/arc-balance/${address}`);
+    if (!res.ok) return 0;
+    const json = await res.json() as { balance?: number };
+    return json.balance ?? 0;
   } catch {
     return 0;
   }
