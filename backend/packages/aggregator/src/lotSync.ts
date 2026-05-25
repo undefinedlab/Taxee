@@ -1,5 +1,26 @@
+import axios from "axios";
 import { importLotsForWallet, resolveAcquisitionPrice } from "./lotImporter.js";
 import type { ImportedLot } from "./lotImporter.js";
+
+const ARC_CHAIN_ID = 5042002;
+const ARC_USDC_TX_SENTINEL = "arc-native-usdc-balance";
+
+async function fetchArcUsdcBalance(walletAddress: string): Promise<number> {
+  const rpcUrl = process.env["ARC_RPC_URL"];
+  if (!rpcUrl) return 0;
+  try {
+    const res = await axios.post(
+      rpcUrl,
+      { jsonrpc: "2.0", id: 1, method: "eth_getBalance", params: [walletAddress, "latest"] },
+      { timeout: 8000 },
+    );
+    const hex = res.data?.result as string | undefined;
+    if (!hex || hex === "0x0" || hex === "0x") return 0;
+    return Number(BigInt(hex)) / 1e18;
+  } catch {
+    return 0;
+  }
+}
 
 export interface LotSyncResult {
   inserted: number;
@@ -49,6 +70,44 @@ export async function syncAgentLotsFromChain(
   geckoKey: string | undefined,
   db: LotSyncDb,
 ): Promise<LotSyncResult> {
+  // ── Arc testnet: native USDC lot ─────────────────────────────────────────
+  const arcBalance = await fetchArcUsdcBalance(walletAddress);
+  const arcLots = (await db.selectOpenLots(agentId)).filter(
+    (l) => l.chainId === ARC_CHAIN_ID && l.txHash === ARC_USDC_TX_SENTINEL,
+  );
+  if (arcBalance > 0) {
+    if (arcLots.length === 0) {
+      await db.insertLots([{
+        agentId,
+        assetId:      "USDC",
+        chainId:      ARC_CHAIN_ID,
+        quantity:     arcBalance.toFixed(6),
+        costBasisUsd: arcBalance.toFixed(6),
+        acquiredAt:   new Date(),
+        status:       "open" as const,
+        txHash:       ARC_USDC_TX_SENTINEL,
+      }]);
+    } else {
+      // Close stale lot and reinsert with current balance (quantity + basis both update)
+      const existing = arcLots[0]!;
+      if (Math.abs(parseFloat(existing.quantity) - arcBalance) > 0.001) {
+        for (const row of arcLots) await db.closeLot(row.id);
+        await db.insertLots([{
+          agentId,
+          assetId:      "USDC",
+          chainId:      ARC_CHAIN_ID,
+          quantity:     arcBalance.toFixed(6),
+          costBasisUsd: arcBalance.toFixed(6),
+          acquiredAt:   new Date(),
+          status:       "open" as const,
+          txHash:       ARC_USDC_TX_SENTINEL,
+        }]);
+      }
+    }
+  } else if (arcLots.length > 0) {
+    for (const row of arcLots) await db.closeLot(row.id);
+  }
+  // ─────────────────────────────────────────────────────────────────────────
   const openBefore = (await db.selectOpenLots(agentId)).filter(
     (l) => l.status === "open" || l.status === "partial",
   );
