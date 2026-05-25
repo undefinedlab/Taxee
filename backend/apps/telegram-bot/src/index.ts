@@ -22,6 +22,7 @@ import {
   formatScanDiagnosticsTelegram,
   formatCandidateOutcomesTelegram,
 } from "@taxee/tax-engine";
+import { splitForTelegram } from "@taxee/notifications";
 import axios from "axios";
 import {
   clearPendingPolicy,
@@ -705,11 +706,17 @@ bot.on("message:text", async (ctx) => {
           body +=
             `\n\n🔄 *Lot sync:* +${sync.inserted} new, ${sync.closed} removed from chain.`;
         }
-        try {
-          await ctx.reply(body, { parse_mode: "Markdown" });
-        } catch (replyErr) {
-          console.error("[bot] diagnostics reply failed (Markdown):", replyErr);
-          await ctx.reply(body.replace(/\*/g, ""));
+        // Diagnostics body can easily exceed 4096 chars for portfolios with many
+        // lots (one line per lot). Telegram returns 400 on send; chunk on line
+        // boundaries to stay under the limit.
+        const chunks = splitForTelegram(body);
+        for (const chunk of chunks) {
+          try {
+            await ctx.reply(chunk, { parse_mode: "Markdown" });
+          } catch (replyErr) {
+            console.error("[bot] diagnostics reply failed (Markdown):", replyErr);
+            await ctx.reply(chunk.replace(/\*/g, ""));
+          }
         }
       })
       .catch(async (err) => {

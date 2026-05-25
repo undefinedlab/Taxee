@@ -147,7 +147,7 @@ function buildOpportunityText(n: OpportunityNotification): string {
  * chunks on line boundaries (so we don't break `*bold*` or `_italic_` markup
  * mid-token, which would cause "Can't parse entities" errors).
  */
-function splitForTelegram(text: string, maxLen = 3900): string[] {
+export function splitForTelegram(text: string, maxLen = 3900): string[] {
   if (text.length <= maxLen) return [text];
   const lines  = text.split("\n");
   const chunks: string[] = [];
