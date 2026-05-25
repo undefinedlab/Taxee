@@ -86,7 +86,7 @@ export function buildScanDiagnostics(
     harvestLines.push("No taxable positions with open lots.");
   }
   if (counts.harvest === 0 && harvestNearMiss === 0 && harvestLines.every((l) => l.includes("in gain"))) {
-    harvestLines.push("_Harvest only targets unrealized losses._");
+    harvestLines.push("Note: harvest only targets unrealized losses.");
   }
 
   const rebalanceCandidates = computeRebalanceCandidates(snapshot, regime, policy);
@@ -105,7 +105,7 @@ export function buildScanDiagnostics(
       rebalanceLines.push(
         `Allocation drift below *${policy.rebalanceAggressiveness}* rebalance threshold, or no overweight assets to trim.`,
       );
-      rebalanceLines.push("_Rebalance sells overweight winners — it does not fix loss positions._");
+      rebalanceLines.push("Note: rebalance trims overweight winners — not loss positions.");
     }
   }
 
@@ -113,8 +113,8 @@ export function buildScanDiagnostics(
     parkLines.unshift("PARK is disabled in your policy.");
   } else if (counts.park === 0) {
     parkLines.push(
-      "_PARK = park *gains* in USYC when a lot is within " +
-        `${policy.maturationBufferDays} days of the ${LONG_TERM_DAYS}-day long-term threshold — not for loss lots._`,
+      `Note: PARK parks gains in USYC within the last ${policy.maturationBufferDays} days before the ` +
+        `${LONG_TERM_DAYS}-day long-term threshold — not for loss lots.`,
     );
   }
 
@@ -138,7 +138,7 @@ function describeParkLot(
   const buf = policy.maturationBufferDays;
 
   if (gain <= 0) {
-    return `*${position.assetId}* (${chain}, ${daysHeld}d held): at a loss — PARK is for *gains* nearing long-term treatment, not maturing losses.`;
+    return `*${position.assetId}* (${chain}, ${daysHeld}d held): at a loss — PARK is for gains nearing long-term treatment, not maturing losses.`;
   }
   if (daysToLt <= 0) {
     return `*${position.assetId}* (${chain}): already long-term (${daysHeld}d) — no maturation park needed.`;

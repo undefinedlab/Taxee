@@ -127,7 +127,7 @@ function buildOpportunityText(n: OpportunityNotification): string {
   }
 
   if (n.jurisdiction === "UK") {
-    lines.push(``, `_🇬🇧 Regime: UK CGT (20% higher rate) — 30-day matching rule applied._`);
+    lines.push(``, `🇬🇧 Regime: UK CGT — crypto loss harvesting without wash-sale deferral.`);
   }
 
   if (n.approvalMode === "delegated" && n.autoExecuteAt) {

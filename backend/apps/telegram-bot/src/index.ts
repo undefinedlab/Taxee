@@ -573,24 +573,38 @@ bot.on("message:text", async (ctx) => {
     );
 
     // ── Step 3: run tax scan (harvest / park / rebalance) + notify via Telegram ─
-    void runHeartbeat(agent.id)
+    void runHeartbeat(agent.id, { skipLotSync: true })
       .then(async (result) => {
         console.log(
           `[bot] heartbeat agent=${agent.id} saved=${result.opportunitiesSaved} candidates=${result.candidatesFound} executed=${result.actionsExecuted}`,
         );
         if (result.opportunitiesSaved === 0) {
           let body = formatScanDiagnosticsTelegram(result.scanDiagnostics);
-          if (result.lotSync && (result.lotSync.closed > 0 || result.lotSync.inserted > 0)) {
+          if (sync.closed > 0 || sync.inserted > 0) {
             body +=
-              `\n\n🔄 *Lot sync:* +${result.lotSync.inserted} new, ${result.lotSync.closed} removed from chain.`;
+              `\n\n🔄 *Lot sync:* +${sync.inserted} new, ${sync.closed} removed from chain.`;
           }
-          await ctx.reply(body, { parse_mode: "Markdown" });
+          try {
+            await ctx.reply(body, { parse_mode: "Markdown" });
+          } catch (replyErr) {
+            console.error("[bot] diagnostics reply failed (Markdown):", replyErr);
+            await ctx.reply(body.replace(/\*/g, ""));
+          }
         }
       })
       .catch(async (err) => {
+        const msg = err instanceof Error ? err.message : String(err);
         console.error("[bot] heartbeat failed:", err);
+        const hint =
+          /anthropic|api key|401|403/i.test(msg)
+            ? "Check `ANTHROPIC_API_KEY` on the telegram-bot service."
+            : /database|ECONNREFUSED|postgres/i.test(msg)
+              ? "Check `DATABASE_URL` on the telegram-bot service."
+              : /coingecko|429/i.test(msg)
+                ? "CoinGecko rate limit — retry in a minute."
+                : "See telegram-bot logs for the full error.";
         await ctx.reply(
-          "⚠️ Tax analysis failed. Check bot logs (`ANTHROPIC_API_KEY`, `COINGECKO_API_KEY`). Try sending your wallet again.",
+          `⚠️ Tax analysis failed.\n\n${msg.slice(0, 280)}\n\n${hint}`,
         );
       });
   } catch (err) {

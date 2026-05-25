@@ -57,7 +57,15 @@ const arc = new ArcClient(
  *   7. Execute (if delegated) OR notify for manual approval
  *   8. LLM: generate explanation → send notification
  */
-export async function runHeartbeat(agentId: string): Promise<{
+export interface RunHeartbeatOptions {
+  /** Skip on-chain lot sync when the caller already synced (e.g. Telegram wallet handler). */
+  skipLotSync?: boolean;
+}
+
+export async function runHeartbeat(
+  agentId: string,
+  options: RunHeartbeatOptions = {},
+): Promise<{
   /** Raw tax-engine matches before LLM */
   candidatesFound: number;
   /** Rows inserted into opportunities (pending notify) */
@@ -94,7 +102,7 @@ export async function runHeartbeat(agentId: string): Promise<{
   const walletAddress = agent.walletAddress;
   let lotSync: { inserted: number; closed: number; basisRefreshed: number } | undefined;
 
-  if (walletAddress && process.env["ALCHEMY_API_KEY"]) {
+  if (walletAddress && process.env["ALCHEMY_API_KEY"] && !options.skipLotSync) {
     const sync = await syncAgentLotsFromChain(
       agentId,
       walletAddress,
