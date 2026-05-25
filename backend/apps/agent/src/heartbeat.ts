@@ -21,7 +21,7 @@ import {
   generateExplanation,
 } from "@taxee/llm";
 import { validateForExecution, isWashSaleSafe } from "@taxee/compliance";
-import { executeApprovedAction, buildWatchTxPlan } from "@taxee/execution";
+import { executeApprovedAction, buildWatchTxPlan, executeApprovedActionEip7702 } from "@taxee/execution";
 import { sendOpportunityNotification, sendActionReceipt } from "@taxee/notifications";
 import type {
   UserPolicy,
@@ -370,14 +370,22 @@ export async function runHeartbeat(
 
       if (agent.approvalMode === "delegated" && decision.decision === "EXECUTE") {
         const approved = validateForExecution(candidate, policy, prices);
-        const receipt  = await executeApprovedAction(approved, circle, arc, {
-          walletId:           agent.circleWalletId ?? "",
-          lotRegistryAddress: process.env["TAXEE_LOT_REGISTRY_ADDRESS"] ?? "",
-          chainId:            candidate.lots[0]?.chainId ?? 8453,
-          ...(process.env["TAXEE_EXECUTOR_ADDRESS"] ? { executorAddress: process.env["TAXEE_EXECUTOR_ADDRESS"] } : {}),
-          ...(process.env["USDC_ADDRESS"]           ? { usdcAddress: process.env["USDC_ADDRESS"] }             : {}),
-          ...(process.env["CIRCLE_PAYMASTER_WALLET_ID"] ? { paymasterWalletId: process.env["CIRCLE_PAYMASTER_WALLET_ID"] } : {}),
-        });
+        const connType = (policy as UserPolicy & { walletConnectionType?: WalletConnectionType }).walletConnectionType;
+
+        let receipt: { arcRecordId?: string | undefined; txHash?: string | undefined };
+        if (connType === "external_eip7702" && agent.walletAddress) {
+          const eipReceipt = await executeApprovedActionEip7702(approved, agent.walletAddress);
+          receipt = { txHash: eipReceipt.txHash };
+        } else {
+          receipt = await executeApprovedAction(approved, circle, arc, {
+            walletId:           agent.circleWalletId ?? "",
+            lotRegistryAddress: process.env["TAXEE_LOT_REGISTRY_ADDRESS"] ?? "",
+            chainId:            candidate.lots[0]?.chainId ?? 8453,
+            ...(process.env["TAXEE_EXECUTOR_ADDRESS"] ? { executorAddress: process.env["TAXEE_EXECUTOR_ADDRESS"] } : {}),
+            ...(process.env["USDC_ADDRESS"]           ? { usdcAddress: process.env["USDC_ADDRESS"] }             : {}),
+            ...(process.env["CIRCLE_PAYMASTER_WALLET_ID"] ? { paymasterWalletId: process.env["CIRCLE_PAYMASTER_WALLET_ID"] } : {}),
+          });
+        }
 
         await db.insert(opportunities).values({
           agentId,
