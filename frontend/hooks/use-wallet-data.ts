@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAccount, useBalance } from 'wagmi';
+import { useAccount } from 'wagmi';
 import { createPublicClient, http, formatUnits } from 'viem';
-import { baseSepolia, base } from 'wagmi/chains';
+import { baseSepolia, base, sepolia } from 'wagmi/chains';
 
 // ERC20 ABI for balance checking
 const ERC20_ABI = [
@@ -30,18 +30,22 @@ const ERC20_ABI = [
   },
 ] as const;
 
-// Common tokens on Base
-const BASE_TOKENS = {
-  [baseSepolia.id]: [
+// Chains to always scan (multi-chain)
+const SCAN_CHAINS = [
+  { chain: sepolia,     label: 'Sepolia',      tokens: [
+    { address: '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14', symbol: 'WETH', decimals: 18 },
+    { address: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', symbol: 'USDC', decimals: 6 },
+  ]},
+  { chain: baseSepolia, label: 'Base Sepolia', tokens: [
     { address: '0x036CbD53842c5426634e7929541eC2318f3dCF7e', symbol: 'USDC', decimals: 6 },
     { address: '0x4200000000000000000000000000000000000006', symbol: 'WETH', decimals: 18 },
-  ],
-  [base.id]: [
+  ]},
+  { chain: base,        label: 'Base',         tokens: [
     { address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', symbol: 'USDC', decimals: 6 },
     { address: '0x4200000000000000000000000000000000000006', symbol: 'WETH', decimals: 18 },
     { address: '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb', symbol: 'DAI', decimals: 18 },
-  ],
-};
+  ]},
+];
 
 export interface WalletPosition {
   asset: string;
@@ -80,19 +84,7 @@ async function fetchArcBalances(address: string): Promise<ArcBalanceResponse> {
   }
 }
 
-// Helper to create public client
-function createClient(chainId: number) {
-  const chain = chainId === 8453 ? base : baseSepolia;
-  return createPublicClient({
-    chain,
-    transport: http(),
-  });
-}
-
-// Helper to get ETH price (mock for now - should use price oracle)
 async function getEthPriceUsd(): Promise<number> {
-  // In production, fetch from CoinGecko, Chainlink, or similar
-  // For now, return a reasonable estimate
   return 3500;
 }
 
@@ -105,14 +97,14 @@ export function useWalletData(
   customAddress?: string,
   options: UseWalletDataOptions = {},
 ): WalletData {
-  const { address: connectedAddress, chainId } = useAccount();
+  const { address: connectedAddress } = useAccount();
   const customValid =
     customAddress && /^0x[a-fA-F0-9]{40}$/i.test(customAddress)
       ? customAddress
       : undefined;
   const allowFallback = options.fallbackToConnected !== false;
   const address = customValid ?? (allowFallback ? connectedAddress : undefined);
-  
+
   const [data, setData] = useState<WalletData>({
     address: address || '',
     totalValueUsd: 0,
@@ -121,15 +113,6 @@ export function useWalletData(
     isLoading: true,
     error: null,
   });
-
-  const { data: ethBalanceData } = useBalance({
-    address: address as `0x${string}` | undefined,
-    query: {
-      enabled: !!address,
-    },
-  });
-
-  const effectiveChainId = chainId ?? baseSepolia.id;
 
   useEffect(() => {
     async function fetchWalletData() {
@@ -141,94 +124,81 @@ export function useWalletData(
       try {
         setData(prev => ({ ...prev, isLoading: true, error: null }));
 
-        const client = createClient(effectiveChainId);
-        const tokens = BASE_TOKENS[effectiveChainId as keyof typeof BASE_TOKENS] || [];
         const ethPrice = await getEthPriceUsd();
-        
         const positions: WalletPosition[] = [];
         let totalValueUsd = 0;
+        let primaryEthBalance = '0';
 
-        // Native ETH (public RPC — works for watch/Circle addresses without wagmi)
-        let ethBalance = ethBalanceData?.value;
-        if (ethBalance === undefined) {
-          ethBalance = await client.getBalance({ address: address as `0x${string}` });
-        }
-        const ethBalanceFormatted = formatUnits(ethBalance, 18);
-        const ethValueUsd = parseFloat(ethBalanceFormatted) * ethPrice;
+        // ── Scan all chains in parallel ────────────────────────────────────────
+        await Promise.allSettled(
+          SCAN_CHAINS.map(async ({ chain, label, tokens }) => {
+            const client = createPublicClient({ chain, transport: http() });
 
-        if (ethBalance > BigInt(0)) {
-          positions.push({
-            asset: 'ETH',
-            symbol: 'ETH',
-            quantity: ethBalanceFormatted,
-            valueUsd: ethValueUsd,
-            chain: effectiveChainId === 8453 ? 'Base' : 'Base Sepolia',
-            address: '0x0000000000000000000000000000000000000000',
-            decimals: 18,
-          });
-          totalValueUsd += ethValueUsd;
-        }
-
-        // Get token balances
-        for (const token of tokens) {
-          try {
-            const balance = await client.readContract({
-              address: token.address as `0x${string}`,
-              abi: ERC20_ABI,
-              functionName: 'balanceOf',
-              args: [address as `0x${string}`],
-            });
-
-            if (balance > BigInt(0)) {
-              const formatted = formatUnits(balance, token.decimals);
-              
-              // Mock price lookup - in production use real price feed
-              let priceUsd = 1; // Default for stablecoins
-              if (token.symbol === 'WETH' || token.symbol === 'ETH') {
-                priceUsd = ethPrice;
+            // Native ETH
+            try {
+              const ethBalance = await client.getBalance({ address: address as `0x${string}` });
+              if (ethBalance > BigInt(0)) {
+                const formatted = formatUnits(ethBalance, 18);
+                const valueUsd = parseFloat(formatted) * ethPrice;
+                positions.push({
+                  asset: 'ETH', symbol: 'ETH',
+                  quantity: formatted, valueUsd,
+                  chain: label,
+                  address: '0x0000000000000000000000000000000000000000',
+                  decimals: 18,
+                });
+                totalValueUsd += valueUsd;
+                if (chain.id === baseSepolia.id || chain.id === sepolia.id) {
+                  primaryEthBalance = formatted;
+                }
               }
-              
-              const valueUsd = parseFloat(formatted) * priceUsd;
+            } catch { /* chain unavailable — skip */ }
 
-              positions.push({
-                asset: token.symbol,
-                symbol: token.symbol,
-                quantity: formatted,
-                valueUsd,
-                chain: effectiveChainId === 8453 ? 'Base' : 'Base Sepolia',
-                address: token.address,
-                decimals: token.decimals,
-              });
-              
-              totalValueUsd += valueUsd;
+            // ERC-20 tokens
+            for (const token of tokens) {
+              try {
+                const balance = await client.readContract({
+                  address: token.address as `0x${string}`,
+                  abi: ERC20_ABI,
+                  functionName: 'balanceOf',
+                  args: [address as `0x${string}`],
+                }) as bigint;
+                if (balance > BigInt(0)) {
+                  const formatted = formatUnits(balance, token.decimals);
+                  const priceUsd = token.symbol === 'WETH' ? ethPrice : 1;
+                  const valueUsd = parseFloat(formatted) * priceUsd;
+                  positions.push({
+                    asset: token.symbol, symbol: token.symbol,
+                    quantity: formatted, valueUsd,
+                    chain: label,
+                    address: token.address,
+                    decimals: token.decimals,
+                  });
+                  totalValueUsd += valueUsd;
+                }
+              } catch { /* token not deployed on this chain — skip */ }
             }
-          } catch (err) {
-            console.warn(`Failed to fetch balance for ${token.symbol}:`, err);
-          }
-        }
+          }),
+        );
 
-        // ── Arc testnet: native USDC + ERC-20 tokens (e.g. EURC) ─────────────
+        // ── Arc testnet: native USDC ───────────────────────────────────────────
         const arcData = await fetchArcBalances(address);
         if (arcData.balance > 0.001) {
           positions.push({
-            asset:    'USDC',
-            symbol:   'USDC',
-            quantity: arcData.balance.toFixed(6),
-            valueUsd: arcData.usd,
-            chain:    'Arc Testnet',
-            address:  '0x0000000000000000000000000000000000000000',
+            asset: 'USDC', symbol: 'USDC',
+            quantity: arcData.balance.toFixed(6), valueUsd: arcData.usd,
+            chain: 'Arc Testnet',
+            address: '0x0000000000000000000000000000000000000000',
             decimals: 18,
           });
           totalValueUsd += arcData.usd;
         }
         for (const tok of arcData.tokens) {
           positions.push({
-            asset:    tok.symbol,
-            symbol:   tok.symbol,
-            quantity: tok.balance.toFixed(6),
-            valueUsd: tok.usd,
-            chain:    'Arc Testnet',
-            address:  tok.contractAddress,
+            asset: tok.symbol, symbol: tok.symbol,
+            quantity: tok.balance.toFixed(6), valueUsd: tok.usd,
+            chain: 'Arc Testnet',
+            address: tok.contractAddress,
             decimals: 18,
           });
           totalValueUsd += tok.usd;
@@ -238,7 +208,7 @@ export function useWalletData(
           address,
           totalValueUsd,
           positions,
-          ethBalance: ethBalanceFormatted,
+          ethBalance: primaryEthBalance,
           isLoading: false,
           error: null,
         });
@@ -252,14 +222,14 @@ export function useWalletData(
       }
     }
 
-    fetchWalletData();
-  }, [address, effectiveChainId, ethBalanceData]);
+    void fetchWalletData();
+  }, [address]);
 
   return data;
 }
 
 // Hook to check if wallet has any value
 export function useHasWalletValue(address?: string): boolean {
-  const { data } = useWalletData(address);
-  return data.totalValueUsd > 0;
+  const walletData = useWalletData(address);
+  return walletData.totalValueUsd > 0;
 }
