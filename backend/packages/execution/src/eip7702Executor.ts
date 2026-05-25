@@ -117,11 +117,11 @@ function rpcUrl(chainId: number): string {
   return url;
 }
 
-export async function checkActiveDelegation(userAddress: Address): Promise<boolean> {
-  const chainId = getExecutionChainId();
+export async function checkActiveDelegation(userAddress: Address, chainId?: number): Promise<boolean> {
+  const effectiveChainId = chainId ?? getExecutionChainId();
   const publicClient = createPublicClient({
-    chain: viemChain(chainId),
-    transport: http(rpcUrl(chainId)),
+    chain: viemChain(effectiveChainId),
+    transport: http(rpcUrl(effectiveChainId)),
   });
   const [hasDelegation] = await publicClient.readContract({
     address: delegationRegistryAddress(),
@@ -147,7 +147,6 @@ export async function executeApprovedActionEip7702(
     );
   }
 
-  const chainId = getExecutionChainId();
   const user = userWalletAddress as Address;
   const { candidateAction, lotManifest } = action;
   const firstLot = lotManifest.lots[0] ?? candidateAction.lots[0];
@@ -155,14 +154,10 @@ export async function executeApprovedActionEip7702(
     throw new Error("No lots in approved action");
   }
 
-  const lotChainId = firstLot.chainId;
-  if (lotChainId !== chainId) {
-    throw new Error(
-      `Lot chain ${lotChainId} does not match execution chain ${chainId}. Bridge via Circle or move lots to Base Sepolia.`,
-    );
-  }
+  // Use the lot's chain for EIP-7702 — execution happens wherever the lots live
+  const chainId = firstLot.chainId;
 
-  const hasDelegation = await checkActiveDelegation(user);
+  const hasDelegation = await checkActiveDelegation(user, chainId);
   if (!hasDelegation) {
     throw new Error(
       "No active EIP-7702 delegation on-chain. Complete Agent Activation in onboarding first.",
