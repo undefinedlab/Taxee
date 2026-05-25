@@ -1,4 +1,7 @@
+const CHART_HEIGHT_PX = 72;
+
 export function AnalyticsCard() {
+  /** Bar heights as % of chart area */
   const bars = [42, 55, 48, 62, 58, 78, 85];
 
   return (
@@ -17,13 +20,16 @@ export function AnalyticsCard() {
       <p className="mt-1 font-landing text-[9px] text-[#6b7280] dark:text-[#9ca3af]">
         vs gross-only benchmark
       </p>
-      <div className="mt-3 flex h-[72px] items-end justify-between gap-1.5">
-        {bars.map((h, i) => (
+      <div
+        className="mt-3 flex items-end justify-between gap-1.5"
+        style={{ height: CHART_HEIGHT_PX }}
+      >
+        {bars.map((pct, i) => (
           <div
             key={i}
-            className="landing-bar-animate w-[18px] bg-landing-active dark:bg-[#5eb3f6]"
+            className="landing-bar-animate landing-chart-dots-blue w-[18px] min-h-[4px] overflow-hidden rounded-t-sm"
             style={{
-              height: `${h}%`,
+              height: Math.max(4, Math.round((pct / 100) * CHART_HEIGHT_PX)),
               animationDelay: `${0.6 + i * 0.06}s`,
             }}
           />

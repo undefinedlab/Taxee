@@ -16,6 +16,7 @@ import {
   problem,
   solution,
 } from "@/components/landing/landing-content";
+import { LandingTextCard } from "@/components/landing/landing-text-card";
 import { SectionHeader } from "@/components/landing/section-header";
 import { cn } from "@/lib/utils";
 
@@ -35,15 +36,17 @@ export function LandingScrollSections() {
           />
           {/* 3 Problem Cards - No border, no background */}
           <div className="grid gap-12 sm:grid-cols-3 sm:gap-8 lg:gap-12">
-            {problem.bullets.map((item, index) => (
-              <div key={item.title} className="text-center">
-                <h3 className="font-landing text-3xl font-bold tracking-tight text-black dark:text-[#f9fafb] sm:text-4xl">
+            {problem.bullets.map((item) => (
+              <LandingTextCard key={item.title}>
+                <h3 className="landing-text-card-title font-landing text-3xl font-bold tracking-tight text-black dark:text-[#f9fafb] sm:text-4xl">
                   {item.title}
                 </h3>
-                <p className="mt-3 font-landing text-[14px] leading-[1.7] text-[#4b5563] dark:text-[#9ca3af]">
-                  {item.body}
-                </p>
-              </div>
+                {item.body ? (
+                  <p className="landing-text-card-body mt-3 font-landing text-[14px] leading-[1.7] text-[#4b5563] dark:text-[#9ca3af]">
+                    {item.body}
+                  </p>
+                ) : null}
+              </LandingTextCard>
             ))}
           </div>
         </div>
@@ -67,14 +70,14 @@ export function LandingScrollSections() {
         </div>
         <div className="mt-10 grid gap-12 sm:grid-cols-3 sm:gap-14 lg:mt-12 lg:gap-20">
           {solution.items.map((item) => (
-            <div key={item.title} className="flex flex-col text-center">
-              <h3 className="font-landing text-2xl font-bold leading-snug tracking-tight text-black dark:text-[#f9fafb] sm:text-3xl">
+            <LandingTextCard key={item.title}>
+              <h3 className="landing-text-card-title font-landing text-2xl font-bold leading-snug tracking-tight text-black dark:text-[#f9fafb] sm:text-3xl">
                 {item.title}
               </h3>
-              <p className="mt-5 font-landing text-[15px] leading-[1.8] text-[#4b5563] dark:text-[#9ca3af]">
+              <p className="landing-text-card-body mt-5 font-landing text-[15px] leading-[1.8] text-[#4b5563] dark:text-[#9ca3af]">
                 {item.description}
               </p>
-            </div>
+            </LandingTextCard>
           ))}
         </div>
         {solution.control ? (
@@ -92,22 +95,22 @@ export function LandingScrollSections() {
 
           <div className="animate-marquee flex gap-8 hover:[animation-play-state:paused]">
             {[...execution.items, ...execution.items, ...execution.items].map((item, index) => (
-              <div
+              <LandingTextCard
                 key={`${item.title}-${index}`}
-                className="flex w-[280px] shrink-0 flex-col items-center text-center px-4"
+                className="w-[280px] shrink-0 px-4"
               >
                 <SectionIcon
                   name={item.icon}
                   variant="plain"
-                  className="mb-5 h-20 w-20 [&_svg]:h-12 [&_svg]:w-12"
+                  className="landing-text-card-icon mx-auto mb-5 h-20 w-20 [&_svg]:h-12 [&_svg]:w-12"
                 />
-                <h3 className="font-landing text-[15px] font-semibold text-black dark:text-[#f9fafb]">
+                <h3 className="landing-text-card-title font-landing text-[15px] font-semibold text-black dark:text-[#f9fafb]">
                   {item.title}
                 </h3>
-                <p className="mt-2 font-landing text-[13px] leading-[1.65] text-[#4b5563] dark:text-[#9ca3af]">
+                <p className="landing-text-card-body mt-2 font-landing text-[13px] leading-[1.65] text-[#4b5563] dark:text-[#9ca3af]">
                   {item.description}
                 </p>
-              </div>
+              </LandingTextCard>
             ))}
           </div>
         </div>

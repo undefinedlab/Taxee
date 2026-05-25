@@ -47,16 +47,16 @@ function StackedYearBar({
         style={{ height: BAR_MAX_PX + 28 }}
       >
         <div
-          className="flex w-full flex-col justify-end overflow-hidden rounded-t-md"
+          className="flex w-full flex-col justify-end overflow-hidden"
           style={{ height: greyPx + bluePx }}
         >
           <div
-            className="w-full bg-landing-active dark:bg-[#5eb3f6]"
+            className="landing-chart-dots-blue w-full rounded-t-md"
             style={{ height: bluePx }}
             title={`+${extra}% extra with taxee`}
           />
           <div
-            className="w-full bg-[#9ca3af]/55 dark:bg-[#6b7280]/65"
+            className="landing-chart-dots-grey w-full"
             style={{ height: greyPx }}
             title={`+${without}% without tax awareness`}
           />
@@ -85,11 +85,11 @@ export function TaxComparisonChart() {
 
       <div className="mt-8 flex flex-wrap items-center justify-center gap-5 sm:gap-8">
         <span className="inline-flex items-center gap-2 font-landing text-xs text-[#6b7280] dark:text-[#9ca3af]">
-          <span className="h-3.5 w-3.5 rounded-sm bg-[#9ca3af]/55 dark:bg-[#6b7280]/65" />
+          <span className="landing-chart-dots-swatch landing-chart-dots-grey" />
           Without Taxee
         </span>
         <span className="inline-flex items-center gap-2 font-landing text-xs text-[#6b7280] dark:text-[#9ca3af]">
-          <span className="h-3.5 w-3.5 rounded-sm bg-landing-active dark:bg-[#5eb3f6]" />
+          <span className="landing-chart-dots-swatch landing-chart-dots-blue" />
           With Taxee (+{ANNUAL_SPREAD_PCT}%/yr)
         </span>
       </div>

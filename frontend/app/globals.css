@@ -775,6 +775,85 @@ html.dark .landing-grid-line {
   }
 }
 
+/* Solution chart — dot-matrix columns (not solid fill) */
+.landing-chart-dots-grey {
+  background-color: transparent;
+  background-image: radial-gradient(
+    circle,
+    rgba(107, 114, 128, 0.72) 1.25px,
+    transparent 1.25px
+  );
+  background-size: 6px 6px;
+  background-position: 3px 3px;
+}
+
+.landing-chart-dots-blue {
+  background-color: transparent;
+  background-image: radial-gradient(
+    circle,
+    var(--landing-active) 1.25px,
+    transparent 1.25px
+  );
+  background-size: 6px 6px;
+  background-position: 3px 3px;
+}
+
+html.dark .landing-chart-dots-grey {
+  background-image: radial-gradient(
+    circle,
+    rgba(156, 163, 175, 0.55) 1.25px,
+    transparent 1.25px
+  );
+}
+
+html.dark .landing-chart-dots-blue {
+  background-image: radial-gradient(
+    circle,
+    #5eb3f6 1.25px,
+    transparent 1.25px
+  );
+}
+
+.landing-chart-dots-swatch {
+  display: inline-block;
+  height: 0.875rem;
+  width: 0.875rem;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+/* Plain text cards — slight motion on hover only */
+.landing-text-card {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0.75rem 0.5rem;
+  margin: -0.75rem -0.5rem;
+  border-radius: 0.5rem;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.landing-text-card:hover {
+  transform: translateY(-2px);
+}
+
+.landing-text-card-icon {
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.landing-text-card:hover .landing-text-card-icon {
+  transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-text-card,
+  .landing-text-card:hover,
+  .landing-text-card-icon,
+  .landing-text-card:hover .landing-text-card-icon {
+    transform: none;
+  }
+}
+
 .landing-scroll-section {
   padding: 2rem 1.25rem;
 }

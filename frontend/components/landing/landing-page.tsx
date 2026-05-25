@@ -7,6 +7,7 @@ import { LandingFooter } from "@/components/landing/landing-footer";
 import { hero, heroStats } from "@/components/landing/landing-content";
 import { landingNavLinks } from "@/components/landing/nav-links";
 import { LandingMorphBackground } from "@/components/landing/landing-morph-background";
+import { LandingTextCard } from "@/components/landing/landing-text-card";
 
 export function LandingPage() {
   return (
@@ -95,14 +96,14 @@ export function LandingPage() {
 
               <div className="landing-area-stats landing-grid-line landing-animate-in landing-delay-5 grid gap-8 px-6 py-8 sm:grid-cols-3 sm:px-8 lg:border-b-0 lg:px-10 lg:py-10">
                 {heroStats.map((stat) => (
-                  <div key={stat.label}>
-                    <p className="font-landing text-[2rem] font-bold leading-none tracking-tight text-black dark:text-[#f9fafb] lg:text-[2.25rem]">
+                  <LandingTextCard key={stat.label}>
+                    <p className="landing-text-card-value font-landing text-[2rem] font-bold leading-none tracking-tight text-black dark:text-[#f9fafb] lg:text-[2.25rem]">
                       {stat.value}
                     </p>
-                    <p className="mt-2 font-landing text-[12px] leading-snug text-[#6b7280] dark:text-[#9ca3af]">
+                    <p className="landing-text-card-body mt-2 font-landing text-[12px] leading-snug text-[#6b7280] dark:text-[#9ca3af]">
                       {stat.label}
                     </p>
-                  </div>
+                  </LandingTextCard>
                 ))}
               </div>
             </div>

@@ -1,0 +1,18 @@
+{
+  "name": "Taxee — After-tax DeFi portfolio agent",
+  "short_name": "Taxee",
+  "description": "AI portfolio agent that optimizes after-tax return with tax-loss harvesting and cross-chain rebalancing.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/logo-mark.png",
+      "sizes": "400x400",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
