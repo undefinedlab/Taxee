@@ -181,7 +181,7 @@ export function CircleWalletSetup({ onComplete, onBack }: CircleWalletSetupProps
       )}
 
       {(status === 'loading' || status === 'ready') && (
-        <div className="rounded-xl border border-[#e5e7eb] bg-white p-8 text-center dark:border-[#1f2937] dark:bg-[#111827]">
+        <div className="rounded-xl border border-[#e5e7eb] bg-white p-8 text-center dark:border-[#262626] dark:bg-[#141414]">
           <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
           <p className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
             {message}

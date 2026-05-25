@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { TaxeeLogo } from "@/components/landing/logo";
-import { ThemeToggle } from "@/components/landing/theme-toggle";
 
 interface OnboardingTopBarProps {
   currentStep: number;
@@ -14,16 +13,11 @@ export function OnboardingTopBar({
   stepLabels = ["Wallet", "Import", "Policy", "Done"],
 }: OnboardingTopBarProps) {
   return (
-    <header className="landing-area-hero-topbar landing-grid-line flex flex-col border-b border-[#e5e7eb] dark:border-[#1f2937]">
-      {/* Top row - Logo and theme */}
-      <div className="flex items-center justify-between gap-3 px-4 py-3 sm:gap-4 sm:px-5 lg:px-6">
+    <header className="landing-area-hero-topbar landing-grid-line flex flex-col border-b border-[#e5e7eb] dark:border-[#262626]">
+      <div className="flex items-center gap-3 px-4 py-3 sm:gap-4 sm:px-5 lg:px-6">
         <Link href="/" className="shrink-0" aria-label="taxee home">
           <TaxeeLogo showWordmark />
         </Link>
-
-        <div className="flex shrink-0 items-center gap-2">
-          <ThemeToggle />
-        </div>
       </div>
 
       {/* Progress bar row */}
@@ -43,14 +37,14 @@ export function OnboardingTopBar({
                     isActive
                       ? "bg-[#111827] text-white dark:bg-[#f9fafb] dark:text-[#111827]"
                       : isCompleted
-                        ? "bg-[#e5e7eb] text-[#374151] dark:bg-[#374151] dark:text-[#d1d5db]"
+                        ? "bg-[#e5e7eb] text-[#374151] dark:bg-[#2a2a2a] dark:text-[#d1d5db]"
                         : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800"
                   }`}
                 >
                   <span
                     className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${
                       isActive
-                        ? "bg-white text-[#111827] dark:bg-[#111827] dark:text-[#f9fafb]"
+                        ? "bg-white text-[#111827] dark:bg-[#141414] dark:text-[#f9fafb]"
                         : isCompleted
                           ? "bg-[#6b7280] text-white dark:bg-[#9ca3af] dark:text-[#111827]"
                           : "bg-zinc-200 text-zinc-500 dark:bg-zinc-700"

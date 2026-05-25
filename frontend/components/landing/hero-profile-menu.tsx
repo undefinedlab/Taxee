@@ -81,7 +81,7 @@ export function HeroProfileMenu() {
         onClick={() => setOpen(!open)}
         className={`hero-menu-profile-btn relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden transition-all duration-300 ease-out ${
           showProfile
-            ? "rounded-full bg-gradient-to-br from-[#4a9eed] to-[#2d7fd4] ring-2 ring-white shadow-md"
+            ? "rounded-full bg-gradient-to-br from-landing-active to-landing-active-deep ring-2 ring-white shadow-md"
             : "landing-glass-btn"
         }`}
         aria-label={open ? "Close profile menu" : "Open menu"}

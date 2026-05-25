@@ -196,7 +196,7 @@ export function SectionIcon({
       className={cn(
         "flex shrink-0 items-center justify-center text-[#111827] dark:text-[#f3f4f6]",
         variant === "default" &&
-          "h-10 w-10 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] dark:border-[#374151] dark:bg-[#111827]",
+          "h-10 w-10 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] dark:border-[#2a2a2a] dark:bg-[#141414]",
         variant === "plain" && "h-9 w-9",
         className,
       )}

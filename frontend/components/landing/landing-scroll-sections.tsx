@@ -194,7 +194,7 @@ export function LandingScrollSections() {
                   </p>
                   {/* Active indicator */}
                   {selectedPlatform === key && (
-                    <div className="absolute right-3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-[#4a9eed] dark:bg-[#5eb3f6]" />
+                    <div className="absolute right-3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-landing-active" />
                   )}
                 </button>
               ))}
@@ -228,7 +228,7 @@ export function LandingScrollSections() {
                     </Link>
                     <Link
                       href="/dashboard"
-                      className="inline-flex items-center justify-center gap-2 rounded-xl border-2 border-[#e5e7eb] px-8 py-4 font-landing text-[15px] font-medium text-black transition-all hover:bg-[#f9fafb] hover:border-[#d1d5db] dark:border-[#374151] dark:text-white dark:hover:bg-[#1f2937]"
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border-2 border-[#e5e7eb] px-8 py-4 font-landing text-[15px] font-medium text-black transition-all hover:bg-[#f9fafb] hover:border-[#d1d5db] dark:border-[#2a2a2a] dark:text-white dark:hover:bg-[#1a1a1a]"
                     >
                       Go to Dashboard
                     </Link>

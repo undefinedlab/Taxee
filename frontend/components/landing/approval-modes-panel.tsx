@@ -125,7 +125,7 @@ export function ApprovalModesPanel({
               {active.bestFor.map((item) => (
                 <span
                   key={item}
-                  className="rounded-full border border-[#e5e7eb] px-3 py-1 font-landing text-[11px] text-[#4b5563] dark:border-[#374151] dark:text-[#9ca3af]"
+                  className="rounded-full border border-[#e5e7eb] px-3 py-1 font-landing text-[11px] text-[#4b5563] dark:border-[#2a2a2a] dark:text-[#9ca3af]"
                 >
                   {item}
                 </span>

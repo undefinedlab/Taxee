@@ -120,7 +120,7 @@ export function WalletButton({ className = '', variant = 'default' }: WalletButt
 
   if (variant === 'topbar' || variant === 'dashboard') {
     const btnBase =
-      'inline-flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white px-3 py-2 font-landing text-sm font-medium text-[#111827] transition-colors hover:bg-[#f9fafb] dark:border-[#374151] dark:bg-[#111827] dark:text-[#f9fafb] dark:hover:bg-[#1f2937]';
+      'inline-flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white px-3 py-2 font-landing text-sm font-medium text-[#111827] transition-colors hover:bg-[#f9fafb] dark:border-[#2a2a2a] dark:bg-[#141414] dark:text-[#f9fafb] dark:hover:bg-[#1a1a1a]';
 
     return (
       <ConnectButton.Custom>

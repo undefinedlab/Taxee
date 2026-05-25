@@ -3,11 +3,18 @@
 @tailwind utilities;
 
 :root {
-  --background: #0c0f14;
+  --background: #0a0a0a;
   --foreground: #f4f4f5;
+  --surface-raised: #141414;
+  --surface-border: #262626;
   --landing-blue: #4a9eed;
   --landing-blue-deep: #2d7fd4;
   --landing-green: #3dcc4e;
+  --landing-action: #4a9eed;
+  --landing-action-hover: #2d7fd4;
+  --landing-action-deep: #1d6bb8;
+  --landing-active: #4a9eed;
+  --landing-active-deep: #2d7fd4;
   --landing-lime: #b8f55a;
   --landing-grid: #e8eaed;
 }
@@ -29,52 +36,7 @@ body:has(.landing-root) {
 
 html.dark body:has(.landing-root) {
   color-scheme: dark;
-  background: #0a0c10;
-}
-
-html.dark .landing-marble-bg {
-  background-color: #0c0e12;
-  background-image:
-    radial-gradient(
-      circle at center,
-      rgba(148, 163, 184, 0.12) 1.5px,
-      transparent 1.5px
-    ),
-    linear-gradient(
-      to right,
-      rgba(255, 255, 255, 0.04) 1px,
-      transparent 1px
-    ),
-    linear-gradient(
-      to bottom,
-      rgba(255, 255, 255, 0.04) 1px,
-      transparent 1px
-    ),
-    radial-gradient(
-      ellipse 120% 80% at 0% 0%,
-      rgba(30, 41, 59, 0.5) 0%,
-      transparent 55%
-    ),
-    radial-gradient(
-      ellipse 90% 70% at 100% 20%,
-      rgba(15, 23, 42, 0.6) 0%,
-      transparent 50%
-    ),
-    linear-gradient(165deg, #111827 0%, #0c0e12 40%, #0a0c10 100%);
-  background-size:
-    56px 56px,
-    56px 56px,
-    56px 56px,
-    100% 100%,
-    100% 100%,
-    100% 100%;
-  background-position:
-    28px 28px,
-    0 0,
-    0 0,
-    0 0,
-    0 0,
-    0 0;
+  background: #0a0a0a;
 }
 
 html:has(.landing-root) {
@@ -87,67 +49,112 @@ html:has(.landing-root) {
   }
 }
 
-/* White marble + net node grid */
+/* Page shell — morph wash + dot grid are separate layers */
 .landing-marble-bg {
-  background-color: #f8f7f5;
-  background-image:
-    /* nodes at grid intersections */
-    radial-gradient(
-      circle at center,
-      rgba(100, 116, 139, 0.14) 1.5px,
-      transparent 1.5px
-    ),
-    /* net lines */
-    linear-gradient(
-      to right,
-      rgba(0, 0, 0, 0.05) 1px,
-      transparent 1px
-    ),
-    linear-gradient(
-      to bottom,
-      rgba(0, 0, 0, 0.05) 1px,
-      transparent 1px
-    ),
-    /* marble wash */
-    radial-gradient(
-      ellipse 120% 80% at 0% 0%,
-      rgba(255, 255, 255, 0.92) 0%,
-      transparent 55%
-    ),
-    radial-gradient(
-      ellipse 90% 70% at 100% 20%,
-      rgba(241, 245, 249, 0.85) 0%,
-      transparent 50%
-    ),
-    radial-gradient(
-      ellipse 70% 60% at 30% 100%,
-      rgba(231, 229, 228, 0.3) 0%,
-      transparent 45%
-    ),
-    linear-gradient(
-      165deg,
-      #ffffff 0%,
-      #f8f7f5 30%,
-      #f4f3f1 55%,
-      #fafaf9 80%,
-      #ffffff 100%
-    );
-  background-size:
-    56px 56px,
-    56px 56px,
-    56px 56px,
-    100% 100%,
-    100% 100%,
-    100% 100%,
-    100% 100%;
-  background-position:
-    28px 28px,
-    0 0,
-    0 0,
-    0 0,
-    0 0,
-    0 0,
-    0 0;
+  isolation: isolate;
+  background-color: transparent;
+}
+
+.landing-marble-dots {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-color: transparent;
+  background-image: radial-gradient(
+    circle at center,
+    rgba(100, 116, 139, 0.18) 1px,
+    transparent 1px
+  );
+  background-size: 24px 24px;
+}
+
+html.dark .landing-marble-bg {
+  background-color: transparent;
+}
+
+html.dark .landing-marble-dots {
+  background-image: radial-gradient(
+    circle at center,
+    rgba(163, 163, 163, 0.14) 1px,
+    transparent 1px
+  );
+}
+
+/* Morphing color wash — blobs animated via GSAP */
+.landing-morph-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  filter: blur(72px) saturate(115%);
+  transform: translateZ(0);
+  --morph-a: rgba(255, 255, 255, 0.95);
+  --morph-b: rgba(241, 245, 249, 0.75);
+  --morph-c: rgba(214, 211, 209, 0.55);
+  --morph-d: rgba(186, 210, 235, 0.45);
+  background: linear-gradient(165deg, #fafaf9 0%, #f4f3f1 45%, #eceae6 100%);
+}
+
+html.dark .landing-morph-bg {
+  --morph-a: rgba(38, 38, 38, 0.9);
+  --morph-b: rgba(20, 20, 20, 0.85);
+  --morph-c: rgba(48, 52, 64, 0.55);
+  --morph-d: rgba(30, 45, 70, 0.4);
+  background: linear-gradient(165deg, #141414 0%, #0a0a0a 50%, #000000 100%);
+  filter: blur(88px) saturate(120%);
+}
+
+.landing-morph-blob {
+  position: absolute;
+  border-radius: 50%;
+  will-change: transform;
+  --focal-x: 50%;
+  --focal-y: 50%;
+  background: radial-gradient(
+    circle at var(--focal-x) var(--focal-y),
+    var(--morph-color) 0%,
+    transparent 70%
+  );
+}
+
+.landing-morph-blob-1 {
+  --morph-color: var(--morph-a);
+  width: min(72vw, 720px);
+  height: min(72vw, 720px);
+  left: 8%;
+  top: 6%;
+}
+
+.landing-morph-blob-2 {
+  --morph-color: var(--morph-b);
+  width: min(64vw, 640px);
+  height: min(64vw, 640px);
+  right: 4%;
+  top: 18%;
+}
+
+.landing-morph-blob-3 {
+  --morph-color: var(--morph-c);
+  width: min(58vw, 580px);
+  height: min(58vw, 580px);
+  left: 28%;
+  bottom: 2%;
+}
+
+.landing-morph-blob-4 {
+  --morph-color: var(--morph-d);
+  width: min(50vw, 500px);
+  height: min(50vw, 500px);
+  right: 22%;
+  bottom: 14%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-morph-blob {
+    transform: none !important;
+  }
 }
 
 /* Quadratic layout — glass cards use soft radius */
@@ -161,64 +168,9 @@ html:has(.landing-root) {
   border-radius: 16px;
 }
 
-/* Ambient light behind glass (marble shows through blur) */
+/* Ambient orbs removed — glass reads against dot grid only */
 .landing-ambient {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-.landing-ambient::before,
-.landing-ambient::after {
-  content: "";
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(90px);
-  opacity: 0.55;
-}
-
-.landing-ambient::before {
-  width: min(55vw, 520px);
-  height: min(55vw, 520px);
-  top: -8%;
-  left: -6%;
-  background: radial-gradient(
-    circle,
-    rgba(74, 158, 237, 0.45) 0%,
-    transparent 70%
-  );
-}
-
-.landing-ambient::after {
-  width: min(48vw, 440px);
-  height: min(48vw, 440px);
-  bottom: 12%;
-  right: -4%;
-  background: radial-gradient(
-    circle,
-    rgba(61, 204, 78, 0.35) 0%,
-    transparent 70%
-  );
-}
-
-html.dark .landing-ambient::before {
-  opacity: 0.35;
-  background: radial-gradient(
-    circle,
-    rgba(74, 158, 237, 0.5) 0%,
-    transparent 70%
-  );
-}
-
-html.dark .landing-ambient::after {
-  opacity: 0.28;
-  background: radial-gradient(
-    circle,
-    rgba(61, 204, 78, 0.4) 0%,
-    transparent 70%
-  );
+  display: none;
 }
 
 /* —— Liquid glass surfaces —— */
@@ -228,12 +180,12 @@ html.dark .landing-ambient::after {
   overflow: hidden;
   background: linear-gradient(
     145deg,
-    rgba(255, 255, 255, 0.78) 0%,
-    rgba(255, 255, 255, 0.52) 42%,
-    rgba(255, 255, 255, 0.62) 100%
+    rgba(255, 255, 255, 0.62) 0%,
+    rgba(255, 255, 255, 0.38) 42%,
+    rgba(255, 255, 255, 0.48) 100%
   );
-  backdrop-filter: blur(24px) saturate(190%) brightness(1.02);
-  -webkit-backdrop-filter: blur(24px) saturate(190%) brightness(1.02);
+  backdrop-filter: blur(40px) saturate(190%) brightness(1.03);
+  -webkit-backdrop-filter: blur(40px) saturate(190%) brightness(1.03);
   border: 1px solid rgba(255, 255, 255, 0.72);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.45) inset,
@@ -284,9 +236,9 @@ html.dark .landing-ambient::after {
 html.dark .landing-glass {
   background: linear-gradient(
     145deg,
-    rgba(30, 41, 59, 0.62) 0%,
-    rgba(15, 23, 42, 0.42) 45%,
-    rgba(30, 41, 59, 0.55) 100%
+    rgba(32, 32, 32, 0.58) 0%,
+    rgba(10, 10, 10, 0.42) 45%,
+    rgba(24, 24, 24, 0.52) 100%
   );
   border-color: rgba(255, 255, 255, 0.14);
   box-shadow:
@@ -319,9 +271,9 @@ html.dark .landing-glass::after {
 /* Inner bento / grid cells */
 .landing-glass-cell {
   position: relative;
-  background: rgba(255, 255, 255, 0.22);
-  backdrop-filter: blur(12px) saturate(160%);
-  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  background: rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(28px) saturate(170%);
+  -webkit-backdrop-filter: blur(28px) saturate(170%);
   transition:
     background 0.25s ease,
     box-shadow 0.25s ease;
@@ -348,18 +300,18 @@ html.dark .landing-glass-cell:hover {
   overflow: hidden;
   background: linear-gradient(
     160deg,
-    rgba(255, 255, 255, 0.88) 0%,
-    rgba(255, 255, 255, 0.65) 100%
+    rgba(255, 255, 255, 0.72) 0%,
+    rgba(255, 255, 255, 0.48) 100%
   );
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(36px) saturate(185%);
+  -webkit-backdrop-filter: blur(36px) saturate(185%);
   border: 1px solid rgba(255, 255, 255, 0.75);
   border-radius: 12px;
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.5) inset,
     0 1px 0 rgba(255, 255, 255, 0.85) inset,
     0 12px 40px rgba(15, 23, 42, 0.12),
-    0 4px 16px rgba(74, 158, 237, 0.15);
+    0 4px 16px rgba(0, 0, 0, 0.08);
 }
 
 .landing-glass-widget::before {
@@ -378,8 +330,8 @@ html.dark .landing-glass-cell:hover {
 html.dark .landing-glass-widget {
   background: linear-gradient(
     160deg,
-    rgba(30, 41, 59, 0.75) 0%,
-    rgba(15, 23, 42, 0.55) 100%
+    rgba(32, 32, 32, 0.82) 0%,
+    rgba(10, 10, 10, 0.65) 100%
   );
   border-color: rgba(255, 255, 255, 0.15);
 }
@@ -395,12 +347,12 @@ html.dark .landing-glass-widget {
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.9) inset,
     0 12px 40px rgba(15, 23, 42, 0.12),
-    0 4px 16px rgba(74, 158, 237, 0.1);
+    0 4px 16px rgba(0, 0, 0, 0.08);
 }
 
 html.dark .landing-glass-widget-solid {
-  background: #1f2937;
-  border-color: #374151;
+  background: #141414;
+  border-color: #262626;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.06) inset,
     0 12px 40px rgba(0, 0, 0, 0.35),
@@ -418,8 +370,8 @@ html.dark .landing-glass-widget-solid {
     rgba(45, 127, 212, 0.45) 50%,
     rgba(74, 158, 237, 0.35) 100%
   );
-  backdrop-filter: blur(28px) saturate(200%);
-  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  backdrop-filter: blur(44px) saturate(200%);
+  -webkit-backdrop-filter: blur(44px) saturate(200%);
   border: 1px solid rgba(255, 255, 255, 0.35);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
@@ -440,10 +392,10 @@ html.dark .landing-glass-widget-solid {
 html.dark .landing-glass-blue {
   background: linear-gradient(
     135deg,
-    rgba(45, 127, 212, 0.4) 0%,
-    rgba(30, 41, 59, 0.35) 100%
+    rgba(32, 32, 32, 0.75) 0%,
+    rgba(10, 10, 10, 0.6) 100%
   );
-  border-color: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 /* Accent panel (delegated approval, table stripes) */
@@ -453,15 +405,15 @@ html.dark .landing-glass-blue {
     rgba(232, 244, 253, 0.75) 0%,
     rgba(255, 255, 255, 0.45) 100%
   );
-  backdrop-filter: blur(20px) saturate(170%);
-  -webkit-backdrop-filter: blur(20px) saturate(170%);
+  backdrop-filter: blur(32px) saturate(175%);
+  -webkit-backdrop-filter: blur(32px) saturate(175%);
 }
 
 html.dark .landing-glass-accent {
   background: linear-gradient(
     135deg,
-    rgba(30, 58, 95, 0.55) 0%,
-    rgba(15, 23, 42, 0.4) 100%
+    rgba(28, 28, 28, 0.65) 0%,
+    rgba(10, 10, 10, 0.5) 100%
   );
 }
 
@@ -472,12 +424,12 @@ html.dark .landing-glass-accent {
   overflow: hidden;
   background: linear-gradient(
     145deg,
-    rgba(17, 24, 39, 0.82) 0%,
-    rgba(15, 23, 42, 0.72) 50%,
-    rgba(30, 41, 59, 0.78) 100%
+    rgba(20, 20, 20, 0.92) 0%,
+    rgba(10, 10, 10, 0.88) 50%,
+    rgba(24, 24, 24, 0.9) 100%
   );
-  backdrop-filter: blur(32px) saturate(150%);
-  -webkit-backdrop-filter: blur(32px) saturate(150%);
+  backdrop-filter: blur(48px) saturate(155%);
+  -webkit-backdrop-filter: blur(48px) saturate(155%);
   border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.06) inset,
@@ -509,8 +461,8 @@ html.dark .landing-glass-accent {
     rgba(255, 255, 255, 0.35) 0%,
     rgba(255, 255, 255, 0.55) 100%
   );
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(36px) saturate(185%);
+  -webkit-backdrop-filter: blur(36px) saturate(185%);
   border: 1px solid rgba(255, 255, 255, 0.5);
   border-radius: 16px;
   box-shadow:
@@ -521,8 +473,8 @@ html.dark .landing-glass-accent {
 html.dark .landing-glass-footer {
   background: linear-gradient(
     180deg,
-    rgba(30, 41, 59, 0.45) 0%,
-    rgba(15, 23, 42, 0.55) 100%
+    rgba(28, 28, 28, 0.55) 0%,
+    rgba(10, 10, 10, 0.65) 100%
   );
   border-color: rgba(255, 255, 255, 0.1);
 }
@@ -534,8 +486,8 @@ html.dark .landing-glass-footer {
     rgba(255, 255, 255, 0.75) 0%,
     rgba(255, 255, 255, 0.45) 100%
   );
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(185%);
+  -webkit-backdrop-filter: blur(24px) saturate(185%);
   border: 1px solid rgba(255, 255, 255, 0.65);
   border-radius: 10px;
   box-shadow:
@@ -561,17 +513,17 @@ html.dark .landing-glass-footer {
 html.dark .landing-glass-btn {
   background: linear-gradient(
     160deg,
-    rgba(55, 65, 81, 0.65) 0%,
-    rgba(31, 41, 55, 0.5) 100%
+    rgba(42, 42, 42, 0.75) 0%,
+    rgba(20, 20, 20, 0.6) 100%
   );
-  border-color: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 html.dark .landing-glass-btn:hover {
   background: linear-gradient(
     160deg,
-    rgba(75, 85, 99, 0.7) 0%,
-    rgba(55, 65, 81, 0.55) 100%
+    rgba(58, 58, 58, 0.8) 0%,
+    rgba(32, 32, 32, 0.65) 100%
   );
 }
 
@@ -584,8 +536,8 @@ html.dark .landing-glass-btn:hover {
     rgba(255, 255, 255, 0.92) 0%,
     rgba(255, 255, 255, 0.78) 100%
   );
-  backdrop-filter: blur(24px) saturate(190%);
-  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  backdrop-filter: blur(40px) saturate(195%);
+  -webkit-backdrop-filter: blur(40px) saturate(195%);
   border: 1px solid rgba(255, 255, 255, 0.7);
   border-radius: 12px;
   box-shadow:
@@ -596,8 +548,8 @@ html.dark .landing-glass-btn:hover {
 html.dark .landing-glass-menu {
   background: linear-gradient(
     165deg,
-    rgba(30, 41, 59, 0.9) 0%,
-    rgba(15, 23, 42, 0.85) 100%
+    rgba(28, 28, 28, 0.95) 0%,
+    rgba(10, 10, 10, 0.9) 100%
   );
   border-color: rgba(255, 255, 255, 0.12);
 }
@@ -642,7 +594,7 @@ html.dark .landing-glass-menu-item:hover {
     background: rgba(74, 158, 237, 0.85);
   }
   html.dark .landing-glass {
-    background: rgba(15, 23, 42, 0.94);
+    background: rgba(10, 10, 10, 0.96);
   }
 }
 
@@ -777,13 +729,13 @@ html.dark .landing-scroll-stats {
 }
 
 .landing-showcase-panel {
-  background: #111827;
+  background: #0a0a0a;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
 }
 
 html.dark .landing-showcase-panel {
-  background: #0c0e12;
+  background: #0a0a0a;
   border-color: rgba(255, 255, 255, 0.06);
 }
 
@@ -976,7 +928,7 @@ html.dark .landing-scroll-card-soft:hover {
   grid-area: stats;
 }
 .hero-menu-profile-btn:focus-visible {
-  outline: 2px solid #4a9eed;
+  outline: 2px solid var(--landing-active);
   outline-offset: 2px;
 }
 

@@ -62,7 +62,7 @@ function TgActivateContent() {
   const inTg = isTelegramWebApp();
 
   return (
-    <main className="min-h-screen bg-[#0b0f19] px-4 py-6 text-white">
+    <main className="min-h-screen bg-[#0a0a0a] px-4 py-6 text-white">
       <div className="mx-auto max-w-md space-y-6">
         <div className="space-y-1 text-center">
           <h1 className="font-serif text-xl font-bold">Activate agent</h1>
@@ -111,7 +111,7 @@ export default function TgActivatePage() {
   return (
     <Suspense
       fallback={
-        <main className="min-h-screen bg-[#0b0f19] flex items-center justify-center text-white/60">
+        <main className="min-h-screen bg-[#0a0a0a] flex items-center justify-center text-white/60">
           Loading…
         </main>
       }

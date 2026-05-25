@@ -19,18 +19,30 @@ const queryClient = new QueryClient({
   },
 });
 
-// Custom RainbowKit theme to match Taxee design
+// Custom RainbowKit theme — neutral black (no default blue tint)
 const customTheme = {
   ...darkTheme({
-    accentColor: '#7c7c7c', // Neutral gray to match Taxee theme
+    accentColor: '#4a9eed',
     accentColorForeground: '#ffffff',
     borderRadius: 'medium',
     fontStack: 'system',
   }),
   colors: {
     ...darkTheme().colors,
-    modalBackground: 'rgba(20, 20, 20, 0.95)',
-    modalBackdrop: 'rgba(0, 0, 0, 0.8)',
+    accentColor: '#4a9eed',
+    accentColorForeground: '#ffffff',
+    connectButtonBackground: '#141414',
+    connectButtonInnerBackground: '#0a0a0a',
+    connectButtonText: '#f4f4f5',
+    modalBackground: 'rgba(10, 10, 10, 0.98)',
+    modalBackdrop: 'rgba(0, 0, 0, 0.85)',
+    modalBorder: 'rgba(255, 255, 255, 0.1)',
+    profileForeground: '#141414',
+    profileAction: '#1a1a1a',
+    profileActionHover: '#262626',
+    menuItemBackground: '#141414',
+    generalBorder: 'rgba(255, 255, 255, 0.1)',
+    generalBorderDim: 'rgba(255, 255, 255, 0.06)',
   },
 };
 

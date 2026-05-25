@@ -97,7 +97,7 @@ export function ValueCardsCarousel({
               className={cn(
                 "rounded-full transition-all duration-300",
                 index === active
-                  ? "h-2.5 w-2.5 bg-[#4a9eed] dark:bg-[#5eb3f6]"
+                  ? "h-2.5 w-2.5 bg-landing-active"
                   : "h-2 w-2 bg-[#9ca3af]/40 hover:bg-[#9ca3af]/65 dark:bg-[#6b7280]/55",
               )}
             />
@@ -165,7 +165,7 @@ export function ValueCardsCarousel({
             className={cn(
               "rounded-full transition-all duration-300",
               index === active
-                ? "h-2.5 w-2.5 bg-[#4a9eed] dark:bg-[#5eb3f6]"
+                ? "h-2.5 w-2.5 bg-landing-active"
                 : "h-2 w-2 bg-[#9ca3af]/40 hover:bg-[#9ca3af]/65 dark:bg-[#6b7280]/55",
             )}
           />

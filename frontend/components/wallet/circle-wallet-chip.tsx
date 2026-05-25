@@ -15,7 +15,7 @@ export function CircleWalletChip({ className = '' }: CircleWalletChipProps) {
 
   return (
     <div
-      className={`inline-flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white px-3 py-2 font-landing text-sm dark:border-[#374151] dark:bg-[#111827] ${className}`}
+      className={`inline-flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white px-3 py-2 font-landing text-sm dark:border-[#2a2a2a] dark:bg-[#141414] ${className}`}
       title={addr}
     >
       <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-xs font-medium text-blue-600 dark:text-blue-400">

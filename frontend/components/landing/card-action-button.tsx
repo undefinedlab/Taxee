@@ -16,7 +16,7 @@ export function CardActionButton({
   const inner = (
     <span
       className={cn(
-        "inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#e5e7eb] bg-white text-black transition-colors group-hover:border-[#d1d5db] group-hover:bg-[#f9fafb] dark:border-[#374151] dark:bg-[#111827] dark:text-[#f9fafb] dark:group-hover:bg-[#1f2937]",
+        "inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#e5e7eb] bg-white text-black transition-colors group-hover:border-[#d1d5db] group-hover:bg-[#f9fafb] dark:border-[#2a2a2a] dark:bg-[#141414] dark:text-[#f9fafb] dark:group-hover:bg-[#1f2937]",
         className,
       )}
       aria-hidden

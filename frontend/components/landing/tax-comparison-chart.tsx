@@ -39,7 +39,7 @@ function StackedYearBar({
 
   return (
     <div className="flex flex-1 flex-col items-center">
-      <span className="mb-2.5 font-landing text-xs font-bold tabular-nums text-[#4a9eed] dark:text-[#5eb3f6] sm:text-[13px]">
+      <span className="mb-2.5 font-landing text-xs font-bold tabular-nums text-landing-active dark:text-[#5eb3f6] sm:text-[13px]">
         +{extra}%
       </span>
       <div
@@ -51,7 +51,7 @@ function StackedYearBar({
           style={{ height: greyPx + bluePx }}
         >
           <div
-            className="w-full bg-[#4a9eed] dark:bg-[#5eb3f6]"
+            className="w-full bg-landing-active dark:bg-[#5eb3f6]"
             style={{ height: bluePx }}
             title={`+${extra}% extra with taxee`}
           />
@@ -89,7 +89,7 @@ export function TaxComparisonChart() {
           Without Taxee
         </span>
         <span className="inline-flex items-center gap-2 font-landing text-xs text-[#6b7280] dark:text-[#9ca3af]">
-          <span className="h-3.5 w-3.5 rounded-sm bg-[#4a9eed] dark:bg-[#5eb3f6]" />
+          <span className="h-3.5 w-3.5 rounded-sm bg-landing-active dark:bg-[#5eb3f6]" />
           With Taxee (+{ANNUAL_SPREAD_PCT}%/yr)
         </span>
       </div>

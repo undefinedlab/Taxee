@@ -37,6 +37,7 @@ import { useWalletData } from "@/hooks/use-wallet-data";
 import { truncateAddress, opportunitySummary } from "@/lib/utils";
 import type { ApprovalSettings } from "@/lib/types";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
+import { LandingMorphBackground } from "@/components/landing/landing-morph-background";
 import { useDelegationStatus } from "@/components/wallet/use-taxee-contracts";
 
 interface DashboardClientProps {
@@ -401,7 +402,7 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
 
   return (
     <div className="landing-root landing-marble-bg relative min-h-screen">
-      <div className="landing-ambient" aria-hidden />
+      <LandingMorphBackground />
       <div className="relative z-[1] p-3 sm:p-5 lg:p-8">
         <div className="mx-auto max-w-[1320px] space-y-6 sm:space-y-8">
           <div className="landing-card-sharp landing-glass landing-animate-in overflow-hidden">
@@ -411,8 +412,8 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
             />
             <main className="relative px-6 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10">
               {(needsOnboarding || needsWalletSetup) && (
-                <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/75 p-6 backdrop-blur-sm dark:bg-[#0b0f19]/80">
-                  <div className="max-w-md rounded-xl border border-[#e5e7eb] bg-white p-8 text-center shadow-lg dark:border-[#374151] dark:bg-[#111827]">
+                <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/75 p-6 backdrop-blur-sm dark:bg-[#0a0a0a]/80">
+                  <div className="max-w-md rounded-xl border border-[#e5e7eb] bg-white p-8 text-center shadow-lg dark:border-[#2a2a2a] dark:bg-[#141414]">
                     <h2 className="font-serif text-xl font-bold text-[#111827] dark:text-[#f9fafb]">
                       {needsOnboarding ? "Register your wallet first" : "Complete wallet setup"}
                     </h2>
@@ -432,7 +433,7 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
                 </div>
               )}
               {/* Stats Bar - Clean Design */}
-              <div className="mb-6 grid grid-cols-2 gap-8 border-b border-[#e5e7eb] pb-6 dark:border-[#374151] sm:grid-cols-4">
+              <div className="mb-6 grid grid-cols-2 gap-8 border-b border-[#e5e7eb] pb-6 dark:border-[#2a2a2a] sm:grid-cols-4">
                 <div>
                   <p className="font-landing text-xs uppercase tracking-wider text-[#9ca3af]">Portfolio Value</p>
                   <p className="mt-1 font-serif text-3xl font-semibold text-[#111827] dark:text-[#f9fafb]">
@@ -481,17 +482,17 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
               </div>
 
               {/* Policy Row */}
-              <div className="mb-6 flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-[#e5e7eb] pb-3 dark:border-[#374151]">
+              <div className="mb-6 flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-[#e5e7eb] pb-3 dark:border-[#2a2a2a]">
                 <div className="flex items-center gap-2">
                   <span className="font-landing text-xs uppercase tracking-wider text-[#9ca3af]">Harvest</span>
                   <span className="font-landing text-sm font-medium text-[#111827] dark:text-[#f9fafb]">−{displayAgent.policy.harvestThresholdPct}%</span>
                 </div>
-                <div className="h-4 w-px bg-[#e5e7eb] dark:bg-[#374151]" />
+                <div className="h-4 w-px bg-[#e5e7eb] dark:bg-[#2a2a2a]" />
                 <div className="flex items-center gap-2">
                   <span className="font-landing text-xs uppercase tracking-wider text-[#9ca3af]">Jurisdiction</span>
                   <span className="font-landing text-sm font-medium text-[#111827] dark:text-[#f9fafb]">{displayAgent.policy.jurisdiction}</span>
                 </div>
-                <div className="h-4 w-px bg-[#e5e7eb] dark:bg-[#374151]" />
+                <div className="h-4 w-px bg-[#e5e7eb] dark:bg-[#2a2a2a]" />
                 <div className="flex items-center gap-2">
                   <span className="font-landing text-xs uppercase tracking-wider text-[#9ca3af]">Objective</span>
                   <span className="font-landing text-sm font-medium capitalize text-[#111827] dark:text-[#f9fafb]">{displayAgent.policy.primaryObjective.replace("_", " ")}</span>
@@ -519,7 +520,7 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
                           type="button"
                           onClick={() => void handleRefreshOpportunities()}
                           disabled={refreshingOpps}
-                          className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#e5e7eb] text-[#6b7280] transition-colors hover:bg-white/50 hover:text-[#111827] disabled:opacity-50 dark:border-[#374151] dark:text-[#9ca3af] dark:hover:bg-white/10 dark:hover:text-[#f9fafb]"
+                          className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#e5e7eb] text-[#6b7280] transition-colors hover:bg-white/50 hover:text-[#111827] disabled:opacity-50 dark:border-[#2a2a2a] dark:text-[#9ca3af] dark:hover:bg-white/10 dark:hover:text-[#f9fafb]"
                           title="Check for new opportunities"
                           aria-label="Refresh opportunities"
                         >
@@ -554,7 +555,7 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
                     )}
                   </div>
 
-                  <div className="mb-4 inline-flex rounded-lg border border-[#e5e7eb] bg-white/50 p-1 dark:border-[#374151] dark:bg-white/5">
+                  <div className="mb-4 inline-flex rounded-lg border border-[#e5e7eb] bg-white/50 p-1 dark:border-[#2a2a2a] dark:bg-white/5">
                     <button
                       type="button"
                       onClick={() => setActivityTab("opportunities")}
@@ -720,7 +721,7 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
                         <span className="font-landing text-lg font-medium capitalize text-[#111827] dark:text-[#f9fafb]">
                           {demoRegime.label.replace("-", " ")}
                         </span>
-                        <span className="rounded-full bg-[#f3f4f6] px-3 py-1 font-landing text-xs text-[#6b7280] dark:bg-[#374151] dark:text-[#9ca3af]">
+                        <span className="rounded-full bg-[#f3f4f6] px-3 py-1 font-landing text-xs text-[#6b7280] dark:bg-[#2a2a2a] dark:text-[#9ca3af]">
                           {Math.round(demoRegime.confidence * 100)}%
                         </span>
                       </div>
@@ -766,7 +767,7 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
                         livePositions.slice(0, 6).map((pos, index) => (
                           <div key={`${pos.symbol}-${index}`} className="flex items-center justify-between rounded-lg bg-white/50 px-3 py-2 dark:bg-white/5">
                             <div className="flex items-center gap-3">
-                              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#f3f4f6] font-bold text-xs text-[#374151] dark:bg-[#374151] dark:text-[#d1d5db]">
+                              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#f3f4f6] font-bold text-xs text-[#374151] dark:bg-[#2a2a2a] dark:text-[#d1d5db]">
                                 {pos.symbol.slice(0, 2)}
                               </div>
                               <div>
@@ -800,7 +801,7 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
       {/* Settings Modal */}
       {settingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-xl border border-[#e5e7eb] bg-white p-6 shadow-xl dark:border-[#374151] dark:bg-[#111827]">
+          <div className="w-full max-w-md rounded-xl border border-[#e5e7eb] bg-white p-6 shadow-xl dark:border-[#2a2a2a] dark:bg-[#141414]">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="font-serif text-xl font-bold text-[#111827] dark:text-[#f9fafb]">
                 Agent settings
@@ -815,7 +816,7 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
               </button>
             </div>
 
-            <div className="mb-4 rounded-lg bg-[#f9fafb] p-3 font-landing text-xs text-[#6b7280] dark:bg-[#1f2937] dark:text-[#9ca3af]">
+            <div className="mb-4 rounded-lg bg-[#f9fafb] p-3 font-landing text-xs text-[#6b7280] dark:bg-[#1a1a1a] dark:text-[#9ca3af]">
               <p>
                 <span className="font-medium text-[#111827] dark:text-[#f9fafb]">Wallet mode:</span>{" "}
                 {connType === "circle"
@@ -836,7 +837,7 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
               <button
                 type="button"
                 onClick={() => void handleResyncAgent()}
-                className="flex w-full items-center gap-3 rounded-lg border border-[#e5e7eb] p-4 text-left transition-colors hover:bg-[#f9fafb] dark:border-[#374151] dark:hover:bg-[#1f2937]"
+                className="flex w-full items-center gap-3 rounded-lg border border-[#e5e7eb] p-4 text-left transition-colors hover:bg-[#f9fafb] dark:border-[#2a2a2a] dark:hover:bg-[#1a1a1a]"
               >
                 <div>
                   <p className="font-landing font-medium text-[#111827] dark:text-[#f9fafb]">
@@ -852,7 +853,7 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
                 </div>
               </button>
 
-              <button type="button" className="flex w-full items-center gap-3 rounded-lg border border-[#e5e7eb] p-4 text-left transition-colors hover:bg-[#f9fafb] dark:border-[#374151] dark:hover:bg-[#1f2937]">
+              <button type="button" className="flex w-full items-center gap-3 rounded-lg border border-[#e5e7eb] p-4 text-left transition-colors hover:bg-[#f9fafb] dark:border-[#2a2a2a] dark:hover:bg-[#1a1a1a]">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#9ca3af]">
                   <rect x="6" y="4" width="12" height="16" rx="2" />
                   <line x1="12" y1="8" x2="12" y2="8.01" />
@@ -865,7 +866,7 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
                 </div>
               </button>
 
-              <button className="flex w-full items-center gap-3 rounded-lg border border-[#e5e7eb] p-4 text-left transition-colors hover:bg-[#f9fafb] dark:border-[#374151] dark:hover:bg-[#1f2937]">
+              <button className="flex w-full items-center gap-3 rounded-lg border border-[#e5e7eb] p-4 text-left transition-colors hover:bg-[#f9fafb] dark:border-[#2a2a2a] dark:hover:bg-[#1a1a1a]">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#9ca3af]">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
@@ -876,7 +877,7 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
                 </div>
               </button>
 
-              <button className="flex w-full items-center gap-3 rounded-lg border border-[#e5e7eb] p-4 text-left transition-colors hover:bg-[#f9fafb] dark:border-[#374151] dark:hover:bg-[#1f2937]">
+              <button className="flex w-full items-center gap-3 rounded-lg border border-[#e5e7eb] p-4 text-left transition-colors hover:bg-[#f9fafb] dark:border-[#2a2a2a] dark:hover:bg-[#1a1a1a]">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#9ca3af]">
                   <circle cx="12" cy="12" r="10" />
                   <polyline points="12 6 12 12 16 14" />
@@ -887,7 +888,7 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
                 </div>
               </button>
 
-              <button className="flex w-full items-center gap-3 rounded-lg border border-[#e5e7eb] p-4 text-left transition-colors hover:bg-[#f9fafb] dark:border-[#374151] dark:hover:bg-[#1f2937]">
+              <button className="flex w-full items-center gap-3 rounded-lg border border-[#e5e7eb] p-4 text-left transition-colors hover:bg-[#f9fafb] dark:border-[#2a2a2a] dark:hover:bg-[#1a1a1a]">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#9ca3af]">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                   <polyline points="7 10 12 15 17 10" />
@@ -899,7 +900,7 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
                 </div>
               </button>
 
-              <div className="my-4 border-t border-[#e5e7eb] dark:border-[#374151]" />
+              <div className="my-4 border-t border-[#e5e7eb] dark:border-[#2a2a2a]" />
 
               <button
                 type="button"
@@ -956,7 +957,7 @@ function TransactionHistoryRow({ item }: { item: Opportunity }) {
             <span className="rounded-full bg-white/70 px-3 py-1 font-landing text-xs text-[#9ca3af] dark:bg-white/10">
               {typeLabels[item.type] ?? item.type}
             </span>
-            <span className="rounded-full bg-[#f3f4f6] px-3 py-1 font-landing text-xs font-medium capitalize text-[#374151] dark:bg-[#374151] dark:text-[#d1d5db]">
+            <span className="rounded-full bg-[#f3f4f6] px-3 py-1 font-landing text-xs font-medium capitalize text-[#374151] dark:bg-[#2a2a2a] dark:text-[#d1d5db]">
               {STATUS_LABELS[item.status]}
             </span>
             {item.taxSavingEstimate > 0 && (
@@ -1065,7 +1066,7 @@ function OpportunityCard({
             <button
               type="button"
               onClick={() => void onSkip()}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#e5e7eb] px-4 py-2 font-landing text-sm text-[#6b7280] transition-colors hover:bg-white/50 dark:border-[#374151] dark:text-[#9ca3af] dark:hover:bg-white/10"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#e5e7eb] px-4 py-2 font-landing text-sm text-[#6b7280] transition-colors hover:bg-white/50 dark:border-[#2a2a2a] dark:text-[#9ca3af] dark:hover:bg-white/10"
             >
               Skip
             </button>
@@ -1078,7 +1079,7 @@ function OpportunityCard({
           <button
             type="button"
             onClick={() => void onApprove()}
-            className="shrink-0 rounded-lg border border-[#e5e7eb] px-3 py-1.5 font-landing text-xs text-[#6b7280] hover:bg-white/50 dark:border-[#374151] dark:hover:bg-white/10"
+            className="shrink-0 rounded-lg border border-[#e5e7eb] px-3 py-1.5 font-landing text-xs text-[#6b7280] hover:bg-white/50 dark:border-[#2a2a2a] dark:hover:bg-white/10"
           >
             Retry
           </button>

@@ -6,11 +6,12 @@ import { LandingScrollSections } from "@/components/landing/landing-scroll-secti
 import { LandingFooter } from "@/components/landing/landing-footer";
 import { hero, heroStats } from "@/components/landing/landing-content";
 import { landingNavLinks } from "@/components/landing/nav-links";
+import { LandingMorphBackground } from "@/components/landing/landing-morph-background";
 
 export function LandingPage() {
   return (
     <div className="landing-root landing-marble-bg relative min-h-screen">
-      <div className="landing-ambient" aria-hidden />
+      <LandingMorphBackground />
       <div className="relative z-[1] p-3 sm:p-5 lg:p-8">
         <div className="mx-auto max-w-[1320px] space-y-6 sm:space-y-8">
           <div className="landing-card-sharp landing-glass landing-animate-in">
@@ -37,8 +38,8 @@ export function LandingPage() {
                 className="landing-area-hero landing-grid-line flex flex-col justify-center border-b px-6 py-10 sm:px-8 sm:py-12 lg:border-b-0 lg:border-l lg:px-10 lg:py-10 xl:px-12"
               >
                 <div className="landing-animate-in landing-delay-3 flex items-center gap-2">
-                  <span className="inline-flex h-3 w-3 bg-[#3dcc4e]" />
-                  <span className="inline-block h-3 w-3 bg-[#4a9eed]" />
+                  <span className="inline-flex h-3 w-3 rounded-sm bg-landing-active" />
+                  <span className="inline-block h-3 w-3 rounded-sm bg-black/20 dark:bg-white/25" />
                   <span className="font-landing text-[10px] font-bold uppercase tracking-[0.14em] text-black dark:text-[#f9fafb]">
                     {hero.eyebrow}
                   </span>
@@ -53,19 +54,19 @@ export function LandingPage() {
                 <div className="landing-animate-in landing-delay-6 mt-9 flex flex-wrap items-center gap-5">
                   <Link
                     href="/onboarding"
-                    className="group inline-flex items-stretch overflow-hidden bg-black shadow-[0_4px_16px_rgba(0,0,0,0.12)] dark:bg-[#f9fafb] dark:shadow-none"
+                    className="group inline-flex items-stretch overflow-hidden rounded-xl bg-black shadow-[0_4px_16px_rgba(0,0,0,0.12)] dark:bg-[#f9fafb] dark:shadow-none"
                   >
                     <span className="flex items-center px-6 py-3.5 font-landing text-[14px] font-medium text-white dark:text-[#111827]">
                       {hero.ctaPrimary}
                     </span>
-                    <span className="flex w-[52px] items-center justify-center bg-[#3dcc4e] transition-colors group-hover:bg-[#34b844]">
+                    <span className="flex w-[52px] items-center justify-center rounded-r-xl bg-landing-action text-white transition-colors group-hover:bg-landing-action-hover">
                       <svg
                         className="landing-cta-arrow"
                         width="20"
                         height="20"
                         viewBox="0 0 20 20"
                         fill="none"
-                        stroke="#111827"
+                        stroke="currentColor"
                         strokeWidth="2.2"
                         aria-hidden
                       >

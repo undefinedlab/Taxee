@@ -21,6 +21,7 @@ import { SimpleWalletConnect } from "@/components/wallet/simple-wallet-connect";
 import { CircleWalletSetup } from "@/components/wallet/circle-wallet-setup";
 import { AgentActivation } from "@/components/wallet/agent-activation";
 import { useWalletData } from "@/hooks/use-wallet-data";
+import { LandingMorphBackground } from "@/components/landing/landing-morph-background";
 
 type Step = "wallet-input" | "wallet-connect" | "circle-setup" | "import" | "policy" | "review" | "activate" | "done";
 
@@ -122,13 +123,13 @@ export default function OnboardingPage() {
 
   return (
     <div className="landing-root landing-marble-bg relative min-h-screen">
-      <div className="landing-ambient" aria-hidden />
+      <LandingMorphBackground />
       <div className="relative z-[1] p-3 sm:p-5 lg:p-8">
         <div className="mx-auto max-w-[1320px] space-y-6 sm:space-y-8">
           <div className="landing-card-sharp landing-glass landing-animate-in overflow-hidden">
             <OnboardingTopBar currentStep={currentStepNumber} />
 
-            <main className="landing-grid-line border-t border-[#e5e7eb] bg-white/50 px-6 py-10 dark:border-[#1f2937] dark:bg-[#0b0f19]/50 sm:px-8 sm:py-12 lg:px-12 lg:py-16">
+            <main className="landing-grid-line border-t border-[#e5e7eb] bg-white/50 px-6 py-10 dark:border-[#262626] dark:bg-[#0a0a0a]/50 sm:px-8 sm:py-12 lg:px-12 lg:py-16">
               {/* Back button */}
               {step !== "wallet-input" && step !== "done" && (
                 <div className="mb-6">
@@ -173,10 +174,10 @@ export default function OnboardingPage() {
                           saveWalletConnectionType("external_eip7702");
                           setStep("wallet-connect");
                         }}
-                        className="group w-full rounded-xl border border-[#e5e7eb] bg-white p-6 text-left transition-all hover:border-[#111827] hover:shadow-lg dark:border-[#374151] dark:bg-[#111827] dark:hover:border-[#f9fafb]"
+                        className="group w-full rounded-xl border border-[#e5e7eb] bg-white p-6 text-left transition-all hover:border-[#111827] hover:shadow-lg dark:border-[#2a2a2a] dark:bg-[#141414] dark:hover:border-[#f9fafb]"
                       >
                         <div className="flex items-center gap-4">
-                          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#f3f4f6] dark:bg-[#374151]">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#f3f4f6] dark:bg-[#2a2a2a]">
                             <svg className="h-6 w-6 text-[#111827] dark:text-[#f9fafb]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                             </svg>
@@ -198,10 +199,10 @@ export default function OnboardingPage() {
                       {/* Option 2: Circle MPC Wallet */}
                       <div className="relative">
                         <div className="absolute inset-0 flex items-center">
-                          <div className="w-full border-t border-[#e5e7eb] dark:border-[#374151]" />
+                          <div className="w-full border-t border-[#e5e7eb] dark:border-[#2a2a2a]" />
                         </div>
                         <div className="relative flex justify-center text-sm">
-                          <span className="bg-white px-2 font-landing text-[#9ca3af] dark:bg-[#0b0f19]">or</span>
+                          <span className="bg-white px-2 font-landing text-[#9ca3af] dark:bg-[#0a0a0a]">or</span>
                         </div>
                       </div>
 
@@ -212,10 +213,10 @@ export default function OnboardingPage() {
                           saveWalletConnectionType("circle");
                           setStep("circle-setup");
                         }}
-                        className="group w-full rounded-xl border border-[#e5e7eb] bg-white p-6 text-left transition-all hover:border-[#111827] hover:shadow-lg dark:border-[#374151] dark:bg-[#111827] dark:hover:border-[#f9fafb]"
+                        className="group w-full rounded-xl border border-[#e5e7eb] bg-white p-6 text-left transition-all hover:border-[#111827] hover:shadow-lg dark:border-[#2a2a2a] dark:bg-[#141414] dark:hover:border-[#f9fafb]"
                       >
                         <div className="flex items-center gap-4">
-                          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#f3f4f6] dark:bg-[#374151]">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#f3f4f6] dark:bg-[#2a2a2a]">
                             <svg className="h-6 w-6 text-[#111827] dark:text-[#f9fafb]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                             </svg>
@@ -237,10 +238,10 @@ export default function OnboardingPage() {
                       {/* Option 3: Watch Address */}
                       <div className="relative">
                         <div className="absolute inset-0 flex items-center">
-                          <div className="w-full border-t border-[#e5e7eb] dark:border-[#374151]" />
+                          <div className="w-full border-t border-[#e5e7eb] dark:border-[#2a2a2a]" />
                         </div>
                         <div className="relative flex justify-center text-sm">
-                          <span className="bg-white px-2 font-landing text-[#9ca3af] dark:bg-[#0b0f19]">or</span>
+                          <span className="bg-white px-2 font-landing text-[#9ca3af] dark:bg-[#0a0a0a]">or</span>
                         </div>
                       </div>
 
@@ -250,7 +251,7 @@ export default function OnboardingPage() {
                           placeholder="0x… (watch-only mode)"
                           value={wallet}
                           onChange={(e) => setWallet(e.target.value)}
-                          className="w-full rounded-lg border border-[#e5e7eb] bg-white px-4 py-3 font-mono text-sm text-[#111827] placeholder:text-[#9ca3af] focus:border-[#111827] focus:outline-none focus:ring-1 focus:ring-[#111827]/20 dark:border-[#374151] dark:bg-[#111827] dark:text-[#f9fafb] dark:focus:border-[#f9fafb] dark:focus:ring-[#f9fafb]/20"
+                          className="w-full rounded-lg border border-[#e5e7eb] bg-white px-4 py-3 font-mono text-sm text-[#111827] placeholder:text-[#9ca3af] focus:border-[#111827] focus:outline-none focus:ring-1 focus:ring-[#111827]/20 dark:border-[#2a2a2a] dark:bg-[#141414] dark:text-[#f9fafb] dark:focus:border-[#f9fafb] dark:focus:ring-[#f9fafb]/20"
                         />
                         <button
                           type="button"
@@ -316,7 +317,7 @@ export default function OnboardingPage() {
                     </div>
 
                     {walletLoading ? (
-                      <div className="rounded-lg border border-[#e5e7eb] bg-white p-8 text-center dark:border-[#1f2937] dark:bg-[#111827]">
+                      <div className="rounded-lg border border-[#e5e7eb] bg-white p-8 text-center dark:border-[#262626] dark:bg-[#141414]">
                         <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-[#6b7280] border-t-transparent dark:border-[#9ca3af]" />
                         <p className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
                           Scanning blockchain for balances...
@@ -338,7 +339,7 @@ export default function OnboardingPage() {
                     ) : (
                       <div className="space-y-4">
                         {/* Show found positions summary */}
-                        <div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4 dark:border-[#374151] dark:bg-[#1f2937]">
+                        <div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4 dark:border-[#2a2a2a] dark:bg-[#1a1a1a]">
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="font-landing text-xs text-[#6b7280] dark:text-[#9ca3af]">{walletMode}</p>
@@ -367,9 +368,9 @@ export default function OnboardingPage() {
                             <p className="font-landing text-xs uppercase tracking-wider text-[#9ca3af]">Preview</p>
                             <div className="space-y-2 max-h-40 overflow-y-auto">
                               {positions.slice(0, 3).map((pos, idx) => (
-                                <div key={idx} className="flex items-center justify-between rounded-lg border border-[#e5e7eb] bg-white p-3 dark:border-[#374151] dark:bg-[#111827]">
+                                <div key={idx} className="flex items-center justify-between rounded-lg border border-[#e5e7eb] bg-white p-3 dark:border-[#2a2a2a] dark:bg-[#141414]">
                                   <div className="flex items-center gap-2">
-                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f3f4f6] text-xs font-bold text-[#374151] dark:bg-[#374151] dark:text-[#d1d5db]">
+                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f3f4f6] text-xs font-bold text-[#374151] dark:bg-[#2a2a2a] dark:text-[#d1d5db]">
                                       {pos.symbol.charAt(0)}
                                     </div>
                                     <span className="font-landing font-medium text-sm text-[#111827] dark:text-[#f9fafb]">{pos.symbol}</span>
@@ -436,7 +437,7 @@ export default function OnboardingPage() {
                       </div>
 
                       {/* Summary card */}
-                      <div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4 dark:border-[#374151] dark:bg-[#1f2937]">
+                      <div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4 dark:border-[#2a2a2a] dark:bg-[#1a1a1a]">
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <p className="font-landing text-xs text-[#6b7280] dark:text-[#9ca3af]">Total value</p>
@@ -456,14 +457,14 @@ export default function OnboardingPage() {
                       {/* Positions list */}
                       <div className="space-y-3">
                         {walletLoading ? (
-                          <div className="rounded-lg border border-[#e5e7eb] bg-white p-8 text-center dark:border-[#1f2937] dark:bg-[#111827]">
+                          <div className="rounded-lg border border-[#e5e7eb] bg-white p-8 text-center dark:border-[#262626] dark:bg-[#141414]">
                             <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-[#6b7280] border-t-transparent dark:border-[#9ca3af]" />
                             <p className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
                               Loading portfolio from blockchain...
                             </p>
                           </div>
                         ) : positions.length === 0 ? (
-                          <div className="space-y-4 rounded-lg border border-[#e5e7eb] bg-white p-6 text-center dark:border-[#1f2937] dark:bg-[#111827]">
+                          <div className="space-y-4 rounded-lg border border-[#e5e7eb] bg-white p-6 text-center dark:border-[#262626] dark:bg-[#141414]">
                             <p className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
                               No positions found on {walletMode}
                               {walletAddress ? ` ${truncateAddress(walletAddress)}` : ""}
@@ -476,10 +477,10 @@ export default function OnboardingPage() {
                           positions.map((pos, index) => (
                             <div
                               key={index}
-                              className="flex items-center justify-between rounded-lg border border-[#e5e7eb] bg-white p-4 dark:border-[#374151] dark:bg-[#111827]"
+                              className="flex items-center justify-between rounded-lg border border-[#e5e7eb] bg-white p-4 dark:border-[#2a2a2a] dark:bg-[#141414]"
                             >
                               <div className="flex items-center gap-3">
-                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#f3f4f6] font-bold text-[#374151] dark:bg-[#374151] dark:text-[#d1d5db]">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#f3f4f6] font-bold text-[#374151] dark:bg-[#2a2a2a] dark:text-[#d1d5db]">
                                   {pos.symbol.charAt(0)}
                                 </div>
                                 <div>
@@ -530,7 +531,7 @@ export default function OnboardingPage() {
                                   .value as UserPolicy["jurisdiction"],
                               })
                             }
-                            className="w-full rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 font-landing text-sm text-[#111827] focus:border-[#111827] focus:outline-none focus:ring-1 focus:ring-[#111827]/20 dark:border-[#374151] dark:bg-[#111827] dark:text-[#f9fafb] dark:focus:border-[#f9fafb] dark:focus:ring-[#f9fafb]/20"
+                            className="w-full rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 font-landing text-sm text-[#111827] focus:border-[#111827] focus:outline-none focus:ring-1 focus:ring-[#111827]/20 dark:border-[#2a2a2a] dark:bg-[#141414] dark:text-[#f9fafb] dark:focus:border-[#f9fafb] dark:focus:ring-[#f9fafb]/20"
                           >
                             <option value="US">United States</option>
                             <option value="UK">United Kingdom</option>
@@ -554,7 +555,7 @@ export default function OnboardingPage() {
                                 harvestThresholdPct: Number(e.target.value),
                               })
                             }
-                            className="w-full rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 font-landing text-sm text-[#111827] focus:border-[#111827] focus:outline-none focus:ring-1 focus:ring-[#111827]/20 dark:border-[#374151] dark:bg-[#111827] dark:text-[#f9fafb] dark:focus:border-[#f9fafb] dark:focus:ring-[#f9fafb]/20"
+                            className="w-full rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 font-landing text-sm text-[#111827] focus:border-[#111827] focus:outline-none focus:ring-1 focus:ring-[#111827]/20 dark:border-[#2a2a2a] dark:bg-[#141414] dark:text-[#f9fafb] dark:focus:border-[#f9fafb] dark:focus:ring-[#f9fafb]/20"
                           >
                             <option value={-5}>5% loss</option>
                             <option value={-8}>8% loss</option>
@@ -575,7 +576,7 @@ export default function OnboardingPage() {
                                 minHarvestLossUsd: Number(e.target.value),
                               })
                             }
-                            className="w-full rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 font-landing text-sm text-[#111827] focus:border-[#111827] focus:outline-none focus:ring-1 focus:ring-[#111827]/20 dark:border-[#374151] dark:bg-[#111827] dark:text-[#f9fafb] dark:focus:border-[#f9fafb] dark:focus:ring-[#f9fafb]/20"
+                            className="w-full rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 font-landing text-sm text-[#111827] focus:border-[#111827] focus:outline-none focus:ring-1 focus:ring-[#111827]/20 dark:border-[#2a2a2a] dark:bg-[#141414] dark:text-[#f9fafb] dark:focus:border-[#f9fafb] dark:focus:ring-[#f9fafb]/20"
                           >
                             <option value={0}>Any loss size</option>
                             <option value={50}>$50+</option>
@@ -598,7 +599,7 @@ export default function OnboardingPage() {
                                 heartbeatIntervalMinutes: Number(e.target.value),
                               })
                             }
-                            className="w-full rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 font-landing text-sm text-[#111827] focus:border-[#111827] focus:outline-none focus:ring-1 focus:ring-[#111827]/20 dark:border-[#374151] dark:bg-[#111827] dark:text-[#f9fafb] dark:focus:border-[#f9fafb] dark:focus:ring-[#f9fafb]/20"
+                            className="w-full rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 font-landing text-sm text-[#111827] focus:border-[#111827] focus:outline-none focus:ring-1 focus:ring-[#111827]/20 dark:border-[#2a2a2a] dark:bg-[#141414] dark:text-[#f9fafb] dark:focus:border-[#f9fafb] dark:focus:ring-[#f9fafb]/20"
                           >
                             <option value={15}>Every 15 minutes</option>
                             <option value={30}>Every 30 minutes</option>
@@ -625,7 +626,7 @@ export default function OnboardingPage() {
                             {goals.map((goal, index) => (
                               <div
                                 key={index}
-                                className="flex items-start gap-2 rounded-lg border border-[#e5e7eb] bg-white p-3 dark:border-[#374151] dark:bg-[#111827]"
+                                className="flex items-start gap-2 rounded-lg border border-[#e5e7eb] bg-white p-3 dark:border-[#2a2a2a] dark:bg-[#141414]"
                               >
                                 <span className="mt-0.5 text-[#9ca3af]">•</span>
                                 <p className="flex-1 font-landing text-sm text-[#111827] dark:text-[#f9fafb]">
@@ -656,7 +657,7 @@ export default function OnboardingPage() {
                                   addGoal();
                                 }
                               }}
-                              className="flex-1 rounded-lg border border-[#e5e7eb] bg-white px-3 py-2 font-landing text-sm text-[#111827] placeholder:text-[#9ca3af] focus:border-[#111827] focus:outline-none focus:ring-1 focus:ring-[#111827]/20 dark:border-[#374151] dark:bg-[#111827] dark:text-[#f9fafb] dark:focus:border-[#f9fafb] dark:focus:ring-[#f9fafb]/20"
+                              className="flex-1 rounded-lg border border-[#e5e7eb] bg-white px-3 py-2 font-landing text-sm text-[#111827] placeholder:text-[#9ca3af] focus:border-[#111827] focus:outline-none focus:ring-1 focus:ring-[#111827]/20 dark:border-[#2a2a2a] dark:bg-[#141414] dark:text-[#f9fafb] dark:focus:border-[#f9fafb] dark:focus:ring-[#f9fafb]/20"
                             />
                             <button
                               type="button"
@@ -710,7 +711,7 @@ export default function OnboardingPage() {
                     </div>
 
                     {/* Portfolio Summary */}
-                    <div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4 dark:border-[#374151] dark:bg-[#1f2937]">
+                    <div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4 dark:border-[#2a2a2a] dark:bg-[#1a1a1a]">
                       <h3 className="font-landing text-sm font-medium text-[#111827] dark:text-[#f9fafb] mb-3">
                         Portfolio ({positions.length} positions)
                       </h3>
@@ -727,7 +728,7 @@ export default function OnboardingPage() {
                           <p className="text-xs text-[#9ca3af] text-center">+{positions.length - 5} more</p>
                         )}
                       </div>
-                      <div className="mt-3 pt-3 border-t border-[#e5e7eb] dark:border-[#374151]">
+                      <div className="mt-3 pt-3 border-t border-[#e5e7eb] dark:border-[#2a2a2a]">
                         <div className="flex justify-between">
                           <span className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">Total Value</span>
                           <span className="font-landing font-semibold text-[#111827] dark:text-[#f9fafb]">${totalValueUsd.toLocaleString()}</span>
@@ -736,7 +737,7 @@ export default function OnboardingPage() {
                     </div>
 
                     {/* Policy Summary */}
-                    <div className="rounded-lg border border-[#e5e7eb] bg-white p-4 dark:border-[#374151] dark:bg-[#111827]">
+                    <div className="rounded-lg border border-[#e5e7eb] bg-white p-4 dark:border-[#2a2a2a] dark:bg-[#141414]">
                       <h3 className="font-landing text-sm font-medium text-[#111827] dark:text-[#f9fafb] mb-3">
                         Agent Policy
                       </h3>
@@ -766,7 +767,7 @@ export default function OnboardingPage() {
 
                    
                     {walletConnectionType === "watch" && (
-                      <div className="p-4 rounded-xl bg-[#f9fafb] border border-[#e5e7eb] dark:border-[#374151] dark:bg-[#1f2937]">
+                      <div className="p-4 rounded-xl bg-[#f9fafb] border border-[#e5e7eb] dark:border-[#2a2a2a] dark:bg-[#1a1a1a]">
                         <p className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
                           Watch-only mode: Taxee scans and suggests actions. You execute trades yourself in your wallet.
                         </p>
@@ -797,7 +798,7 @@ export default function OnboardingPage() {
                       <button
                         type="button"
                         onClick={() => setStep("policy")}
-                        className="flex-1 px-6 py-3 rounded-xl border border-[#e5e7eb] font-landing text-sm font-medium text-[#6b7280] hover:bg-[#f9fafb] dark:border-[#374151] dark:text-[#9ca3af] dark:hover:bg-[#1f2937]"
+                        className="flex-1 px-6 py-3 rounded-xl border border-[#e5e7eb] font-landing text-sm font-medium text-[#6b7280] hover:bg-[#f9fafb] dark:border-[#2a2a2a] dark:text-[#9ca3af] dark:hover:bg-[#1a1a1a]"
                       >
                         Edit Policy
                       </button>
@@ -832,7 +833,7 @@ export default function OnboardingPage() {
 
                 {step === "done" && agentId && (
                   <div className="space-y-6 text-center">
-                    <div className="rounded-xl border border-[#e5e7eb] bg-[#f9fafb] p-8 dark:border-[#374151] dark:bg-[#1f2937]">
+                    <div className="rounded-xl border border-[#e5e7eb] bg-[#f9fafb] p-8 dark:border-[#2a2a2a] dark:bg-[#1a1a1a]">
                       <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#111827] dark:bg-[#f9fafb]">
                         <svg
                           width="32"

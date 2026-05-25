@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { TaxeeLogo } from '@/components/landing/logo';
-import { ThemeToggle } from '@/components/landing/theme-toggle';
 import { WalletButton } from '@/components/wallet/wallet-button';
 import { CircleWalletChip } from '@/components/wallet/circle-wallet-chip';
 import type { WalletConnectionType } from '@/lib/types';
@@ -14,7 +13,7 @@ interface DashboardHeaderProps {
 
 export function DashboardHeader({ onOpenSettings, walletConnectionType }: DashboardHeaderProps) {
   return (
-    <header className="landing-area-hero-topbar landing-grid-line flex items-center justify-between gap-3 border-b border-[#e5e7eb] px-4 py-3 dark:border-[#1f2937] sm:gap-4 sm:px-5 lg:px-6">
+    <header className="landing-area-hero-topbar landing-grid-line flex items-center justify-between gap-3 border-b border-[#e5e7eb] px-4 py-3 dark:border-[#262626] sm:gap-4 sm:px-5 lg:px-6">
       <Link href="/" className="shrink-0" aria-label="taxee home">
         <TaxeeLogo showWordmark />
       </Link>
@@ -24,7 +23,7 @@ export function DashboardHeader({ onOpenSettings, walletConnectionType }: Dashbo
           <button
             type="button"
             onClick={onOpenSettings}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#e5e7eb] text-[#6b7280] transition-colors hover:bg-[#f9fafb] hover:text-[#111827] dark:border-[#374151] dark:text-[#9ca3af] dark:hover:bg-[#1f2937] dark:hover:text-[#f9fafb]"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#e5e7eb] text-[#6b7280] transition-colors hover:bg-[#f9fafb] hover:text-[#111827] dark:border-[#2a2a2a] dark:text-[#9ca3af] dark:hover:bg-[#1a1a1a] dark:hover:text-[#f9fafb]"
             title="Agent settings"
             aria-label="Agent settings"
           >
@@ -34,7 +33,6 @@ export function DashboardHeader({ onOpenSettings, walletConnectionType }: Dashbo
             </svg>
           </button>
         )}
-        <ThemeToggle />
         {walletConnectionType === 'circle' ? (
           <CircleWalletChip />
         ) : (

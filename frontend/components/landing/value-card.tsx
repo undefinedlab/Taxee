@@ -110,7 +110,7 @@ export function ValueCard({
         {description}
       </p>
       {metric ? (
-        <div className="mt-4 border-t border-[#e5e7eb] pt-4 dark:border-[#374151]">
+        <div className="mt-4 border-t border-[#e5e7eb] pt-4 dark:border-[#2a2a2a]">
           <p className="font-landing text-xl font-bold tracking-tight text-black dark:text-[#f9fafb]">
             {metric}
           </p>

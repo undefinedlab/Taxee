@@ -53,7 +53,7 @@ export function StepCard({
       {href ? (
         <Link href={href} className="group mt-6 inline-flex items-center gap-2 font-landing text-[13px] font-medium text-black dark:text-[#f9fafb]">
           Learn more
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#e5e7eb] dark:border-[#374151]">
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#e5e7eb] dark:border-[#2a2a2a]">
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
               <path d="M5 10h10M11 6l4 4-4 4" />
             </svg>
