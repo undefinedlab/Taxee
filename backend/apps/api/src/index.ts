@@ -32,7 +32,7 @@ function parseCorsOrigins(): Set<string> {
 const allowedOrigins = parseCorsOrigins();
 
 /** Dev / preview origins (Next.js Network URL, Vercel previews) */
-function isAllowedDevOrigin(origin: string): boolean {
+function isAllowedOrigin(origin: string): boolean {
   try {
     const { hostname, protocol } = new URL(origin);
     if (protocol !== "http:" && protocol !== "https:") return false;
@@ -40,6 +40,10 @@ function isAllowedDevOrigin(origin: string): boolean {
     if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
     if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
     if (hostname.endsWith(".vercel.app")) return true;
+    // Production domains — hardcoded so a missing CORS_ORIGINS env var can't
+    // silently break the live site (@fastify/cors returns 404 on preflight
+    // for rejected origins, which surfaces as "Failed to fetch" in browsers).
+    if (hostname === "taxee.pro" || hostname.endsWith(".taxee.pro")) return true;
   } catch {
     return false;
   }
@@ -52,7 +56,7 @@ await app.register(cors, {
       cb(null, true);
       return;
     }
-    if (allowedOrigins.has(origin) || isAllowedDevOrigin(origin)) {
+    if (allowedOrigins.has(origin) || isAllowedOrigin(origin)) {
       cb(null, origin);
       return;
     }

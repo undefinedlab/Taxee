@@ -47,7 +47,17 @@
       "Bash(connection.*type.*circle)",
       "Bash(\\\\\"Circle\\\\\"\" frontend/components/dashboard/dashboard-client.tsx 2>/dev/null | head -10)",
       "Bash(PGPASSWORD=taxee psql -U taxee -d taxee -h localhost -P pager=off -c \"SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename;\")",
-      "Bash(pnpm exec *)"
+      "Bash(pnpm exec *)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" https://taxee-production.up.railway.app/health)",
+      "Bash(curl -s -X OPTIONS -o /dev/null -w \"HTTP %{http_code}\\\\n\" -H \"Origin: https://taxee.pro\" -H \"Access-Control-Request-Method: POST\" https://taxee-production.up.railway.app/circle/register-web-user)",
+      "Bash(curl -s -X POST -o /tmp/regbody -w \"HTTP %{http_code}\\\\n\" -H \"Content-Type: application/json\" -d '{}' https://taxee-production.up.railway.app/circle/register-web-user)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" https://taxee-production.up.railway.app/circle/setup/00000000-0000-0000-0000-000000000000)",
+      "Bash(curl -si -X OPTIONS -H \"Origin: https://taxee.pro\" -H \"Access-Control-Request-Method: GET\" https://taxee-production.up.railway.app/circle/setup/00000000-0000-0000-0000-000000000000)",
+      "Bash(curl -si -X OPTIONS -H \"Origin: https://taxee.pro\" -H \"Access-Control-Request-Method: GET\" https://taxee-production.up.railway.app/health)",
+      "Bash(curl -si -X OPTIONS -H \"Origin: http://localhost:3000\" -H \"Access-Control-Request-Method: POST\" http://localhost:3001/circle/register-web-user)",
+      "Bash(python3 -c \"import json,sys; p=json.load\\(sys.stdin\\); print\\('start:', p['scripts'].get\\('start'\\)\\); print\\('build:', p['scripts'].get\\('build'\\)\\); print\\('cors dep:', p['dependencies'].get\\('@fastify/cors'\\)\\); print\\('main:', p.get\\('main'\\)\\)\")",
+      "Bash(curl -si -X OPTIONS -H \"Origin: https://taxee-nine.vercel.app\" -H \"Access-Control-Request-Method: POST\" https://taxee-production.up.railway.app/circle/register-web-user)",
+      "Bash(curl -si -X OPTIONS -H \"Origin: https://taxee.pro\" -H \"Access-Control-Request-Method: POST\" https://taxee-production.up.railway.app/circle/register-web-user)"
     ]
   }
 }
