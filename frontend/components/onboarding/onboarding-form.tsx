@@ -214,7 +214,7 @@ export function OnboardingForm() {
           <div className="rounded-xl border border-accent/30 bg-emerald-950/20 p-6">
             <p className="text-lg font-medium text-accent">Agent active</p>
             <p className="mt-2 text-sm text-zinc-400">
-              Heartbeat every 60 minutes ·{" "}
+              Heartbeat every {policy.heartbeatIntervalMinutes ?? 30} minutes ·{" "}
               {approval.mode === "delegated"
                 ? "delegated (autonomous within policy)"
                 : "manual (you approve each action)"}

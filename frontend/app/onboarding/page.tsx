@@ -851,7 +851,7 @@ export default function OnboardingPage() {
                         Agent active
                       </p>
                       <p className="mt-2 font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
-                        Heartbeat every 60 minutes ·{" "}
+                        Heartbeat every {policy.heartbeatIntervalMinutes ?? 30} minutes ·{" "}
                         {approval.mode === "delegated"
                           ? "delegated (autonomous within policy)"
                           : "manual (you approve each action)"}
