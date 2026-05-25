@@ -566,9 +566,9 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
     await circle.getUserToken(userId);
 
     // Circle's GET /wallets is eventually consistent — the SDK's execute()
-    // callback fires before the wallet is queryable here. Poll up to ~10s.
+    // callback fires before the wallet is queryable here. Poll up to ~30s.
     let walletList: any[] = [];
-    const MAX_ATTEMPTS = 10;
+    const MAX_ATTEMPTS = 30;
     const DELAY_MS     = 1000;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       const walletsRes = await (circle as any).client.get("/wallets", {
