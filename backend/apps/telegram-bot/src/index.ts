@@ -18,11 +18,6 @@ import {
 } from "@taxee/aggregator";
 import { buildWatchTxPlan, formatWatchTxPlanTelegram } from "@taxee/execution";
 import type { CandidateAction } from "@taxee/shared";
-import {
-  formatScanDiagnosticsTelegram,
-  formatCandidateOutcomesTelegram,
-} from "@taxee/tax-engine";
-import { splitForTelegram } from "@taxee/notifications";
 import axios from "axios";
 import {
   clearPendingPolicy,
@@ -700,23 +695,24 @@ bot.on("message:text", async (ctx) => {
           return;
         }
 
-        let body = formatScanDiagnosticsTelegram(result.scanDiagnostics);
-        body += formatCandidateOutcomesTelegram(result.candidateOutcomes);
+        // No new opportunities — send a concise one-liner instead of the giant
+        // per-lot diagnostic dump. The 92-line wall of "ETH (Sepolia, 134d
+        // held): at a loss — PARK is for gains…" lines is noise; per-lot
+        // detail is in DB for /opportunities and admin debugging.
+        const summary: string[] = [
+          `✅ *Scan complete* — no new tax actions to surface.`,
+          ``,
+          `📊 ${result.candidatesFound} candidate(s) evaluated. ${result.opportunitiesSaved} new opportunity(ies) saved.`,
+        ];
         if (sync.closed > 0 || sync.inserted > 0) {
-          body +=
-            `\n\n🔄 *Lot sync:* +${sync.inserted} new, ${sync.closed} removed from chain.`;
+          summary.push(`🔄 Lot sync: +${sync.inserted} new, ${sync.closed} removed`);
         }
-        // Diagnostics body can easily exceed 4096 chars for portfolios with many
-        // lots (one line per lot). Telegram returns 400 on send; chunk on line
-        // boundaries to stay under the limit.
-        const chunks = splitForTelegram(body);
-        for (const chunk of chunks) {
-          try {
-            await ctx.reply(chunk, { parse_mode: "Markdown" });
-          } catch (replyErr) {
-            console.error("[bot] diagnostics reply failed (Markdown):", replyErr);
-            await ctx.reply(chunk.replace(/\*/g, ""));
-          }
+        summary.push(``, `Use /opportunities to view any pending actions.`);
+        try {
+          await ctx.reply(summary.join("\n"), { parse_mode: "Markdown" });
+        } catch (replyErr) {
+          console.error("[bot] summary reply failed (Markdown):", replyErr);
+          await ctx.reply(summary.join("\n").replace(/\*/g, ""));
         }
       })
       .catch(async (err) => {
