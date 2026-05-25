@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { type FastifyPluginAsync } from "fastify";
 import { db } from "../db/client.js";
 import { users, agents, opportunities } from "../db/schema.js";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { executeOpportunity } from "@taxee/execution";
 import { CircleClient } from "@taxee/aggregator";
 
 const UUID_RE =
@@ -37,6 +38,17 @@ async function findExistingUserWallet(circle: CircleClient, userId: string) {
  */
 function uuidToBytes32(uuid: string): string {
   return "0x" + uuid.replace(/-/g, "").padEnd(64, "0");
+}
+
+async function assertOppOwnedByUser(oppId: string, userId: string) {
+  if (!UUID_RE.test(userId)) return null;
+  const rows = await db
+    .select({ opp: opportunities, agent: agents })
+    .from(opportunities)
+    .innerJoin(agents, eq(opportunities.agentId, agents.id))
+    .where(and(eq(opportunities.id, oppId), eq(agents.userId, userId)))
+    .limit(1);
+  return rows[0] ?? null;
 }
 
 const circleRoutes: FastifyPluginAsync = async (app) => {
@@ -282,6 +294,58 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
       walletConnectionType: connType,
       userId,
     });
+  });
+
+  /**
+   * Approve an opportunity (web dashboard). Starts server execution for Circle agents.
+   */
+  app.post<{
+    Params: { oppId: string };
+    Body: { userId: string };
+  }>("/opportunities/:oppId/approve", async (request, reply) => {
+    const { oppId } = request.params;
+    const { userId } = request.body ?? {};
+    const row = await assertOppOwnedByUser(oppId, userId);
+    if (!row) return reply.code(404).send({ error: "Opportunity not found" });
+
+    if (row.opp.executedAt) {
+      return reply.send({ ok: true, alreadyExecuted: true });
+    }
+
+    await db
+      .update(opportunities)
+      .set({ approvedAt: new Date() })
+      .where(eq(opportunities.id, oppId));
+
+    if (row.agent.circleWalletId && row.opp.candidateAction) {
+      void executeOpportunity(oppId).catch((err: unknown) =>
+        request.log.error({ err, oppId }, "executeOpportunity failed"),
+      );
+      return reply.send({ ok: true, execution: "circle_started" });
+    }
+
+    return reply.send({
+      ok: true,
+      execution: "recorded",
+      message:
+        "Approval saved. On-chain execution uses Circle MPC or EIP-7702 delegation when configured; tx hash appears in History after execution.",
+    });
+  });
+
+  /**
+   * Skip / dismiss an opportunity (web dashboard).
+   */
+  app.post<{
+    Params: { oppId: string };
+    Body: { userId: string };
+  }>("/opportunities/:oppId/skip", async (request, reply) => {
+    const { oppId } = request.params;
+    const { userId } = request.body ?? {};
+    const row = await assertOppOwnedByUser(oppId, userId);
+    if (!row) return reply.code(404).send({ error: "Opportunity not found" });
+
+    await db.delete(opportunities).where(eq(opportunities.id, oppId));
+    return reply.send({ ok: true });
   });
 
   /**

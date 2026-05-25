@@ -56,7 +56,7 @@ function mapDbOpportunity(row: Record<string, unknown>): Opportunity {
   if (executedAt) status = 'executed';
   else if (deferredUntil) status = 'deferred';
   else if (llmDecision === 'SKIP') status = 'skipped';
-  else if (approvedAt) status = 'pending';
+  else if (approvedAt) status = 'approved';
 
   return {
     id: String(row.id),
@@ -196,7 +196,6 @@ export async function runWebOpportunityScan(): Promise<{
   try {
     const res = await fetch(`${API_BASE_URL}/circle/run-scan/${userId}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
     });
     let data: Record<string, unknown> = {};
     try {
@@ -210,7 +209,7 @@ export async function runWebOpportunityScan(): Promise<{
         return {
           ok: false,
           error:
-            'No server agent yet. Open Settings (gear) → Sync Circle agent to server, then Refresh.',
+            'No server agent yet. Open Settings (gear) → Sync agent to server, then Refresh.',
         };
       }
       return {
@@ -282,4 +281,62 @@ export function getBackendAgentId(): string | null {
 /** True if this opportunity can use Circle execute flow on Railway */
 export function isServerExecutableOpportunity(opp: Opportunity): boolean {
   return UUID_RE.test(opp.id) && !opp.id.startsWith('opp-demo');
+}
+
+export async function approveOpportunityOnServer(
+  oppId: string,
+): Promise<{ ok: boolean; execution?: string; message?: string; error?: string }> {
+  const userId = getTaxeeUserId();
+  if (!userId) return { ok: false, error: 'Missing taxee_user_id' };
+
+  try {
+    const res = await fetch(
+      `${API_BASE_URL}/circle/opportunities/${oppId}/approve`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      },
+    );
+    const data = (await res.json()) as Record<string, unknown>;
+    if (!res.ok) {
+      return { ok: false, error: String(data.error ?? data.message ?? `HTTP ${res.status}`) };
+    }
+    return {
+      ok: true,
+      execution: String(data.execution ?? ''),
+      message: data.message as string | undefined,
+    };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Approve failed' };
+  }
+}
+
+export async function skipOpportunityOnServer(
+  oppId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const userId = getTaxeeUserId();
+  if (!userId) return { ok: false, error: 'Missing taxee_user_id' };
+
+  try {
+    const res = await fetch(
+      `${API_BASE_URL}/circle/opportunities/${oppId}/skip`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      },
+    );
+    const data = (await res.json()) as Record<string, unknown>;
+    if (!res.ok) {
+      return { ok: false, error: String(data.error ?? data.message ?? `HTTP ${res.status}`) };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Skip failed' };
+  }
+}
+
+export async function reloadOpportunitiesFromServer(): Promise<FetchOpportunitiesResult> {
+  return fetchWebOpportunities();
 }

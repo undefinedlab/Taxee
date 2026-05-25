@@ -13,8 +13,11 @@ import {
   updateOpportunityStatus,
 } from "@/lib/agent-store";
 import {
+  approveOpportunityOnServer,
   fetchWebOpportunities,
+  reloadOpportunitiesFromServer,
   runWebOpportunityScan,
+  skipOpportunityOnServer,
   fullWebReset,
   getTaxeeUserId,
   isServerExecutableOpportunity,
@@ -31,7 +34,7 @@ import {
 } from "@/lib/wallet-session";
 import { DepositFundsButton } from "@/components/wallet/deposit-funds-button";
 import { useWalletData } from "@/hooks/use-wallet-data";
-import { truncateAddress } from "@/lib/utils";
+import { truncateAddress, opportunitySummary } from "@/lib/utils";
 import type { ApprovalSettings } from "@/lib/types";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 
@@ -139,9 +142,12 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
     fallbackToConnected: connType === "external_eip7702",
   });
 
-  const pending = opportunities.filter((o) => o.status === "pending");
+  const activeOpportunities = opportunities.filter(
+    (o) => o.status === "pending" || o.status === "approved",
+  );
+  const pending = activeOpportunities;
   const history = opportunities
-    .filter((o) => o.status !== "pending")
+    .filter((o) => o.status !== "pending" && o.status !== "approved")
     .sort(
       (a, b) =>
         new Date(b.resolvedAt ?? b.createdAt).getTime() -
@@ -173,38 +179,84 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
     (connType === "circle" ? !getStoredCircleAddress() : !walletValid);
   const needsOnboarding = hydrated && !hasRegisteredAgent && agentId !== "demo";
 
+  const applyServerOpportunities = useCallback(
+    (remote: Opportunity[]) => {
+      setOpportunities(remote);
+      saveOpportunities(remote);
+    },
+    [],
+  );
+
   const handleApprove = useCallback(
-    (opp: Opportunity) => {
+    async (opp: Opportunity) => {
+      if (connType === "watch") {
+        window.alert(
+          "Watch-only mode: Taxee cannot execute from the dashboard.",
+        );
+        return;
+      }
+
+      if (!isServerExecutableOpportunity(opp)) {
+        window.alert(
+          "This opportunity is only stored locally. Refresh after a server scan, or reset onboarding.",
+        );
+        return;
+      }
+
       if (connType === "circle") {
-        if (!isServerExecutableOpportunity(opp)) {
-          window.alert(
-            "This opportunity is not on the server yet (local/demo only).\n\n" +
-              "• Open Settings (gear) → Reset registration, then complete onboarding again\n" +
-              "• Or use Telegram after the agent heartbeat creates real opportunities",
-          );
-          return;
-        }
-        if (!getTaxeeUserId()) {
-          window.alert("Missing taxee user id. Reset registration in Settings and set up Circle again.");
+        const approved = await approveOpportunityOnServer(opp.id);
+        if (!approved.ok) {
+          window.alert(approved.error ?? "Approve failed");
           return;
         }
         router.push(`/execute?oppId=${encodeURIComponent(opp.id)}`);
         return;
       }
-      if (connType === "watch") {
-        window.alert(
-          "Watch-only mode: Taxee cannot execute from the dashboard. Use Telegram for tx steps, or onboard with a Circle wallet.",
-        );
+
+      const result = await approveOpportunityOnServer(opp.id);
+      if (!result.ok) {
+        window.alert(result.error ?? "Approve failed");
         return;
       }
-      setOpportunities(updateOpportunityStatus(opp.id, "executed"));
+
+      const remote = await reloadOpportunitiesFromServer();
+      if (remote.opportunities.length > 0) {
+        applyServerOpportunities(remote.opportunities);
+      }
+
+      if (result.execution === "circle_started") {
+        setOppsRefreshNote("Executing on-chain via Circle — check History for tx hash.");
+      } else {
+        setOppsRefreshNote(
+          "Approved on server. Tx hash appears in History after the agent executes (Circle MPC or EIP-7702).",
+        );
+      }
+
+      window.setTimeout(() => {
+        void reloadOpportunitiesFromServer().then((r) => {
+          if (r.opportunities.length > 0) applyServerOpportunities(r.opportunities);
+        });
+      }, 4000);
     },
-    [connType, router],
+    [connType, router, applyServerOpportunities],
   );
 
-  const handleSkip = useCallback((opp: Opportunity) => {
-    setOpportunities(updateOpportunityStatus(opp.id, "skipped"));
-  }, []);
+  const handleSkip = useCallback(
+    async (opp: Opportunity) => {
+      if (isServerExecutableOpportunity(opp)) {
+        const result = await skipOpportunityOnServer(opp.id);
+        if (!result.ok) {
+          window.alert(result.error ?? "Skip failed");
+          return;
+        }
+        const remote = await reloadOpportunitiesFromServer();
+        applyServerOpportunities(remote.opportunities);
+        return;
+      }
+      setOpportunities(updateOpportunityStatus(opp.id, "skipped"));
+    },
+    [applyServerOpportunities],
+  );
 
   const handleRefreshOpportunities = useCallback(async () => {
     setRefreshingOpps(true);
@@ -282,7 +334,7 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
       router.push(`/execute?oppId=${encodeURIComponent(executable.id)}`);
       return;
     }
-    pending.forEach((opp) => handleApprove(opp));
+    void handleApprove(executable ?? pending[0]!);
   }, [pending, connType, router, handleApprove]);
 
   const handleResetRegistration = useCallback(async () => {
@@ -854,6 +906,7 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
 
 const STATUS_LABELS: Record<Opportunity["status"], string> = {
   pending: "Pending",
+  approved: "Approved",
   executed: "Executed",
   deferred: "Deferred",
   skipped: "Skipped",
@@ -888,15 +941,22 @@ function TransactionHistoryRow({ item }: { item: Opportunity }) {
               </span>
             )}
           </div>
-          <h3 className="font-landing font-medium text-[#111827] dark:text-[#f9fafb]">
-            {item.headline}
-          </h3>
           <p className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
-            {item.llmReasoning}
+            {opportunitySummary(item.headline, item.llmReasoning)}
           </p>
           {item.txHash && (
-            <p className="font-mono text-xs text-[#9ca3af] break-all">
-              Tx: {item.txHash}
+            <a
+              href={`https://sepolia.basescan.org/tx/${item.txHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1 inline-block font-mono text-xs text-blue-600 hover:underline dark:text-blue-400 break-all"
+            >
+              {truncateAddress(item.txHash)} ↗
+            </a>
+          )}
+          {!item.txHash && (item.status === "executed" || item.status === "auto_executed") && (
+            <p className="mt-1 font-landing text-xs text-[#9ca3af]">
+              No tx hash yet — execution may still be processing.
             </p>
           )}
         </div>
@@ -952,33 +1012,38 @@ function OpportunityCard({
 
       {/* Content */}
       <div className="flex items-start justify-between gap-4">
-        <div className="flex-1">
-          <h3 className="font-landing font-medium text-[#111827] dark:text-[#f9fafb]">
-            {opportunity.headline}
-          </h3>
-          <p className="mt-2 font-landing text-sm leading-relaxed text-[#6b7280] dark:text-[#9ca3af]">
-            {opportunity.llmReasoning}
+        <div className="flex-1 min-w-0">
+          <p className="font-landing text-sm font-medium text-[#111827] dark:text-[#f9fafb]">
+            {opportunitySummary(opportunity.headline, opportunity.llmReasoning)}
           </p>
+          {opportunity.status === "approved" && (
+            <p className="mt-1 font-landing text-xs text-amber-700 dark:text-amber-400/90">
+              Approved — waiting for on-chain execution (tx hash will show in History)
+            </p>
+          )}
         </div>
 
         {/* Actions */}
-        {!resolved && approvalMode === "manual" && (
+        {!resolved && opportunity.status !== "approved" && approvalMode === "manual" && (
           <div className="flex shrink-0 gap-2">
             <button
               type="button"
-              onClick={onApprove}
+              onClick={() => void onApprove()}
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#111827] px-4 py-2 font-landing text-sm text-white transition-colors hover:bg-[#374151] dark:bg-[#f9fafb] dark:text-[#111827] dark:hover:bg-[#e5e7eb]"
             >
               Approve
             </button>
             <button
               type="button"
-              onClick={onSkip}
+              onClick={() => void onSkip()}
               className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#e5e7eb] px-4 py-2 font-landing text-sm text-[#6b7280] transition-colors hover:bg-white/50 dark:border-[#374151] dark:text-[#9ca3af] dark:hover:bg-white/10"
             >
               Skip
             </button>
           </div>
+        )}
+        {opportunity.status === "approved" && (
+          <span className="shrink-0 font-landing text-xs text-[#9ca3af]">Executing…</span>
         )}
       </div>
     </div>

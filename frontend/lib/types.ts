@@ -2,6 +2,7 @@ export type AgentStatus = "pending" | "active" | "paused";
 export type OpportunityType = "HARVEST" | "REBALANCE" | "PARK";
 export type OpportunityStatus =
   | "pending"
+  | "approved"
   | "executed"
   | "deferred"
   | "skipped"
