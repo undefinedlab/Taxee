@@ -27,7 +27,7 @@ export function resolvePrimaryWalletAddress(options: {
     case 'external_eip7702':
       return wagmi || stored || '';
     default:
-      return wagmi || circle || stored || '';
+      return wagmi || stored || '';
   }
 }
 

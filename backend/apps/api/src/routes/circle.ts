@@ -148,7 +148,7 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
    * Registers a new web user before Circle wallet setup.
    */
   /**
-   * After web onboarding — link Circle wallet to a DB agent (not MetaMask).
+   * After web onboarding — link wallet to a DB agent (Circle MPC or MetaMask / watch-only).
    */
   app.post<{
     Body: {
@@ -167,81 +167,119 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
       return reply.code(400).send({ error: "Invalid walletAddress" });
     }
 
+    const connType =
+      (policy as { walletConnectionType?: string }).walletConnectionType ?? "external_eip7702";
+    const linked = walletAddress.toLowerCase();
+
     let [user] = await db.select().from(users).where(eq(users.id, userId));
     if (!user) {
       const [created] = await db.insert(users).values({ id: userId }).returning();
       user = created;
     }
 
-    const circle = getCircleClient();
-    try { await circle.createCircleUser(userId); } catch (err: any) {
-      if (err?.response?.data?.code !== 155101) throw err;
-    }
+    const policyPayload = {
+      ...policy,
+      walletConnectionType: connType,
+    };
 
-    const wallets = await circle.listUserWallets(userId);
-    if (wallets.length === 0) {
-      return reply.code(400).send({
-        error: "No Circle wallet found. Complete Circle PIN setup first.",
+    const upsertAgent = async (fields: {
+      walletAddress: string;
+      circleWalletId?: string | null;
+    }) => {
+      const existingAgents = await db.select().from(agents).where(eq(agents.userId, userId));
+      let agent = existingAgents.find(
+        (a) => a.walletAddress?.toLowerCase() === fields.walletAddress.toLowerCase(),
+      );
+
+      if (!agent) {
+        const [created] = await db
+          .insert(agents)
+          .values({
+            userId,
+            walletAddress: fields.walletAddress,
+            circleWalletId: fields.circleWalletId ?? null,
+            name: "Web Agent",
+            status: "active",
+            approvalMode,
+            policy: policyPayload as any,
+          })
+          .returning();
+        if (!created) return null;
+        agent = created;
+      } else {
+        const [updated] = await db
+          .update(agents)
+          .set({
+            walletAddress: fields.walletAddress,
+            circleWalletId: fields.circleWalletId ?? agent.circleWalletId,
+            approvalMode,
+            policy: policyPayload as any,
+            status: "active",
+            updatedAt: new Date(),
+          })
+          .where(eq(agents.id, agent.id))
+          .returning();
+        agent = updated ?? agent;
+      }
+      return agent;
+    };
+
+    if (connType === "circle") {
+      const circle = getCircleClient();
+      try {
+        await circle.createCircleUser(userId);
+      } catch (err: any) {
+        if (err?.response?.data?.code !== 155101) throw err;
+      }
+
+      const wallets = await circle.listUserWallets(userId);
+      if (wallets.length === 0) {
+        return reply.code(400).send({
+          error: "No Circle wallet found. Complete Circle PIN setup first.",
+        });
+      }
+
+      const firstWallet = wallets[0];
+      if (!firstWallet?.address) {
+        return reply.code(400).send({ error: "Circle wallet has no address" });
+      }
+
+      const circleAddr = firstWallet.address.toLowerCase();
+      await db.update(users).set({ address: circleAddr }).where(eq(users.id, userId));
+
+      const agent = await upsertAgent({
+        walletAddress: circleAddr,
+        circleWalletId: firstWallet.id,
+      });
+      if (!agent) return reply.code(500).send({ error: "Agent sync failed" });
+
+      return reply.send({
+        agentId: agent.id,
+        circleWalletId: firstWallet.id,
+        walletAddress: circleAddr,
+        walletConnectionType: connType,
+        userId,
       });
     }
 
-    const firstWallet = wallets[0];
-    if (!firstWallet?.address) {
-      return reply.code(400).send({ error: "Circle wallet has no address" });
-    }
-    const circleWalletId = firstWallet.id;
-    const circleAddr = firstWallet.address.toLowerCase();
-    const linked = walletAddress.toLowerCase();
-
-    await db.update(users).set({ address: circleAddr }).where(eq(users.id, userId));
-
-    const existingAgents = await db.select().from(agents).where(eq(agents.userId, userId));
-    let agent = existingAgents.find(
-      (a) => a.walletAddress?.toLowerCase() === linked || a.walletAddress?.toLowerCase() === circleAddr,
-    );
-
-    const policyPayload = {
-      ...policy,
-      walletConnectionType: (policy as any).walletConnectionType ?? "circle",
-    };
-
-    if (!agent) {
-      const [created] = await db
-        .insert(agents)
-        .values({
-          userId,
-          walletAddress: circleAddr,
-          circleWalletId,
-          name: "Web Agent",
-          status: "active",
-          approvalMode,
-          policy: policyPayload as any,
-        })
-        .returning();
-      if (!created) return reply.code(500).send({ error: "Failed to create agent" });
-      agent = created;
-    } else {
-      const [updated] = await db
-        .update(agents)
-        .set({
-          walletAddress: circleAddr,
-          circleWalletId,
-          approvalMode,
-          policy: policyPayload as any,
-          status: "active",
-          updatedAt: new Date(),
-        })
-        .where(eq(agents.id, agent.id))
-        .returning();
-      agent = updated ?? agent;
+    // MetaMask / EIP-7702 or watch-only — use the connected address directly
+    try {
+      await db.update(users).set({ address: linked }).where(eq(users.id, userId));
+    } catch (err: unknown) {
+      const pgCode = (err as { code?: string })?.code;
+      if (pgCode !== "23505") throw err;
     }
 
+    const agent = await upsertAgent({
+      walletAddress: linked,
+      circleWalletId: null,
+    });
     if (!agent) return reply.code(500).send({ error: "Agent sync failed" });
 
     return reply.send({
       agentId: agent.id,
-      circleWalletId,
-      walletAddress: circleAddr,
+      walletAddress: linked,
+      walletConnectionType: connType,
       userId,
     });
   });

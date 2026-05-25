@@ -27,7 +27,9 @@ export function getActiveWalletAddress(
       return circle || stored || '';
     case 'watch':
       return stored || '';
+    case 'external_eip7702':
+      return stored || '';
     default:
-      return stored || circle || '';
+      return stored || '';
   }
 }

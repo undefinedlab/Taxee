@@ -40,10 +40,9 @@ interface DashboardClientProps {
 }
 
 function resolveConnectionType(agent: Agent | null): WalletConnectionType {
+  if (agent?.policy.walletConnectionType) return agent.policy.walletConnectionType;
   const stored = getWalletConnectionType();
   if (stored) return stored;
-  if (agent?.policy.walletConnectionType) return agent.policy.walletConnectionType;
-  if (getStoredCircleAddress()) return "circle";
   return "external_eip7702";
 }
 
@@ -68,24 +67,7 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
     const stored = loadAgent();
     if (stored && (stored.id === agentId || agentId === "demo")) {
       const conn = resolveConnectionType(stored);
-      const circleAddr = getStoredCircleAddress();
-      const primaryAddr = getActiveWalletAddress(
-        conn,
-        stored.wallets[0]?.address,
-      );
-      const patched: Agent =
-        primaryAddr && stored.wallets[0]?.address !== primaryAddr
-          ? {
-              ...stored,
-              wallets: [
-                {
-                  ...stored.wallets[0],
-                  address: primaryAddr,
-                },
-                ...stored.wallets.slice(1),
-              ],
-            }
-          : stored;
+      const patched = stored;
       const withApproval = {
         ...patched,
         approval: {
@@ -229,7 +211,22 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
     setOppsRefreshNote(null);
     let note: string | null = null;
     try {
-      const scan = await runWebOpportunityScan();
+      let scan = await runWebOpportunityScan();
+      if (scan.error?.includes('No server agent') && walletValid) {
+        const synced = await syncWebAgentToBackend(
+          wallet,
+          { ...displayAgent.policy, walletConnectionType: connType },
+          displayApproval,
+        );
+        if (synced) {
+          scan = await runWebOpportunityScan();
+        } else {
+          note =
+            connType === 'circle'
+              ? 'Could not link Circle agent — finish PIN setup, then Settings → Sync.'
+              : 'Could not link MetaMask agent — connect the same wallet, then Settings → Sync.';
+        }
+      }
       if (scan.error) {
         note = scan.error;
       } else if (scan.ok && scan.totalSaved !== undefined) {
@@ -265,7 +262,14 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
     } finally {
       setRefreshingOpps(false);
     }
-  }, [agentId]);
+  }, [
+    agentId,
+    connType,
+    wallet,
+    walletValid,
+    displayAgent.policy,
+    displayApproval,
+  ]);
 
   const handleApproveAll = useCallback(() => {
     if (pending.length === 0) return;
@@ -284,7 +288,7 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
   const handleResetRegistration = useCallback(async () => {
     if (
       !window.confirm(
-        "Reset this registration?\n\nClears local data and deletes web agents on the server. Your Circle wallet stays at Circle — you can onboard again with the correct wallet type.",
+        "Reset this registration?\n\nClears local data and deletes web agents on the server. You can onboard again (MetaMask or Circle).",
       )
     ) {
       return;
@@ -295,20 +299,30 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
   }, [router]);
 
   const handleResyncAgent = useCallback(async () => {
-    const synced = await syncWebAgentToBackend(wallet, displayAgent.policy, displayApproval);
+    const policy = {
+      ...displayAgent.policy,
+      walletConnectionType: connType,
+    };
+    const synced = await syncWebAgentToBackend(wallet, policy, displayApproval);
     if (synced) {
-      window.alert(`Linked to server agent.\nCircle wallet: ${synced.circleWalletId ? "yes" : "pending"}`);
-      const { opportunities: remote } = await fetchWebOpportunities();
-      if (remote.length > 0) {
-        setOpportunities(remote);
-        saveOpportunities(remote);
+      const mode =
+        connType === "circle"
+          ? `Circle wallet linked (${synced.circleWalletId ? "MPC ready" : "pending"})`
+          : `MetaMask agent linked at ${truncateAddress(wallet)}`;
+      window.alert(`Linked to server.\n${mode}`);
+      const remote = await fetchWebOpportunities();
+      if (remote.opportunities.length > 0) {
+        setOpportunities(remote.opportunities);
+        saveOpportunities(remote.opportunities);
       }
     } else {
       window.alert(
-        "Sync failed. Deploy the latest API to Railway (needs /circle/sync-web-agent), or finish Circle PIN setup and try again.",
+        connType === "circle"
+          ? "Sync failed — complete Circle PIN or redeploy API."
+          : "Sync failed — connect MetaMask with the same address you used in onboarding, then try again.",
       );
     }
-  }, [wallet, displayAgent.policy, displayApproval]);
+  }, [wallet, connType, displayAgent.policy, displayApproval]);
 
   return (
     <div className="landing-root landing-marble-bg relative min-h-screen">
@@ -744,22 +758,24 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
             </div>
 
             <div className="space-y-3">
-              {connType === "circle" && (
-                <button
-                  type="button"
-                  onClick={() => void handleResyncAgent()}
-                  className="flex w-full items-center gap-3 rounded-lg border border-[#e5e7eb] p-4 text-left transition-colors hover:bg-[#f9fafb] dark:border-[#374151] dark:hover:bg-[#1f2937]"
-                >
-                  <div>
-                    <p className="font-landing font-medium text-[#111827] dark:text-[#f9fafb]">
-                      Sync Circle agent to server
-                    </p>
-                    <p className="font-landing text-xs text-[#9ca3af]">
-                      Fixes approve/PIN errors when MetaMask and Circle were mixed up
-                    </p>
-                  </div>
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => void handleResyncAgent()}
+                className="flex w-full items-center gap-3 rounded-lg border border-[#e5e7eb] p-4 text-left transition-colors hover:bg-[#f9fafb] dark:border-[#374151] dark:hover:bg-[#1f2937]"
+              >
+                <div>
+                  <p className="font-landing font-medium text-[#111827] dark:text-[#f9fafb]">
+                    {connType === "circle"
+                      ? "Sync Circle agent to server"
+                      : "Sync MetaMask agent to server"}
+                  </p>
+                  <p className="font-landing text-xs text-[#9ca3af]">
+                    {connType === "circle"
+                      ? "Links your Circle MPC wallet for PIN approvals and scans"
+                      : "Registers your connected wallet + EIP-7702 policy for opportunity scans"}
+                  </p>
+                </div>
+              </button>
 
               <button type="button" className="flex w-full items-center gap-3 rounded-lg border border-[#e5e7eb] p-4 text-left transition-colors hover:bg-[#f9fafb] dark:border-[#374151] dark:hover:bg-[#1f2937]">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#9ca3af]">

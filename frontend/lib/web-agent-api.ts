@@ -1,6 +1,14 @@
 import { API_BASE_URL } from '@/lib/api';
 import type { Agent, ApprovalSettings, Opportunity, UserPolicy } from '@/lib/types';
 
+function networkErrorHint(): string {
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  if (/^https?:\/\/192\.168\.|^https?:\/\/10\./.test(origin)) {
+    return `${origin} may be blocked by API CORS — open http://localhost:3000 instead, or redeploy API with LAN CORS fix.`;
+  }
+  return 'Cannot reach API — check NEXT_PUBLIC_API_URL and that Railway API is running.';
+}
+
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -8,6 +16,34 @@ export function getTaxeeUserId(): string | null {
   if (typeof window === 'undefined') return null;
   const id = localStorage.getItem('taxee_user_id');
   return id && UUID_RE.test(id) ? id : null;
+}
+
+/** Web dashboard user id (MetaMask + Circle share the same taxee user row) */
+export async function ensureWebUserRegistered(): Promise<string | null> {
+  if (typeof window === 'undefined') return null;
+
+  let userId = getTaxeeUserId();
+  if (!userId) {
+    userId = crypto.randomUUID();
+    localStorage.setItem('taxee_user_id', userId);
+  }
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/circle/register-web-user`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, source: 'web_onboarding' }),
+    });
+    const data = (await res.json()) as Record<string, unknown>;
+    const resolved = String(data.userId ?? userId);
+    if (UUID_RE.test(resolved)) {
+      localStorage.setItem('taxee_user_id', resolved);
+      return resolved;
+    }
+  } catch {
+    /* local-only ok */
+  }
+  return userId;
 }
 
 function mapDbOpportunity(row: Record<string, unknown>): Opportunity {
@@ -41,7 +77,7 @@ export async function syncWebAgentToBackend(
   policy: UserPolicy,
   approval: ApprovalSettings,
 ): Promise<{ agentId: string; circleWalletId?: string } | null> {
-  const userId = getTaxeeUserId();
+  const userId = (await ensureWebUserRegistered()) ?? getTaxeeUserId();
   if (!userId || !walletAddress) return null;
 
   try {
@@ -97,7 +133,10 @@ export type FetchOpportunitiesResult = {
 export async function fetchWebOpportunities(): Promise<FetchOpportunitiesResult> {
   const userId = getTaxeeUserId();
   if (!userId) {
-    return { opportunities: [], error: 'Missing taxee_user_id — complete Circle onboarding again.' };
+    return {
+      opportunities: [],
+      error: 'Missing taxee_user_id — open Settings → Sync agent to server.',
+    };
   }
 
   try {
@@ -132,9 +171,14 @@ export async function fetchWebOpportunities(): Promise<FetchOpportunitiesResult>
       ),
     };
   } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Could not reach API';
+    const isNetwork =
+      msg.includes('NetworkError') ||
+      msg.includes('Failed to fetch') ||
+      msg.includes('fetch resource');
     return {
       opportunities: [],
-      error: e instanceof Error ? e.message : 'Could not reach API',
+      error: isNetwork ? `${msg}. ${networkErrorHint()}` : msg,
     };
   }
 }
@@ -152,14 +196,27 @@ export async function runWebOpportunityScan(): Promise<{
   try {
     const res = await fetch(`${API_BASE_URL}/circle/run-scan/${userId}`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
     });
-    const data = (await res.json()) as Record<string, unknown>;
+    let data: Record<string, unknown> = {};
+    try {
+      data = (await res.json()) as Record<string, unknown>;
+    } catch {
+      data = {};
+    }
     if (res.status === 404) {
+      const msg = String(data.error ?? data.message ?? '');
+      if (msg.includes('No server agent')) {
+        return {
+          ok: false,
+          error:
+            'No server agent yet. Open Settings (gear) → Sync Circle agent to server, then Refresh.',
+        };
+      }
       return {
         ok: false,
         apiRouteMissing: true,
-        error:
-          'Scan API not deployed yet. Redeploy Railway API, then use Refresh again.',
+        error: 'Scan API not deployed yet. Redeploy Railway API, then Refresh.',
       };
     }
     if (!res.ok) {
@@ -170,7 +227,15 @@ export async function runWebOpportunityScan(): Promise<{
       totalSaved: Number(data.totalSaved ?? 0),
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Scan request failed' };
+    const msg = e instanceof Error ? e.message : 'Scan request failed';
+    const isNetwork =
+      msg.includes('NetworkError') ||
+      msg.includes('Failed to fetch') ||
+      msg.includes('fetch resource');
+    return {
+      ok: false,
+      error: isNetwork ? `${msg}. ${networkErrorHint()}` : msg,
+    };
   }
 }
 

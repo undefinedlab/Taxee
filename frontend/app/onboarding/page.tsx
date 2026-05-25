@@ -8,7 +8,7 @@ import { defaultApproval, defaultPolicy } from "@/lib/mock-data";
 import { ApprovalModePicker } from "@/components/onboarding/approval-mode-picker";
 import { OnboardingTopBar } from "@/components/onboarding/onboarding-topbar";
 import { registerAgent } from "@/lib/agent-store";
-import { syncWebAgentToBackend } from "@/lib/web-agent-api";
+import { ensureWebUserRegistered, syncWebAgentToBackend } from "@/lib/web-agent-api";
 import { saveWalletConnectionType } from "@/lib/wallet-session";
 import { DepositFundsButton } from "@/components/wallet/deposit-funds-button";
 import { getCircleWalletAddress } from "@/hooks/use-circle-wallet";
@@ -101,11 +101,12 @@ export default function OnboardingPage() {
         ? getCircleWalletAddress() || wallet
         : walletAddress || "";
     const agent = registerAgent(addr, finalPolicy, approval);
-    if (conn === "circle" && addr) {
+    if (addr) {
+      await ensureWebUserRegistered();
       const synced = await syncWebAgentToBackend(addr, finalPolicy, approval);
       if (!synced) {
         console.warn(
-          "Server agent sync skipped (deploy latest API for /circle/sync-web-agent). Local agent is ready.",
+          "Server agent sync skipped — deploy latest API or use Dashboard → Settings → Sync.",
         );
       }
     }

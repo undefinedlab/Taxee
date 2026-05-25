@@ -31,18 +31,33 @@ function parseCorsOrigins(): Set<string> {
 
 const allowedOrigins = parseCorsOrigins();
 
+/** Dev / preview origins (Next.js Network URL, Vercel previews) */
+function isAllowedDevOrigin(origin: string): boolean {
+  try {
+    const { hostname, protocol } = new URL(origin);
+    if (protocol !== "http:" && protocol !== "https:") return false;
+    if (hostname === "localhost" || hostname === "127.0.0.1") return true;
+    if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+    if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+    if (hostname.endsWith(".vercel.app")) return true;
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 await app.register(cors, {
   origin: (origin, cb) => {
-    // Non-browser clients (curl, server-side) omit Origin
     if (!origin) {
       cb(null, true);
       return;
     }
-    if (allowedOrigins.has(origin)) {
+    if (allowedOrigins.has(origin) || isAllowedDevOrigin(origin)) {
       cb(null, origin);
       return;
     }
-    cb(new Error(`CORS: origin not allowed: ${origin}`), false);
+    // Do not pass Error — that becomes HTTP 500 without CORS headers (browser: NetworkError)
+    cb(null, false);
   },
   credentials: true,
   methods:     ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
