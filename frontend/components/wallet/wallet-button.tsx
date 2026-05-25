@@ -234,7 +234,7 @@ export function WalletConnectionPrompt() {
           </div>
           <div>
             <p className="text-white font-medium">Wrong Network</p>
-            <p className="text-white/50 text-sm">Please switch to Base Sepolia or Base Mainnet</p>
+            <p className="text-white/50 text-sm">Please switch to Ethereum Sepolia, Base Sepolia, or Base</p>
           </div>
         </div>
         <WalletButton variant="onboarding" />
