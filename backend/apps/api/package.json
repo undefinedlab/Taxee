@@ -25,6 +25,7 @@
     "@taxee/compliance": "workspace:*",
     "@taxee/notifications": "workspace:*",
     "@taxee/db": "workspace:*",
+    "@taxee/agent": "workspace:*",
     "fastify": "^4.26.2",
     "@fastify/cors": "^9.0.1",
     "@fastify/jwt": "^8.0.1",

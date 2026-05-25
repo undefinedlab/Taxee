@@ -5,7 +5,7 @@ import { useWalletStatus } from '@/components/wallet/use-wallet-status';
 
 interface WalletButtonProps {
   className?: string;
-  variant?: 'default' | 'onboarding' | 'dashboard';
+  variant?: 'default' | 'onboarding' | 'dashboard' | 'topbar';
 }
 
 export function WalletButton({ className = '', variant = 'default' }: WalletButtonProps) {
@@ -118,7 +118,10 @@ export function WalletButton({ className = '', variant = 'default' }: WalletButt
     );
   }
 
-  if (variant === 'dashboard') {
+  if (variant === 'topbar' || variant === 'dashboard') {
+    const btnBase =
+      'inline-flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white px-3 py-2 font-landing text-sm font-medium text-[#111827] transition-colors hover:bg-[#f9fafb] dark:border-[#374151] dark:bg-[#111827] dark:text-[#f9fafb] dark:hover:bg-[#1f2937]';
+
     return (
       <ConnectButton.Custom>
         {({
@@ -147,21 +150,11 @@ export function WalletButton({ className = '', variant = 'default' }: WalletButt
                 if (!connected) {
                   return (
                     <button
+                      type="button"
                       onClick={openConnectModal}
-                      className={`
-                        inline-flex items-center gap-2
-                        px-4 py-2 rounded-lg
-                        bg-slate-800 hover:bg-slate-700
-                        border border-slate-700
-                        text-white text-sm font-medium
-                        transition-colors
-                        ${className}
-                      `}
+                      className={`${btnBase} ${className}`}
                     >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                      </svg>
-                      Connect
+                      Connect wallet
                     </button>
                   );
                 }
@@ -169,79 +162,26 @@ export function WalletButton({ className = '', variant = 'default' }: WalletButt
                 if (chain.unsupported) {
                   return (
                     <button
+                      type="button"
                       onClick={openChainModal}
-                      className={`
-                        inline-flex items-center gap-2
-                        px-4 py-2 rounded-lg
-                        bg-red-500/10 hover:bg-red-500/20
-                        border border-red-500/30
-                        text-red-400 text-sm
-                        transition-colors
-                        ${className}
-                      `}
+                      className={`${btnBase} border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-400 ${className}`}
                     >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
-                      Network
+                      Wrong network
                     </button>
                   );
                 }
 
                 return (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={openChainModal}
-                      className={`
-                        hidden sm:inline-flex items-center gap-2
-                        px-3 py-2 rounded-lg
-                        bg-slate-800 hover:bg-slate-700
-                        border border-slate-700
-                        text-slate-300 text-sm
-                        transition-colors
-                        ${className}
-                      `}
-                    >
-                      {chain.hasIcon && (
-                        <div
-                          style={{
-                            background: chain.iconBackground,
-                            width: 16,
-                            height: 16,
-                            borderRadius: 999,
-                            overflow: 'hidden',
-                          }}
-                        >
-                          {chain.iconUrl && (
-                            <img
-                              alt={chain.name ?? 'Chain icon'}
-                              src={chain.iconUrl}
-                              style={{ width: 16, height: 16 }}
-                            />
-                          )}
-                        </div>
-                      )}
-                      <span className="hidden md:inline">{chain.name}</span>
-                    </button>
-
-                    <button
-                      onClick={openAccountModal}
-                      className={`
-                        inline-flex items-center gap-2
-                        px-4 py-2 rounded-lg
-                        bg-slate-800 hover:bg-slate-700
-                        border border-slate-700
-                        text-white text-sm font-medium
-                        transition-colors
-                        ${className}
-                      `}
-                    >
-                      <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                      <span className="font-mono">
-                        {account.displayName}
-                      </span>
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={openAccountModal}
+                    className={`${btnBase} ${className}`}
+                  >
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                    <span className="max-w-[8rem] truncate font-mono text-xs sm:max-w-[10rem]">
+                      {account.displayName}
+                    </span>
+                  </button>
                 );
               })()}
             </div>

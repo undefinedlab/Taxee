@@ -86,14 +86,46 @@ const TAXEE_MANAGER_ABI = [
   },
 ] as const;
 
-// Policy type
-export interface UserPolicy {
+// Policy type for on-chain delegation (EIP-712 + registry)
+export interface DelegationPolicy {
   actions: string[];
   maxPerTransaction: number;
   maxPerMonth: number;
   allowedAssets: string[];
   restrictions: string[];
   expirationDays: number;
+}
+
+/** @deprecated Use DelegationPolicy — kept for existing imports */
+export type UserPolicy = DelegationPolicy;
+
+const DEFAULT_DELEGATION_POLICY: DelegationPolicy = {
+  actions: ["HARVEST", "PARK", "REBALANCE"],
+  maxPerTransaction: 5000,
+  maxPerMonth: 20000,
+  allowedAssets: ["USDC", "USYC", "ETH"],
+  restrictions: [],
+  expirationDays: 90,
+};
+
+/** Map onboarding/tax policy to delegation limits with safe defaults */
+export function normalizeDelegationPolicy(
+  policy: Partial<DelegationPolicy> & {
+    maxPerTransaction?: number;
+    maxPerMonth?: number;
+    expirationDays?: number;
+  },
+): DelegationPolicy {
+  return {
+    actions: policy.actions ?? DEFAULT_DELEGATION_POLICY.actions,
+    maxPerTransaction:
+      policy.maxPerTransaction ?? DEFAULT_DELEGATION_POLICY.maxPerTransaction,
+    maxPerMonth: policy.maxPerMonth ?? DEFAULT_DELEGATION_POLICY.maxPerMonth,
+    allowedAssets: policy.allowedAssets ?? DEFAULT_DELEGATION_POLICY.allowedAssets,
+    restrictions: policy.restrictions ?? DEFAULT_DELEGATION_POLICY.restrictions,
+    expirationDays:
+      policy.expirationDays ?? DEFAULT_DELEGATION_POLICY.expirationDays,
+  };
 }
 
 // Delegation type
@@ -269,17 +301,20 @@ export function useCreateDelegation() {
     : '';
 
   const createDelegation = useCallback((
-    policy: UserPolicy,
+    policy: Partial<DelegationPolicy>,
     signature: `0x${string}`
   ) => {
     if (!registryAddress || !managerAddress) {
       throw new Error(`Contracts not deployed on this network (chainId: ${chainId}). Please switch to Base Sepolia (84532) or Base (8453).`);
     }
 
-    const policyHash = createPolicyHash(policy);
-    const expiration = BigInt(Math.floor(Date.now() / 1000) + (policy.expirationDays * 24 * 60 * 60));
-    const maxPerTx = parseUnits(policy.maxPerTransaction.toString(), 18);
-    const maxPerMonth = parseUnits(policy.maxPerMonth.toString(), 18);
+    const delegation = normalizeDelegationPolicy(policy);
+    const policyHash = createPolicyHash(delegation);
+    const expiration = BigInt(
+      Math.floor(Date.now() / 1000) + delegation.expirationDays * 24 * 60 * 60,
+    );
+    const maxPerTx = parseUnits(delegation.maxPerTransaction.toString(), 18);
+    const maxPerMonth = parseUnits(delegation.maxPerMonth.toString(), 18);
 
     writeContract({
       address: registryAddress as `0x${string}`,
@@ -341,7 +376,7 @@ export function useRevokeDelegation() {
 }
 
 // Helper function to create policy hash (bytes32)
-export function createPolicyHash(policy: UserPolicy): `0x${string}` {
+export function createPolicyHash(policy: DelegationPolicy): `0x${string}` {
   const policyString = JSON.stringify({
     actions: policy.actions,
     maxPerTransaction: policy.maxPerTransaction,

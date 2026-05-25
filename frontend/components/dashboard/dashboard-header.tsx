@@ -1,67 +1,45 @@
 'use client';
 
 import Link from 'next/link';
+import { TaxeeLogo } from '@/components/landing/logo';
+import { ThemeToggle } from '@/components/landing/theme-toggle';
 import { WalletButton } from '@/components/wallet/wallet-button';
-import { useDelegationStatus, useMonthlyLimits } from '@/components/wallet/use-taxee-contracts';
-import { useAccount } from 'wagmi';
+import { CircleWalletChip } from '@/components/wallet/circle-wallet-chip';
+import type { WalletConnectionType } from '@/lib/types';
 
-export function DashboardHeader() {
-  const { address } = useAccount();
-  const { hasDelegation, isLoading: delegationLoading } = useDelegationStatus();
-  const { remaining, isLoading: limitsLoading } = useMonthlyLimits();
+interface DashboardHeaderProps {
+  onOpenSettings?: () => void;
+  walletConnectionType?: WalletConnectionType | null;
+}
 
+export function DashboardHeader({ onOpenSettings, walletConnectionType }: DashboardHeaderProps) {
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-slate-800 bg-slate-950/80 backdrop-blur-xl">
-      <div className="w-full px-4 sm:px-6 lg:px-8">
-        <div className="flex h-16 items-center justify-between">
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center border border-slate-600">
-              <span className="text-white font-bold text-sm">T</span>
-            </div>
-            <span className="text-white font-display text-lg hidden sm:inline">taxee</span>
-          </Link>
+    <header className="landing-area-hero-topbar landing-grid-line flex items-center justify-between gap-3 border-b border-[#e5e7eb] px-4 py-3 dark:border-[#1f2937] sm:gap-4 sm:px-5 lg:px-6">
+      <Link href="/" className="shrink-0" aria-label="taxee home">
+        <TaxeeLogo showWordmark />
+      </Link>
 
-          {/* Center - Stats (if wallet connected) */}
-          {address && (
-            <div className="hidden md:flex items-center gap-6">
-              {/* Monthly Limit */}
-              <div className="flex items-center gap-2">
-                <span className="text-slate-400 text-sm">Monthly:</span>
-                <span className="text-white font-mono text-sm">
-                  {limitsLoading ? (
-                    <span className="animate-pulse">...</span>
-                  ) : (
-                    `$${remaining.toLocaleString()} left`
-                  )}
-                </span>
-              </div>
-
-              {/* Delegation Status */}
-              <div className="flex items-center gap-2">
-                <span className="text-slate-400 text-sm">Status:</span>
-                {delegationLoading ? (
-                  <span className="animate-pulse text-slate-400 text-sm">...</span>
-                ) : hasDelegation ? (
-                  <span className="flex items-center gap-1.5 text-emerald-400 text-sm">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                    Active
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1.5 text-amber-400 text-sm">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                    No Delegation
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Right side - Wallet */}
-          <div className="flex items-center gap-4">
-            <WalletButton variant="dashboard" />
-          </div>
-        </div>
+      <div className="flex shrink-0 items-center gap-2">
+        {onOpenSettings && (
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#e5e7eb] text-[#6b7280] transition-colors hover:bg-[#f9fafb] hover:text-[#111827] dark:border-[#374151] dark:text-[#9ca3af] dark:hover:bg-[#1f2937] dark:hover:text-[#f9fafb]"
+            title="Agent settings"
+            aria-label="Agent settings"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
+              <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
+            </svg>
+          </button>
+        )}
+        <ThemeToggle />
+        {walletConnectionType === 'circle' ? (
+          <CircleWalletChip />
+        ) : (
+          <WalletButton variant="topbar" />
+        )}
       </div>
     </header>
   );

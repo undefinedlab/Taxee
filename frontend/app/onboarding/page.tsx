@@ -3,11 +3,19 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
-import type { ApprovalSettings, UserPolicy } from "@/lib/types";
+import type { ApprovalSettings, UserPolicy, WalletConnectionType } from "@/lib/types";
 import { defaultApproval, defaultPolicy } from "@/lib/mock-data";
 import { ApprovalModePicker } from "@/components/onboarding/approval-mode-picker";
 import { OnboardingTopBar } from "@/components/onboarding/onboarding-topbar";
 import { registerAgent } from "@/lib/agent-store";
+import { syncWebAgentToBackend } from "@/lib/web-agent-api";
+import { saveWalletConnectionType } from "@/lib/wallet-session";
+import { DepositFundsButton } from "@/components/wallet/deposit-funds-button";
+import { getCircleWalletAddress } from "@/hooks/use-circle-wallet";
+import {
+  resolvePrimaryWalletAddress,
+  walletModeLabel,
+} from "@/lib/primary-wallet";
 import { truncateAddress } from "@/lib/utils";
 import { SimpleWalletConnect } from "@/components/wallet/simple-wallet-connect";
 import { CircleWalletSetup } from "@/components/wallet/circle-wallet-setup";
@@ -26,21 +34,35 @@ export default function OnboardingPage() {
   const [policy, setPolicy] = useState<UserPolicy>({ ...defaultPolicy });
   const [approval, setApproval] = useState<ApprovalSettings>({
     ...defaultApproval,
+    mode: "manual",
   });
   const [agentId, setAgentId] = useState<string | null>(null);
   const [goals, setGoals] = useState<string[]>([
     "Minimize taxes this year",
   ]);
   const [newGoal, setNewGoal] = useState("");
+  const [walletConnectionType, setWalletConnectionType] =
+    useState<WalletConnectionType | null>(null);
 
   const walletValid = /^0x[a-fA-F0-9]{40}$/.test(wallet.trim());
+  const needsEip7702 = walletConnectionType === "external_eip7702";
   
-  // Get connected wallet address
   const { address: connectedAddress } = useAccount();
-  const walletAddress = connectedAddress || wallet;
+  const walletAddress = resolvePrimaryWalletAddress({
+    connectionType: walletConnectionType,
+    storedWallet: wallet,
+    wagmiAddress: connectedAddress,
+  });
+  const walletMode = walletModeLabel(walletConnectionType);
   
-  // Fetch real wallet data
-  const { positions, totalValueUsd, isLoading: walletLoading, error: walletError } = useWalletData(walletAddress);
+  const scanAddress =
+    walletAddress && /^0x[a-fA-F0-9]{40}$/i.test(walletAddress)
+      ? walletAddress
+      : undefined;
+  const { positions, totalValueUsd, isLoading: walletLoading, error: walletError } =
+    useWalletData(scanAddress, {
+      fallbackToConnected: walletConnectionType === 'external_eip7702',
+    });
   
   // Set importing state based on wallet loading
   useEffect(() => {
@@ -71,8 +93,22 @@ export default function OnboardingPage() {
     setGoals(goals.filter((_, i) => i !== index));
   }
 
-  function finishOnboarding() {
-    const agent = registerAgent(walletAddress || '', policy, approval);
+  async function finishOnboarding(conn: WalletConnectionType = walletConnectionType ?? "external_eip7702") {
+    const finalPolicy: UserPolicy = { ...policy, walletConnectionType: conn };
+    saveWalletConnectionType(conn);
+    const addr =
+      conn === "circle"
+        ? getCircleWalletAddress() || wallet
+        : walletAddress || "";
+    const agent = registerAgent(addr, finalPolicy, approval);
+    if (conn === "circle" && addr) {
+      const synced = await syncWebAgentToBackend(addr, finalPolicy, approval);
+      if (!synced) {
+        console.warn(
+          "Server agent sync skipped (deploy latest API for /circle/sync-web-agent). Local agent is ready.",
+        );
+      }
+    }
     setAgentId(agent.id);
     setStep("done");
   }
@@ -131,7 +167,11 @@ export default function OnboardingPage() {
                       {/* Option 1: Connect with Wallet (MetaMask, etc.) */}
                       <button
                         type="button"
-                        onClick={() => setStep("wallet-connect")}
+                        onClick={() => {
+                          setWalletConnectionType("external_eip7702");
+                          saveWalletConnectionType("external_eip7702");
+                          setStep("wallet-connect");
+                        }}
                         className="group w-full rounded-xl border border-[#e5e7eb] bg-white p-6 text-left transition-all hover:border-[#111827] hover:shadow-lg dark:border-[#374151] dark:bg-[#111827] dark:hover:border-[#f9fafb]"
                       >
                         <div className="flex items-center gap-4">
@@ -166,21 +206,25 @@ export default function OnboardingPage() {
 
                       <button
                         type="button"
-                        onClick={() => setStep("circle-setup")}
+                        onClick={() => {
+                          setWalletConnectionType("circle");
+                          saveWalletConnectionType("circle");
+                          setStep("circle-setup");
+                        }}
                         className="group w-full rounded-xl border border-[#e5e7eb] bg-white p-6 text-left transition-all hover:border-[#111827] hover:shadow-lg dark:border-[#374151] dark:bg-[#111827] dark:hover:border-[#f9fafb]"
                       >
                         <div className="flex items-center gap-4">
-                          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white">
-                            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#f3f4f6] dark:bg-[#374151]">
+                            <svg className="h-6 w-6 text-[#111827] dark:text-[#f9fafb]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                             </svg>
                           </div>
                           <div className="flex-1">
                             <h3 className="font-landing font-medium text-[#111827] dark:text-[#f9fafb]">
-                              Create Circle Wallet
+                            Connect Circle Wallet
                             </h3>
                             <p className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
-                              MPC-based wallet with PIN protection. No seed phrase needed.
+                              MPC-based wallet with PIN protection.
                             </p>
                           </div>
                           <svg className="h-5 w-5 text-[#9ca3af] transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -209,7 +253,11 @@ export default function OnboardingPage() {
                         />
                         <button
                           type="button"
-                          onClick={() => setStep("import")}
+                          onClick={() => {
+                            setWalletConnectionType("watch");
+                            saveWalletConnectionType("watch");
+                            setStep("import");
+                          }}
                           disabled={!/^0x[a-fA-F0-9]{40}$/.test(wallet.trim())}
                           className="group inline-flex w-full items-stretch overflow-hidden rounded-lg bg-black shadow-[0_4px_16px_rgba(0,0,0,0.12)] disabled:opacity-50 disabled:cursor-not-allowed dark:bg-[#f9fafb] dark:shadow-none"
                         >
@@ -261,7 +309,8 @@ export default function OnboardingPage() {
                         Import portfolio
                       </h2>
                       <p className="font-landing text-sm leading-relaxed text-[#6b7280] dark:text-[#9ca3af]">
-                        Scanning blockchain for your wallet balances on {walletAddress ? truncateAddress(walletAddress) : 'connected wallet'} — no keys required.
+                        Scanning {walletMode.toLowerCase()}{" "}
+                        {walletAddress ? truncateAddress(walletAddress) : ""} — balances for the wallet you chose, not MetaMask unless you picked Connect Wallet.
                       </p>
                     </div>
 
@@ -291,9 +340,9 @@ export default function OnboardingPage() {
                         <div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4 dark:border-[#374151] dark:bg-[#1f2937]">
                           <div className="flex items-center justify-between">
                             <div>
-                              <p className="font-landing text-xs text-[#6b7280] dark:text-[#9ca3af]">Wallet</p>
+                              <p className="font-landing text-xs text-[#6b7280] dark:text-[#9ca3af]">{walletMode}</p>
                               <p className="font-landing font-medium text-[#111827] dark:text-[#f9fafb]">
-                                {walletAddress ? truncateAddress(walletAddress) : 'Connected'}
+                                {walletAddress ? truncateAddress(walletAddress) : "—"}
                               </p>
                             </div>
                             <div className="text-right">
@@ -380,7 +429,7 @@ export default function OnboardingPage() {
                           ) : walletError ? (
                             `Error: ${walletError}`
                           ) : (
-                            `Found ${positions.length} position${positions.length !== 1 ? 's' : ''} on ${walletAddress ? truncateAddress(walletAddress) : 'connected wallet'}`
+                            `Found ${positions.length} position${positions.length !== 1 ? 's' : ''} on ${walletMode} ${walletAddress ? truncateAddress(walletAddress) : ""}`
                           )}
                         </p>
                       </div>
@@ -413,10 +462,14 @@ export default function OnboardingPage() {
                             </p>
                           </div>
                         ) : positions.length === 0 ? (
-                          <div className="rounded-lg border border-[#e5e7eb] bg-white p-6 text-center dark:border-[#1f2937] dark:bg-[#111827]">
+                          <div className="space-y-4 rounded-lg border border-[#e5e7eb] bg-white p-6 text-center dark:border-[#1f2937] dark:bg-[#111827]">
                             <p className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
-                              No positions found on this wallet
+                              No positions found on {walletMode}
+                              {walletAddress ? ` ${truncateAddress(walletAddress)}` : ""}
                             </p>
+                            {walletAddress && /^0x[a-fA-F0-9]{40}$/i.test(walletAddress) && (
+                              <DepositFundsButton address={walletAddress} className="mx-auto" />
+                            )}
                           </div>
                         ) : (
                           positions.map((pos, index) => (
@@ -687,18 +740,8 @@ export default function OnboardingPage() {
                         Agent Policy
                       </h3>
                       <ul className="space-y-2 text-sm">
-                        <li className="flex items-center gap-2">
-                          <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          <span className="font-landing text-[#111827] dark:text-[#f9fafb]">Max ${policy.maxPerTransaction?.toLocaleString() || '5,000'} per transaction</span>
-                        </li>
-                        <li className="flex items-center gap-2">
-                          <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          <span className="font-landing text-[#111827] dark:text-[#f9fafb]">Max ${(policy.maxPerMonth || 20000).toLocaleString()} per month</span>
-                        </li>
+                     
+                     
                         <li className="flex items-center gap-2">
                           <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -720,21 +763,33 @@ export default function OnboardingPage() {
                       </ul>
                     </div>
 
-                    {/* EIP-7702 Info */}
-                    <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
-                      <div className="flex items-start gap-3">
-                        <svg className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <div>
-                          <p className="text-white/90 font-medium">EIP-7702 Delegation</p>
-                          <p className="text-white/60 text-sm">
-                            By activating, you&apos;ll sign a message granting Taxee limited authority to execute 
-                            tax optimization within your policy limits. You keep full control and can revoke anytime.
-                          </p>
+                   
+                    {walletConnectionType === "watch" && (
+                      <div className="p-4 rounded-xl bg-[#f9fafb] border border-[#e5e7eb] dark:border-[#374151] dark:bg-[#1f2937]">
+                        <p className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
+                          Watch-only mode: Taxee scans and suggests actions. You execute trades yourself in your wallet.
+                        </p>
+                      </div>
+                    )}
+
+                    {needsEip7702 && (
+                      <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                        <div className="flex items-start gap-3">
+                          <svg className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <div>
+                            <p className="font-landing text-sm font-medium text-[#111827] dark:text-[#f9fafb]">
+                              EIP-7702 delegation (MetaMask)
+                            </p>
+                            <p className="mt-1 font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
+                              Next you&apos;ll sign once in MetaMask to grant Taxee limited on-chain authority
+                              within your policy limits. You keep your keys and can revoke anytime.
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* Action Buttons */}
                     <div className="flex gap-3">
@@ -747,11 +802,14 @@ export default function OnboardingPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setStep("activate")}
+                        onClick={() => {
+                          if (needsEip7702) setStep("activate");
+                          else finishOnboarding(walletConnectionType ?? "circle");
+                        }}
                         className="flex-[2] group inline-flex items-stretch overflow-hidden rounded-xl bg-black shadow-[0_4px_16px_rgba(0,0,0,0.12)] dark:bg-[#f9fafb] dark:shadow-none"
                       >
                         <span className="flex flex-1 items-center justify-center px-6 py-3 font-landing text-sm font-medium text-white dark:text-[#111827]">
-                          Activate Agent
+                          {needsEip7702 ? "Continue to Sign" : "Activate Agent"}
                         </span>
                         <span className="flex w-[52px] items-center justify-center bg-[#374151] transition-colors group-hover:bg-[#4b5563] dark:bg-[#4b5563] dark:group-hover:bg-[#6b7280]">
                           <svg className="landing-cta-arrow" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#111827" strokeWidth="2.2">
@@ -763,14 +821,10 @@ export default function OnboardingPage() {
                   </div>
                 )}
 
-                {step === "activate" && (
+                {step === "activate" && needsEip7702 && (
                   <AgentActivation
                     policy={policy}
-                    onSuccess={() => {
-                      const agent = registerAgent(walletAddress || '', policy, approval);
-                      setAgentId(agent.id);
-                      setStep("done");
-                    }}
+                    onSuccess={() => finishOnboarding("external_eip7702")}
                     onBack={() => setStep("review")}
                   />
                 )}

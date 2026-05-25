@@ -8,6 +8,7 @@ export type OpportunityStatus =
   | "auto_executed";
 export type ExecutionTier = "watch" | "execute";
 export type ApprovalMode = "manual" | "delegated";
+export type WalletConnectionType = "watch" | "external_eip7702" | "circle";
 
 export interface ApprovalSettings {
   mode: ApprovalMode;
@@ -28,6 +29,11 @@ export interface UserPolicy {
   /** Ignore harvest suggestions below this USD loss */
   minHarvestLossUsd?: number;
   heartbeatIntervalMinutes?: number;
+  /** EIP-7702 delegation limits (USD) */
+  maxPerTransaction?: number;
+  maxPerMonth?: number;
+  expirationDays?: number;
+  walletConnectionType?: WalletConnectionType;
 }
 
 export interface WalletBinding {
@@ -79,6 +85,8 @@ export interface Opportunity {
   deferDays?: number;
   deferReason?: string;
   createdAt: string;
+  resolvedAt?: string;
+  txHash?: string;
   executedAutonomously?: boolean;
 }
 

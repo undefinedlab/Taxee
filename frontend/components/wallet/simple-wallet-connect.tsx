@@ -89,29 +89,7 @@ export function SimpleWalletConnect({ onComplete, onBack }: SimpleWalletConnectP
         </div>
       </div>
 
-      {/* Optional Circle PIN wallet for execution */}
-      {canProceed && (
-        <div className="ml-11 space-y-3">
-          <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-            <p className="text-white font-medium text-sm mb-1">Circle wallet (optional)</p>
-            <p className="text-white/50 text-xs mb-3">
-              MetaMask is for signing &amp; delegation. Add a Circle MPC wallet with PIN if you want
-              taxee to execute trades with gas sponsorship.
-            </p>
-            {hasCircle ? (
-              <p className="text-emerald-400 text-sm">Circle wallet already set up.</p>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setShowCircleSetup(true)}
-                className="text-sm font-medium text-blue-400 hover:text-blue-300"
-              >
-                Create Circle wallet + PIN →
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+     
 
       {/* Continue Button */}
       {canProceed && (
@@ -128,33 +106,9 @@ export function SimpleWalletConnect({ onComplete, onBack }: SimpleWalletConnectP
         </div>
       )}
 
-      {/* Info Box */}
-      <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
-        <div className="flex items-start gap-3">
-          <svg className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <div className="space-y-2">
-            <div>
-              <p className="text-white/90 font-medium">What happens next?</p>
-              <p className="text-white/60 text-sm">
-                We&apos;ll scan your wallet for token balances, then you&apos;ll configure your tax optimization policy. 
-                The EIP-7702 delegation will be created at the final step when you activate your agent.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+    
 
-      {/* Back Button */}
-      <div className="flex justify-center">
-        <button
-          onClick={onBack}
-          className="text-white/50 hover:text-white/80 text-sm transition-colors"
-        >
-          ← Back
-        </button>
-      </div>
+
     </div>
   );
 }

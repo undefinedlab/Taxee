@@ -25,8 +25,33 @@ function ExecuteContent() {
     async function run() {
       try {
         const res  = await fetch(`${apiUrl}/circle/challenge/${oppId}`, { method: "POST" });
-        const data = await res.json();
-        if (data.error) { setStatus("error"); setMessage(`API error: ${data.error}`); return; }
+        let data: Record<string, unknown> = {};
+        try {
+          data = (await res.json()) as Record<string, unknown>;
+        } catch {
+          data = {};
+        }
+        if (!res.ok) {
+          setStatus("error");
+          const err = String(data.error ?? data.message ?? `HTTP ${res.status}`);
+          if (res.status === 404) {
+            setMessage(
+              `${err}\n\nThis opportunity is not on the server. Open Dashboard → Settings (gear) → Sync Circle agent, or reset and onboard again.`,
+            );
+          } else if (res.status === 400 && err.includes("Circle wallet")) {
+            setMessage(
+              `${err}\n\nYour agent is not linked to Circle. Dashboard → Settings → Sync Circle agent to server.`,
+            );
+          } else {
+            setMessage(err);
+          }
+          return;
+        }
+        if (data.error) {
+          setStatus("error");
+          setMessage(String(data.error));
+          return;
+        }
         const { userToken, encryptionKey, challengeId } = data;
 
         const { W3SSdk } = await import("@circle-fin/w3s-pw-web-sdk");

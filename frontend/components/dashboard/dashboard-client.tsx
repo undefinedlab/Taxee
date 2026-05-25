@@ -1,15 +1,37 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import type { Agent, Opportunity } from "@/lib/types";
+import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { useAccount } from "wagmi";
+import type { Agent, Opportunity, WalletConnectionType } from "@/lib/types";
+import { defaultApproval, demoAgent, demoRegime } from "@/lib/mock-data";
 import {
-  defaultApproval,
-  demoAgent,
-  demoPositions,
-  demoRegime,
-} from "@/lib/mock-data";
-import { loadAgent } from "@/lib/agent-store";
+  loadAgent,
+  loadOpportunities,
+  saveOpportunities,
+  updateAgentApproval,
+  updateOpportunityStatus,
+} from "@/lib/agent-store";
+import {
+  fetchWebOpportunities,
+  runWebOpportunityScan,
+  fullWebReset,
+  getTaxeeUserId,
+  isServerExecutableOpportunity,
+  syncWebAgentToBackend,
+} from "@/lib/web-agent-api";
+import {
+  getStoredCircleAddress,
+  resolvePrimaryWalletAddress,
+  walletModeLabel,
+} from "@/lib/primary-wallet";
+import {
+  getWalletConnectionType,
+  getActiveWalletAddress,
+} from "@/lib/wallet-session";
+import { DepositFundsButton } from "@/components/wallet/deposit-funds-button";
+import { useWalletData } from "@/hooks/use-wallet-data";
+import { truncateAddress } from "@/lib/utils";
 import type { ApprovalSettings } from "@/lib/types";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 
@@ -17,76 +39,309 @@ interface DashboardClientProps {
   agentId: string;
 }
 
-// Mock opportunities data
-const MOCK_OPPORTUNITIES: Opportunity[] = [
-  {
-    id: "opp-1",
-    agentId: "agent-1",
-    type: "HARVEST",
-    status: "pending",
-    headline: "Harvest wETH loss",
-    taxSavingEstimate: 180,
-    llmReasoning: "wETH is down 14% from cost basis. Harvesting now would save ~$180 in taxes. Replace with stETH to maintain ETH exposure.",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "opp-2",
-    agentId: "agent-1",
-    type: "PARK",
-    status: "pending",
-    headline: "Park USDC in USYC",
-    taxSavingEstimate: 45,
-    llmReasoning: "Lot approaching long-term threshold (335 days). Park in USYC to earn 4.5% yield while waiting for LT treatment.",
-    createdAt: new Date().toISOString(),
-  },
-];
+function resolveConnectionType(agent: Agent | null): WalletConnectionType {
+  const stored = getWalletConnectionType();
+  if (stored) return stored;
+  if (agent?.policy.walletConnectionType) return agent.policy.walletConnectionType;
+  if (getStoredCircleAddress()) return "circle";
+  return "external_eip7702";
+}
 
 export function DashboardClient({ agentId }: DashboardClientProps) {
-  const [agent, setAgent] = useState<Agent | null>(null);
+  const router = useRouter();
+  const { address: wagmiAddress } = useAccount();
+  const [agent, setAgent] = useState<Agent | null>(() =>
+    typeof window !== "undefined" ? loadAgent() : null,
+  );
+  const [hydrated, setHydrated] = useState(false);
   const [approval, setApproval] = useState<ApprovalSettings | null>(null);
-  const [opportunities, setOpportunities] = useState<Opportunity[]>(MOCK_OPPORTUNITIES);
+  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activityTab, setActivityTab] = useState<"opportunities" | "history">(
+    "opportunities",
+  );
+  const [refreshingOpps, setRefreshingOpps] = useState(false);
+  const [oppsRefreshNote, setOppsRefreshNote] = useState<string | null>(null);
 
   useEffect(() => {
+    setHydrated(true);
     const stored = loadAgent();
     if (stored && (stored.id === agentId || agentId === "demo")) {
+      const conn = resolveConnectionType(stored);
+      const circleAddr = getStoredCircleAddress();
+      const primaryAddr = getActiveWalletAddress(
+        conn,
+        stored.wallets[0]?.address,
+      );
+      const patched: Agent =
+        primaryAddr && stored.wallets[0]?.address !== primaryAddr
+          ? {
+              ...stored,
+              wallets: [
+                {
+                  ...stored.wallets[0],
+                  address: primaryAddr,
+                },
+                ...stored.wallets.slice(1),
+              ],
+            }
+          : stored;
       const withApproval = {
-        ...stored,
-        approval: stored.approval ?? defaultApproval,
+        ...patched,
+        approval: {
+          ...defaultApproval,
+          ...patched.approval,
+          mode: patched.approval?.mode ?? "manual",
+        },
       };
       setAgent(withApproval);
       setApproval(withApproval.approval);
     } else if (agentId === "demo") {
       setAgent(demoAgent);
       setApproval(demoAgent.approval);
+    } else if (!stored) {
+      setAgent(null);
+      setApproval(null);
     } else {
       setAgent(demoAgent);
       setApproval(demoAgent.approval);
     }
+    const storedOpps = loadOpportunities().filter(
+      (o) => o.agentId === agentId || agentId === "demo",
+    );
+
+    void (async () => {
+      const { opportunities: remote, error, apiRouteMissing } =
+        await fetchWebOpportunities();
+      if (remote.length > 0) {
+        setOpportunities(remote);
+        saveOpportunities(remote);
+        setOppsRefreshNote(null);
+      } else {
+        setOpportunities(storedOpps);
+        if (error) setOppsRefreshNote(error);
+        else if (apiRouteMissing) {
+          setOppsRefreshNote(
+            "Production API is missing opportunity routes — redeploy Railway API.",
+          );
+        }
+      }
+    })();
   }, [agentId]);
 
+  const hasRegisteredAgent = !!agent && agentId !== "demo";
   const displayAgent = agent ?? demoAgent;
-  const displayApproval = approval ?? displayAgent.approval;
-  const wallet = displayAgent.wallets[0]?.address ?? "—";
+  const connType = resolveConnectionType(agent);
+  const displayApproval: ApprovalSettings = {
+    ...defaultApproval,
+    ...displayAgent.approval,
+    ...(approval ?? {}),
+    mode: approval?.mode ?? displayAgent.approval?.mode ?? "manual",
+  };
+  const wallet =
+    connType === "circle"
+      ? getActiveWalletAddress(connType, displayAgent.wallets[0]?.address)
+      : resolvePrimaryWalletAddress({
+          connectionType: connType,
+          storedWallet: displayAgent.wallets[0]?.address,
+          wagmiAddress: wagmiAddress,
+        });
+  const walletValid = /^0x[a-fA-F0-9]{40}$/.test(wallet);
+  const walletMode = walletModeLabel(connType);
+  const {
+    positions: livePositions,
+    totalValueUsd,
+    isLoading: portfolioLoading,
+    error: portfolioError,
+  } = useWalletData(walletValid ? wallet : undefined, {
+    fallbackToConnected: connType === "external_eip7702",
+  });
+
   const pending = opportunities.filter((o) => o.status === "pending");
-  
-  // Calculate stats
-  const totalValue = demoPositions.reduce((sum, pos) => sum + pos.valueUsd, 0);
-  const totalCostBasis = demoPositions.reduce((sum, pos) => sum + pos.costBasisUsd, 0);
-  const totalUnrealized = totalValue - totalCostBasis;
+  const history = opportunities
+    .filter((o) => o.status !== "pending")
+    .sort(
+      (a, b) =>
+        new Date(b.resolvedAt ?? b.createdAt).getTime() -
+        new Date(a.resolvedAt ?? a.createdAt).getTime(),
+    );
+
+  const displayApprovalMode = displayApproval?.mode ?? "manual";
+
+  const totalValue = walletValid ? totalValueUsd : 0;
   const totalTaxSaved = opportunities
     .filter((o) => o.status === "executed" || o.status === "auto_executed")
     .reduce((sum, o) => sum + (o.taxSavingEstimate || 0), 0);
   const pendingTaxSavings = pending.reduce((sum, o) => sum + (o.taxSavingEstimate || 0), 0);
 
+  const heartbeatMin =
+    displayAgent.policy.heartbeatIntervalMinutes ??
+    displayAgent.heartbeatIntervalMinutes ??
+    60;
+  const agentStatusLabel =
+    displayAgent.status === "active"
+      ? "Active"
+      : displayAgent.status === "paused"
+        ? "Paused"
+        : "Setup";
+
+  const needsWalletSetup =
+    hydrated &&
+    hasRegisteredAgent &&
+    (connType === "circle" ? !getStoredCircleAddress() : !walletValid);
+  const needsOnboarding = hydrated && !hasRegisteredAgent && agentId !== "demo";
+
+  const handleApprove = useCallback(
+    (opp: Opportunity) => {
+      if (connType === "circle") {
+        if (!isServerExecutableOpportunity(opp)) {
+          window.alert(
+            "This opportunity is not on the server yet (local/demo only).\n\n" +
+              "• Open Settings (gear) → Reset registration, then complete onboarding again\n" +
+              "• Or use Telegram after the agent heartbeat creates real opportunities",
+          );
+          return;
+        }
+        if (!getTaxeeUserId()) {
+          window.alert("Missing taxee user id. Reset registration in Settings and set up Circle again.");
+          return;
+        }
+        router.push(`/execute?oppId=${encodeURIComponent(opp.id)}`);
+        return;
+      }
+      if (connType === "watch") {
+        window.alert(
+          "Watch-only mode: Taxee cannot execute from the dashboard. Use Telegram for tx steps, or onboard with a Circle wallet.",
+        );
+        return;
+      }
+      setOpportunities(updateOpportunityStatus(opp.id, "executed"));
+    },
+    [connType, router],
+  );
+
+  const handleSkip = useCallback((opp: Opportunity) => {
+    setOpportunities(updateOpportunityStatus(opp.id, "skipped"));
+  }, []);
+
+  const handleRefreshOpportunities = useCallback(async () => {
+    setRefreshingOpps(true);
+    setOppsRefreshNote(null);
+    let note: string | null = null;
+    try {
+      const scan = await runWebOpportunityScan();
+      if (scan.error) {
+        note = scan.error;
+      } else if (scan.ok && scan.totalSaved !== undefined) {
+        note =
+          scan.totalSaved > 0
+            ? `Scan complete — ${scan.totalSaved} new opportunit${scan.totalSaved === 1 ? "y" : "ies"}.`
+            : "Scan complete — no tax actions flagged (empty wallet, no losses, or LLM skipped).";
+      }
+
+      const { opportunities: remote, error, apiRouteMissing } =
+        await fetchWebOpportunities();
+      if (remote.length > 0) {
+        setOpportunities(remote);
+        saveOpportunities(remote);
+        if (scan.ok && scan.totalSaved && scan.totalSaved > 0) {
+          note = `Showing ${remote.length} opportunit${remote.length === 1 ? "y" : "ies"}.`;
+        } else {
+          note = null;
+        }
+      } else if (!scan.error && !error) {
+        const stored = loadOpportunities().filter(
+          (o) => o.agentId === agentId || agentId === "demo",
+        );
+        setOpportunities(stored);
+      }
+      if (error) note = error;
+      else if (apiRouteMissing && !scan.apiRouteMissing) {
+        note =
+          note ??
+          "Deploy latest API so Refresh can list opportunities from the database.";
+      }
+      setOppsRefreshNote(note);
+    } finally {
+      setRefreshingOpps(false);
+    }
+  }, [agentId]);
+
+  const handleApproveAll = useCallback(() => {
+    if (pending.length === 0) return;
+    const executable = pending.find((o) => isServerExecutableOpportunity(o));
+    if (connType === "circle") {
+      if (!executable) {
+        window.alert("No server-backed opportunities to execute. Sync via Settings or use Telegram.");
+        return;
+      }
+      router.push(`/execute?oppId=${encodeURIComponent(executable.id)}`);
+      return;
+    }
+    pending.forEach((opp) => handleApprove(opp));
+  }, [pending, connType, router, handleApprove]);
+
+  const handleResetRegistration = useCallback(async () => {
+    if (
+      !window.confirm(
+        "Reset this registration?\n\nClears local data and deletes web agents on the server. Your Circle wallet stays at Circle — you can onboard again with the correct wallet type.",
+      )
+    ) {
+      return;
+    }
+    await fullWebReset();
+    setSettingsOpen(false);
+    router.push("/onboarding");
+  }, [router]);
+
+  const handleResyncAgent = useCallback(async () => {
+    const synced = await syncWebAgentToBackend(wallet, displayAgent.policy, displayApproval);
+    if (synced) {
+      window.alert(`Linked to server agent.\nCircle wallet: ${synced.circleWalletId ? "yes" : "pending"}`);
+      const { opportunities: remote } = await fetchWebOpportunities();
+      if (remote.length > 0) {
+        setOpportunities(remote);
+        saveOpportunities(remote);
+      }
+    } else {
+      window.alert(
+        "Sync failed. Deploy the latest API to Railway (needs /circle/sync-web-agent), or finish Circle PIN setup and try again.",
+      );
+    }
+  }, [wallet, displayAgent.policy, displayApproval]);
+
   return (
     <div className="landing-root landing-marble-bg relative min-h-screen">
       <div className="landing-ambient" aria-hidden />
-      <DashboardHeader />
       <div className="relative z-[1] p-3 sm:p-5 lg:p-8">
         <div className="mx-auto max-w-[1320px] space-y-6 sm:space-y-8">
           <div className="landing-card-sharp landing-glass landing-animate-in overflow-hidden">
-            <main className="px-6 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10">
+            <DashboardHeader
+              onOpenSettings={() => setSettingsOpen(true)}
+              walletConnectionType={connType}
+            />
+            <main className="relative px-6 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10">
+              {(needsOnboarding || needsWalletSetup) && (
+                <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/75 p-6 backdrop-blur-sm dark:bg-[#0b0f19]/80">
+                  <div className="max-w-md rounded-xl border border-[#e5e7eb] bg-white p-8 text-center shadow-lg dark:border-[#374151] dark:bg-[#111827]">
+                    <h2 className="font-serif text-xl font-bold text-[#111827] dark:text-[#f9fafb]">
+                      {needsOnboarding ? "Register your wallet first" : "Complete wallet setup"}
+                    </h2>
+                    <p className="mt-2 font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
+                      {needsOnboarding
+                        ? "Finish onboarding to create or connect your taxee wallet before using the dashboard."
+                        : "Your Circle wallet is not linked in this browser. Finish setup or reset registration."}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => router.push("/onboarding")}
+                      className="mt-6 rounded-lg bg-[#111827] px-6 py-3 font-landing text-sm font-medium text-white dark:bg-[#f9fafb] dark:text-[#111827]"
+                    >
+                      Go to onboarding
+                    </button>
+                  </div>
+                </div>
+              )}
               {/* Stats Bar - Clean Design */}
               <div className="mb-6 grid grid-cols-2 gap-8 border-b border-[#e5e7eb] pb-6 dark:border-[#374151] sm:grid-cols-4">
                 <div>
@@ -94,8 +349,14 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
                   <p className="mt-1 font-serif text-3xl font-semibold text-[#111827] dark:text-[#f9fafb]">
                     ${totalValue.toLocaleString()}
                   </p>
-                  <p className={`mt-1 font-landing text-sm ${totalUnrealized >= 0 ? "text-[#374151] dark:text-[#9ca3af]" : "text-[#374151] dark:text-[#9ca3af]"}`}>
-                    {totalUnrealized >= 0 ? "+" : ""}{((totalUnrealized / totalCostBasis) * 100).toFixed(1)}% unrealized
+                  <p className="mt-1 font-landing text-sm text-[#9ca3af]">
+                    {portfolioLoading
+                      ? "Loading…"
+                      : portfolioError
+                        ? "Scan error"
+                        : walletValid
+                          ? `${livePositions.length} on-chain position${livePositions.length !== 1 ? "s" : ""}`
+                          : "No wallet"}
                   </p>
                 </div>
 
@@ -120,12 +381,12 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
                 </div>
 
                 <div>
-                  <p className="font-landing text-xs uppercase tracking-wider text-[#9ca3af]">Heartbeat</p>
+                  <p className="font-landing text-xs uppercase tracking-wider text-[#9ca3af]">Agent</p>
                   <p className="mt-1 font-serif text-3xl font-semibold text-[#111827] dark:text-[#f9fafb]">
-                    Active
+                    {agentStatusLabel}
                   </p>
                   <p className="mt-1 font-landing text-sm text-[#9ca3af]">
-                    Every 60 min
+                    Heartbeat every {heartbeatMin} min · {walletMode}
                   </p>
                 </div>
               </div>
@@ -152,75 +413,138 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
               <div className="grid gap-8 lg:grid-cols-3">
                 {/* Left Column - Opportunities (2/3) */}
                 <div className="lg:col-span-2">
-                  {/* Section heading OUTSIDE the card */}
-                  <div className="mb-4 flex items-center justify-between">
+                  <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
                     <div>
                       <h2 className="font-serif text-xl font-bold text-[#111827] dark:text-[#f9fafb]">
-                        Opportunities
+                        Activity
                       </h2>
                       <p className="mt-1 font-landing text-sm text-[#9ca3af]">
-                        {pending.length} actions waiting for your review
+                        {activityTab === "opportunities"
+                          ? `${pending.length} waiting for review`
+                          : `${history.length} past action${history.length !== 1 ? "s" : ""}`}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button 
-                        className="flex h-9 w-9 items-center justify-center rounded-lg text-[#6b7280] transition-colors hover:bg-white/50 hover:text-[#111827] dark:text-[#9ca3af] dark:hover:bg-white/10 dark:hover:text-[#f9fafb]"
-                        title="Approve all"
-                      >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                      </button>
-                      <button 
-                        className="flex h-9 w-9 items-center justify-center rounded-lg text-[#6b7280] transition-colors hover:bg-white/50 hover:text-[#111827] dark:text-[#9ca3af] dark:hover:bg-white/10 dark:hover:text-[#f9fafb]"
-                        title="Refresh"
-                      >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <polyline points="23 4 23 10 17 10" />
-                          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                        </svg>
-                      </button>
-                    </div>
+                    {activityTab === "opportunities" && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void handleRefreshOpportunities()}
+                          disabled={refreshingOpps}
+                          className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#e5e7eb] text-[#6b7280] transition-colors hover:bg-white/50 hover:text-[#111827] disabled:opacity-50 dark:border-[#374151] dark:text-[#9ca3af] dark:hover:bg-white/10 dark:hover:text-[#f9fafb]"
+                          title="Check for new opportunities"
+                          aria-label="Refresh opportunities"
+                        >
+                          <svg
+                            width="18"
+                            height="18"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            className={refreshingOpps ? "animate-spin" : undefined}
+                            aria-hidden
+                          >
+                            <path d="M23 4v6h-6" />
+                            <path d="M1 20v-6h6" />
+                            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleApproveAll}
+                          disabled={pending.length === 0}
+                          className="flex h-9 w-9 items-center justify-center rounded-lg text-[#6b7280] transition-colors hover:bg-white/50 hover:text-[#111827] disabled:opacity-40 dark:text-[#9ca3af] dark:hover:bg-white/10 dark:hover:text-[#f9fafb]"
+                          title="Approve all"
+                          aria-label="Approve all"
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Individual Opportunity Cards */}
-                  <div className="space-y-4">
-                    {pending.length === 0 ? (
-                      <div className="landing-glass rounded-xl p-8 text-center">
-                        <p className="font-landing text-[#9ca3af]">
-                          Nothing flagged — agent will rescan on next heartbeat.
-                        </p>
-                      </div>
-                    ) : (
-                      pending.map((opportunity) => (
-                        <OpportunityCard 
-                          key={opportunity.id} 
-                          opportunity={opportunity}
-                          approvalMode={displayApproval.mode}
-                        />
-                      ))
-                    )}
+                  <div className="mb-4 inline-flex rounded-lg border border-[#e5e7eb] bg-white/50 p-1 dark:border-[#374151] dark:bg-white/5">
+                    <button
+                      type="button"
+                      onClick={() => setActivityTab("opportunities")}
+                      className={`rounded-md px-4 py-2 font-landing text-sm font-medium transition-colors ${
+                        activityTab === "opportunities"
+                          ? "bg-[#111827] text-white dark:bg-[#f9fafb] dark:text-[#111827]"
+                          : "text-[#6b7280] hover:text-[#111827] dark:text-[#9ca3af] dark:hover:text-[#f9fafb]"
+                      }`}
+                    >
+                      Opportunities
+                      {pending.length > 0 && (
+                        <span className="ml-2 rounded-full bg-white/20 px-1.5 py-0.5 text-xs dark:bg-black/10">
+                          {pending.length}
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActivityTab("history")}
+                      className={`rounded-md px-4 py-2 font-landing text-sm font-medium transition-colors ${
+                        activityTab === "history"
+                          ? "bg-[#111827] text-white dark:bg-[#f9fafb] dark:text-[#111827]"
+                          : "text-[#6b7280] hover:text-[#111827] dark:text-[#9ca3af] dark:hover:text-[#f9fafb]"
+                      }`}
+                    >
+                      History
+                      {history.length > 0 && (
+                        <span className="ml-2 rounded-full bg-white/20 px-1.5 py-0.5 text-xs dark:bg-black/10">
+                          {history.length}
+                        </span>
+                      )}
+                    </button>
+                  </div>
 
-                    {/* Resolved opportunities */}
-                    {opportunities.filter((o) => o.status !== "pending").length > 0 && (
-                      <div className="mt-8">
-                        <h3 className="mb-4 font-landing text-sm font-medium text-[#9ca3af]">
-                          Resolved
-                        </h3>
-                        <div className="space-y-4 opacity-60">
-                          {opportunities
-                            .filter((o) => o.status !== "pending")
-                            .map((o) => (
-                              <OpportunityCard
-                                key={o.id}
-                                opportunity={o}
-                                approvalMode={displayApproval.mode}
-                                resolved
-                              />
-                            ))}
+                  <div className="space-y-4">
+                    {activityTab === "opportunities" &&
+                      (pending.length === 0 ? (
+                        <div className="landing-glass rounded-xl p-8 text-center space-y-3">
+                          <p className="font-landing text-[#9ca3af]">
+                            {refreshingOpps
+                              ? "Running scan and checking opportunities…"
+                              : "Nothing flagged yet — tap Refresh to run a scan."}
+                          </p>
+                          {oppsRefreshNote && (
+                            <p className="font-landing text-xs text-amber-700 dark:text-amber-400/90 max-w-md mx-auto">
+                              {oppsRefreshNote}
+                            </p>
+                          )}
+                          {!oppsRefreshNote && !refreshingOpps && (
+                            <p className="font-landing text-xs text-[#9ca3af] max-w-md mx-auto">
+                              Needs: server agent synced, funded wallet with open lots, and API +
+                              agent worker deployed on Railway.
+                            </p>
+                          )}
                         </div>
-                      </div>
-                    )}
+                      ) : (
+                        pending.map((opportunity) => (
+                          <OpportunityCard
+                            key={opportunity.id}
+                            opportunity={opportunity}
+                            approvalMode={displayApprovalMode}
+                            onApprove={() => handleApprove(opportunity)}
+                            onSkip={() => handleSkip(opportunity)}
+                          />
+                        ))
+                      ))}
+
+                    {activityTab === "history" &&
+                      (history.length === 0 ? (
+                        <div className="landing-glass rounded-xl p-8 text-center">
+                          <p className="font-landing text-[#9ca3af]">
+                            No transactions yet. Approved, skipped, and executed actions will appear here.
+                          </p>
+                        </div>
+                      ) : (
+                        history.map((item) => (
+                          <TransactionHistoryRow key={item.id} item={item} />
+                        ))
+                      ))}
                   </div>
                 </div>
 
@@ -237,42 +561,51 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
                         Approval mode
                       </h3>
                       <span className="font-landing text-xs text-[#6b7280] dark:text-[#9ca3af]">
-                        {displayApproval.mode === "manual" ? "Manual" : "Delegated"}
+                        {displayApprovalMode === "manual" ? "Manual (default)" : "Delegated"}
                       </span>
                     </div>
-                    
-                    {/* Toggle Switch */}
+
                     <button
-                      onClick={() => setApproval({ 
-                        ...displayApproval, 
-                        mode: displayApproval.mode === "manual" ? "delegated" : "manual" 
-                      })}
+                      type="button"
+                      onClick={() => {
+                        const next: ApprovalSettings = {
+                          ...displayApproval,
+                          mode:
+                            displayApprovalMode === "manual" ? "delegated" : "manual",
+                        };
+                        setApproval(next);
+                        updateAgentApproval(next);
+                      }}
                       className="relative flex h-8 w-full items-center rounded-full bg-white/50 p-1 dark:bg-white/10"
                     >
                       <div
                         className={`absolute h-6 w-1/2 rounded-full bg-[#111827] transition-all duration-200 dark:bg-[#f9fafb] ${
-                          displayApproval.mode === "delegated" ? "left-1/2" : "left-1"
+                          displayApprovalMode === "delegated" ? "left-1/2" : "left-1"
                         }`}
                       />
-                      <span className={`relative z-10 flex-1 text-center font-landing text-xs ${
-                        displayApproval.mode === "manual" 
-                          ? "text-white dark:text-[#111827]" 
-                          : "text-[#6b7280] dark:text-[#9ca3af]"
-                      }`}>
+                      <span
+                        className={`relative z-10 flex-1 text-center font-landing text-xs ${
+                          displayApprovalMode === "manual"
+                            ? "text-white dark:text-[#111827]"
+                            : "text-[#6b7280] dark:text-[#9ca3af]"
+                        }`}
+                      >
                         Manual
                       </span>
-                      <span className={`relative z-10 flex-1 text-center font-landing text-xs ${
-                        displayApproval.mode === "delegated" 
-                          ? "text-white dark:text-[#111827]" 
-                          : "text-[#6b7280] dark:text-[#9ca3af]"
-                      }`}>
+                      <span
+                        className={`relative z-10 flex-1 text-center font-landing text-xs ${
+                          displayApprovalMode === "delegated"
+                            ? "text-white dark:text-[#111827]"
+                            : "text-[#6b7280] dark:text-[#9ca3af]"
+                        }`}
+                      >
                         Delegated
                       </span>
                     </button>
-                    
+
                     <p className="mt-3 font-landing text-xs text-[#9ca3af]">
-                      {displayApproval.mode === "manual" 
-                        ? "You approve each action manually" 
+                      {displayApprovalMode === "manual"
+                        ? "Standard: you approve each action before anything runs"
                         : "Agent acts autonomously within policy limits"}
                     </p>
                   </div>
@@ -319,29 +652,49 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
                           Positions
                         </h3>
                       </div>
-                      <span className="font-landing text-xs text-[#9ca3af]">{demoPositions.length} assets</span>
+                      <span className="font-landing text-xs text-[#9ca3af]">
+                        {walletValid ? `${livePositions.length} on-chain` : "—"}
+                      </span>
                     </div>
+                    {portfolioError && (
+                      <p className="mb-2 font-landing text-xs text-red-500">{portfolioError}</p>
+                    )}
                     <div className="space-y-2">
-                      {demoPositions.slice(0, 4).map((pos, index) => (
-                        <div key={index} className="flex items-center justify-between rounded-lg bg-white/50 px-3 py-2 dark:bg-white/5">
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#f3f4f6] font-bold text-xs text-[#374151] dark:bg-[#374151] dark:text-[#d1d5db]">
-                              {pos.assetId.slice(0, 2)}
-                            </div>
-                            <div>
-                              <span className="font-landing text-sm font-medium text-[#111827] dark:text-[#f9fafb]">
-                                {pos.assetId}
-                              </span>
-                              <span className="ml-2 font-landing text-xs text-[#9ca3af]">
-                                {pos.chain}
-                              </span>
-                            </div>
-                          </div>
-                          <span className="font-landing text-sm text-[#111827] dark:text-[#f9fafb]">
-                            ${pos.valueUsd.toLocaleString()}
-                          </span>
+                      {portfolioLoading && walletValid ? (
+                        <p className="font-landing text-sm text-[#9ca3af] py-4 text-center">Loading balances…</p>
+                      ) : livePositions.length === 0 ? (
+                        <div className="space-y-3 py-4 text-center">
+                          <p className="font-landing text-sm text-[#9ca3af]">
+                            {walletValid
+                              ? `No positions on ${truncateAddress(wallet)} (Base Sepolia)`
+                              : "Connect or complete onboarding with a wallet address"}
+                          </p>
+                          {walletValid && (
+                            <DepositFundsButton address={wallet} className="mx-auto" />
+                          )}
                         </div>
-                      ))}
+                      ) : (
+                        livePositions.slice(0, 6).map((pos, index) => (
+                          <div key={`${pos.symbol}-${index}`} className="flex items-center justify-between rounded-lg bg-white/50 px-3 py-2 dark:bg-white/5">
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#f3f4f6] font-bold text-xs text-[#374151] dark:bg-[#374151] dark:text-[#d1d5db]">
+                                {pos.symbol.slice(0, 2)}
+                              </div>
+                              <div>
+                                <span className="font-landing text-sm font-medium text-[#111827] dark:text-[#f9fafb]">
+                                  {pos.symbol}
+                                </span>
+                                <span className="ml-2 font-landing text-xs text-[#9ca3af]">
+                                  {pos.chain}
+                                </span>
+                              </div>
+                            </div>
+                            <span className="font-landing text-sm text-[#111827] dark:text-[#f9fafb]">
+                              ${pos.valueUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                            </span>
+                          </div>
+                        ))
+                      )}
                     </div>
                     <button className="mt-3 w-full rounded-lg bg-white/50 py-2 font-landing text-sm text-[#6b7280] transition-colors hover:bg-white dark:bg-white/5 dark:text-[#9ca3af] dark:hover:bg-white/10">
                       View all positions
@@ -373,8 +726,42 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
               </button>
             </div>
 
+            <div className="mb-4 rounded-lg bg-[#f9fafb] p-3 font-landing text-xs text-[#6b7280] dark:bg-[#1f2937] dark:text-[#9ca3af]">
+              <p>
+                <span className="font-medium text-[#111827] dark:text-[#f9fafb]">Wallet mode:</span>{" "}
+                {connType === "circle"
+                  ? "Circle MPC (PIN)"
+                  : connType === "watch"
+                    ? "Watch-only"
+                    : "MetaMask / EIP-7702"}
+              </p>
+              {walletValid && (
+                <p className="mt-1 font-mono">{truncateAddress(wallet)}</p>
+              )}
+              {getTaxeeUserId() && (
+                <p className="mt-1 font-mono">User: {getTaxeeUserId()!.slice(0, 8)}…</p>
+              )}
+            </div>
+
             <div className="space-y-3">
-              <button className="flex w-full items-center gap-3 rounded-lg border border-[#e5e7eb] p-4 text-left transition-colors hover:bg-[#f9fafb] dark:border-[#374151] dark:hover:bg-[#1f2937]">
+              {connType === "circle" && (
+                <button
+                  type="button"
+                  onClick={() => void handleResyncAgent()}
+                  className="flex w-full items-center gap-3 rounded-lg border border-[#e5e7eb] p-4 text-left transition-colors hover:bg-[#f9fafb] dark:border-[#374151] dark:hover:bg-[#1f2937]"
+                >
+                  <div>
+                    <p className="font-landing font-medium text-[#111827] dark:text-[#f9fafb]">
+                      Sync Circle agent to server
+                    </p>
+                    <p className="font-landing text-xs text-[#9ca3af]">
+                      Fixes approve/PIN errors when MetaMask and Circle were mixed up
+                    </p>
+                  </div>
+                </button>
+              )}
+
+              <button type="button" className="flex w-full items-center gap-3 rounded-lg border border-[#e5e7eb] p-4 text-left transition-colors hover:bg-[#f9fafb] dark:border-[#374151] dark:hover:bg-[#1f2937]">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#9ca3af]">
                   <rect x="6" y="4" width="12" height="16" rx="2" />
                   <line x1="12" y1="8" x2="12" y2="8.01" />
@@ -423,14 +810,20 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
 
               <div className="my-4 border-t border-[#e5e7eb] dark:border-[#374151]" />
 
-              <button className="flex w-full items-center gap-3 rounded-lg border border-red-200 p-4 text-left transition-colors hover:bg-red-50 dark:border-red-900/30 dark:hover:bg-red-900/20">
+              <button
+                type="button"
+                onClick={() => void handleResetRegistration()}
+                className="flex w-full items-center gap-3 rounded-lg border border-red-200 p-4 text-left transition-colors hover:bg-red-50 dark:border-red-900/30 dark:hover:bg-red-900/20"
+              >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-red-500">
                   <polyline points="3 6 5 6 21 6" />
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                 </svg>
                 <div>
-                  <p className="font-landing font-medium text-red-600 dark:text-red-400">Delete agent</p>
-                  <p className="font-landing text-xs text-red-400/70">Permanently remove this agent and all data</p>
+                  <p className="font-landing font-medium text-red-600 dark:text-red-400">Reset registration</p>
+                  <p className="font-landing text-xs text-red-400/70">
+                    Clear local app data and delete web agents on server (keeps Circle wallet)
+                  </p>
                 </div>
               </button>
             </div>
@@ -443,14 +836,72 @@ export function DashboardClient({ agentId }: DashboardClientProps) {
 
 
 
+const STATUS_LABELS: Record<Opportunity["status"], string> = {
+  pending: "Pending",
+  executed: "Executed",
+  deferred: "Deferred",
+  skipped: "Skipped",
+  auto_executed: "Auto-executed",
+};
+
+function TransactionHistoryRow({ item }: { item: Opportunity }) {
+  const typeLabels: Record<string, string> = {
+    HARVEST: "Tax Loss Harvest",
+    REBALANCE: "Rebalance",
+    PARK: "Yield Park",
+  };
+  const when = new Date(item.resolvedAt ?? item.createdAt).toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+
+  return (
+    <div className="landing-glass rounded-xl p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-white/70 px-3 py-1 font-landing text-xs text-[#9ca3af] dark:bg-white/10">
+              {typeLabels[item.type] ?? item.type}
+            </span>
+            <span className="rounded-full bg-[#f3f4f6] px-3 py-1 font-landing text-xs font-medium capitalize text-[#374151] dark:bg-[#374151] dark:text-[#d1d5db]">
+              {STATUS_LABELS[item.status]}
+            </span>
+            {item.taxSavingEstimate > 0 && (
+              <span className="font-landing text-xs text-[#6b7280] dark:text-[#9ca3af]">
+                Est. tax impact ${item.taxSavingEstimate.toLocaleString()}
+              </span>
+            )}
+          </div>
+          <h3 className="font-landing font-medium text-[#111827] dark:text-[#f9fafb]">
+            {item.headline}
+          </h3>
+          <p className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
+            {item.llmReasoning}
+          </p>
+          {item.txHash && (
+            <p className="font-mono text-xs text-[#9ca3af] break-all">
+              Tx: {item.txHash}
+            </p>
+          )}
+        </div>
+        <p className="shrink-0 font-landing text-xs text-[#9ca3af]">{when}</p>
+      </div>
+    </div>
+  );
+}
+
 // Opportunity Card Component
-function OpportunityCard({ 
-  opportunity, 
+function OpportunityCard({
+  opportunity,
   approvalMode,
-  resolved = false 
-}: { 
-  opportunity: Opportunity; 
+  onApprove,
+  onSkip,
+  resolved = false,
+}: {
+  opportunity: Opportunity;
   approvalMode: string;
+  onApprove: () => void;
+  onSkip: () => void;
   resolved?: boolean;
 }) {
   const typeLabels: Record<string, string> = {
@@ -497,10 +948,18 @@ function OpportunityCard({
         {/* Actions */}
         {!resolved && approvalMode === "manual" && (
           <div className="flex shrink-0 gap-2">
-            <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#111827] px-4 py-2 font-landing text-sm text-white transition-colors hover:bg-[#374151] dark:bg-[#f9fafb] dark:text-[#111827] dark:hover:bg-[#e5e7eb]">
+            <button
+              type="button"
+              onClick={onApprove}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#111827] px-4 py-2 font-landing text-sm text-white transition-colors hover:bg-[#374151] dark:bg-[#f9fafb] dark:text-[#111827] dark:hover:bg-[#e5e7eb]"
+            >
               Approve
             </button>
-            <button className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#e5e7eb] px-4 py-2 font-landing text-sm text-[#6b7280] transition-colors hover:bg-white/50 dark:border-[#374151] dark:text-[#9ca3af]">
+            <button
+              type="button"
+              onClick={onSkip}
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#e5e7eb] px-4 py-2 font-landing text-sm text-[#6b7280] transition-colors hover:bg-white/50 dark:border-[#374151] dark:text-[#9ca3af] dark:hover:bg-white/10"
+            >
               Skip
             </button>
           </div>

@@ -1,10 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAccount } from 'wagmi';
 import { useCircleWalletSetup, getCircleWalletAddress } from '@/hooks/use-circle-wallet';
-import { truncateAddress } from '@/lib/utils';
-
 interface CircleWalletSetupProps {
   onComplete: (walletAddress: string) => void;
   onBack: () => void;
@@ -12,52 +10,53 @@ interface CircleWalletSetupProps {
 
 export function CircleWalletSetup({ onComplete, onBack }: CircleWalletSetupProps) {
   const { address } = useAccount();
-  const { userId, status, message, walletAddress, setupWallet } = useCircleWalletSetup();
+  const {
+    userId,
+    status,
+    message,
+    walletAddress,
+    existingAddress,
+    setupWallet,
+    unlockWithPin,
+    probeExistingWallet,
+  } = useCircleWalletSetup();
   const [showInfo, setShowInfo] = useState(true);
-  
-  // If wallet was just created, show success
-  if (status === 'done' && walletAddress) {
+  const advancedRef = useRef(false);
+
+  // Drop cache if MetaMask address was wrongly stored as "Circle wallet"
+  useEffect(() => {
+    const cached = getCircleWalletAddress();
+    if (cached && address && cached.toLowerCase() === address.toLowerCase()) {
+      localStorage.removeItem('taxee_circle_wallet');
+    }
+  }, [address]);
+
+  const [hasExisting, setHasExisting] = useState(false);
+
+  useEffect(() => {
+    if (!userId) return;
+    void probeExistingWallet().then((addr) => {
+      if (addr) setHasExisting(true);
+    });
+  }, [userId, probeExistingWallet]);
+
+  // After PIN setup succeeds, go straight to portfolio import (Circle address only)
+  useEffect(() => {
+    if (status !== 'done' || advancedRef.current) return;
+    const resolved = walletAddress || getCircleWalletAddress() || '';
+    if (!resolved || !/^0x[a-fA-F0-9]{40}$/i.test(resolved)) return;
+    if (address && resolved.toLowerCase() === address.toLowerCase()) return;
+    advancedRef.current = true;
+    onComplete(resolved);
+  }, [status, walletAddress, address, onComplete]);
+
+  if (status === 'done') {
     return (
       <div className="space-y-6 text-center">
-        <div className="w-20 h-20 mx-auto rounded-full bg-emerald-500/20 flex items-center justify-center">
-          <svg className="w-10 h-10 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-        </div>
-        
-        <div className="space-y-2">
-          <h3 className="text-2xl font-display text-white">Circle Wallet Created!</h3>
-          <p className="text-white/60">
-            Your MPC wallet is ready. Your key is split across secure enclaves.
-          </p>
-        </div>
-        
-        <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-left space-y-3">
-          <div>
-            <p className="text-white/50 text-xs uppercase tracking-wider mb-1">Wallet Address</p>
-            <p className="text-white font-mono text-sm">{walletAddress}</p>
-          </div>
-          <div>
-            <p className="text-white/50 text-xs uppercase tracking-wider mb-1">Protection</p>
-            <p className="text-white text-sm">PIN + Biometric</p>
-          </div>
-          <div>
-            <p className="text-white/50 text-xs uppercase tracking-wider mb-1">User ID</p>
-            <p className="text-white/60 font-mono text-xs">{userId}</p>
-          </div>
-        </div>
-        
-        <div className="flex gap-3 justify-center">
-          <button
-            onClick={() => onComplete(walletAddress)}
-            className="inline-flex items-center gap-2 px-8 py-3 rounded-xl bg-white text-slate-950 font-medium hover:bg-white/90 transition-colors"
-          >
-            Continue to Portfolio
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
-          </button>
-        </div>
+        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+        <p className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
+          Wallet created — importing portfolio…
+        </p>
       </div>
     );
   }
@@ -67,7 +66,7 @@ export function CircleWalletSetup({ onComplete, onBack }: CircleWalletSetupProps
     return (
       <div className="space-y-8">
         <div className="text-center space-y-2">
-          <h2 className="text-3xl font-display text-white">Create Circle Wallet</h2>
+          <h2 className="text-3xl font-display text-white">Connect Circle Wallet</h2>
           <p className="text-white/60">
             MPC-based wallet with institutional-grade security
           </p>
@@ -112,16 +111,6 @@ export function CircleWalletSetup({ onComplete, onBack }: CircleWalletSetupProps
           </div>
         </div>
         
-        {address && (
-          <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-            <p className="text-white/60 text-sm mb-2">Connected Wallet</p>
-            <p className="text-white font-mono">{truncateAddress(address)}</p>
-            <p className="text-white/40 text-xs mt-1">
-              This address will be linked to your Circle account
-            </p>
-          </div>
-        )}
-        
         <div className="flex gap-3 justify-center">
           <button
             onClick={onBack}
@@ -136,7 +125,7 @@ export function CircleWalletSetup({ onComplete, onBack }: CircleWalletSetupProps
             }}
             className="inline-flex items-center gap-2 px-8 py-3 rounded-xl bg-white text-slate-950 font-medium hover:bg-white/90 transition-colors"
           >
-            Create Wallet
+            {hasExisting ? 'Connect Circle wallet' : 'Create wallet'}
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
             </svg>
@@ -173,6 +162,24 @@ export function CircleWalletSetup({ onComplete, onBack }: CircleWalletSetupProps
         </div>
       )}
       
+      {status === 'connect-ready' && (
+        <div className="space-y-4 rounded-xl border border-blue-200 bg-blue-50 p-6 text-center dark:border-blue-900/40 dark:bg-blue-900/20">
+          <p className="font-landing text-sm text-[#374151] dark:text-[#d1d5db]">{message}</p>
+          {existingAddress && (
+            <p className="font-mono text-xs text-[#6b7280] dark:text-[#9ca3af]">
+              {existingAddress.slice(0, 6)}…{existingAddress.slice(-4)}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() => void unlockWithPin()}
+            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 font-landing text-sm font-medium text-white hover:bg-blue-700"
+          >
+            Enter PIN to connect
+          </button>
+        </div>
+      )}
+
       {(status === 'loading' || status === 'ready') && (
         <div className="rounded-xl border border-[#e5e7eb] bg-white p-8 text-center dark:border-[#1f2937] dark:bg-[#111827]">
           <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />

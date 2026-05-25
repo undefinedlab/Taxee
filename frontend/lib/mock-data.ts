@@ -17,6 +17,9 @@ export const defaultPolicy: UserPolicy = {
   primaryObjective: "minimize_tax",
   minHarvestLossUsd: 100,
   heartbeatIntervalMinutes: 30,
+  maxPerTransaction: 5000,
+  maxPerMonth: 20000,
+  expirationDays: 90,
 };
 
 export const defaultApproval: ApprovalSettings = {
@@ -108,6 +111,10 @@ export function createDemoAgent(
   policy: UserPolicy = defaultPolicy,
   approval: ApprovalSettings = defaultApproval,
 ): Agent {
+  const conn = policy.walletConnectionType ?? "external_eip7702";
+  const executionTier: Agent["executionTier"] =
+    conn === "watch" ? "watch" : "execute";
+
   return {
     id: `agent-${walletAddress.slice(2, 10)}`,
     status: "active",
@@ -118,9 +125,9 @@ export function createDemoAgent(
         importSource: "onchain",
       },
     ],
-    policy,
-    approval,
-    executionTier: "watch",
+    policy: { ...policy, walletConnectionType: conn },
+    approval: { ...defaultApproval, ...approval, mode: approval.mode ?? "manual" },
+    executionTier,
     heartbeatIntervalMinutes: policy.heartbeatIntervalMinutes ?? 30,
     createdAt: new Date().toISOString(),
   };

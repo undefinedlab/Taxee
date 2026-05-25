@@ -1,5 +1,6 @@
 import type { Agent, ApprovalSettings, Opportunity, UserPolicy } from "./types";
-import { createDemoAgent, defaultApproval, demoOpportunity } from "./mock-data";
+import { createDemoAgent, defaultApproval } from "./mock-data";
+import { saveWalletConnectionType } from "./wallet-session";
 
 const AGENT_KEY = "taxee_agent";
 const OPPORTUNITIES_KEY = "taxee_opportunities";
@@ -25,9 +26,12 @@ export function registerAgent(
   policy: UserPolicy,
   approval: ApprovalSettings = defaultApproval,
 ): Agent {
+  if (policy.walletConnectionType) {
+    saveWalletConnectionType(policy.walletConnectionType);
+  }
   const agent = createDemoAgent(walletAddress, policy, approval);
   saveAgent(agent);
-  saveOpportunities([{ ...demoOpportunity, agentId: agent.id }]);
+  saveOpportunities([]);
   return agent;
 }
 
@@ -58,10 +62,29 @@ export function loadOpportunities(): Opportunity[] {
 export function updateOpportunityStatus(
   opportunityId: string,
   status: Opportunity["status"],
+  meta?: { txHash?: string },
 ): Opportunity[] {
   const list = loadOpportunities().map((o) =>
-    o.id === opportunityId ? { ...o, status } : o,
+    o.id === opportunityId
+      ? {
+          ...o,
+          status,
+          resolvedAt: new Date().toISOString(),
+          ...(meta?.txHash ? { txHash: meta.txHash } : {}),
+        }
+      : o,
   );
   saveOpportunities(list);
   return list;
+}
+
+/** Non-pending opportunities + actions, newest first */
+export function loadTransactionHistory(agentId?: string): Opportunity[] {
+  return loadOpportunities()
+    .filter((o) => o.status !== "pending" && (!agentId || o.agentId === agentId))
+    .sort(
+      (a, b) =>
+        new Date(b.resolvedAt ?? b.createdAt).getTime() -
+        new Date(a.resolvedAt ?? a.createdAt).getTime(),
+    );
 }

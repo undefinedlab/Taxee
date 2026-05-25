@@ -169,6 +169,16 @@ export class CircleClient {
     await this.client.post("/users", { userId });
   }
 
+  /** List user-controlled wallets for a Circle user (by taxee userId). */
+  async listUserWallets(
+    userId: string,
+  ): Promise<Array<{ id: string; address: string; blockchain: string }>> {
+    const res = await this.client.get<{
+      data: { wallets: Array<{ id: string; address: string; blockchain: string }> };
+    }>("/wallets", { params: { userId } });
+    return res.data?.data?.wallets ?? [];
+  }
+
   /**
    * Get a short-lived session token for a Circle user.
    * Returns `userToken` + `encryptionKey` — both are passed to the web SDK.

@@ -19,6 +19,13 @@ function getCircleClient(): CircleClient {
   );
 }
 
+async function findExistingUserWallet(circle: CircleClient, userId: string) {
+  const wallets = await circle.listUserWallets(userId);
+  const first = wallets[0];
+  if (!first?.address) return null;
+  return { walletId: first.id, walletAddress: first.address };
+}
+
 /**
  * Circle User-Controlled Wallet routes.
  *
@@ -98,21 +105,277 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
     if (err?.response?.data?.code !== 155101) throw err;
   }
 
+  const existing = await findExistingUserWallet(circle, userId);
+  if (existing) {
+    if (existing.walletAddress) {
+      await db.update(users).set({ address: existing.walletAddress.toLowerCase() }).where(eq(users.id, userId));
+    }
+    return reply.send({
+      alreadySetup: true,
+      walletAddress: existing.walletAddress,
+      walletId: existing.walletId,
+    });
+  }
+
   const { userToken, encryptionKey } = await circle.getUserToken(userId);
   const blockchain = process.env["CIRCLE_ENVIRONMENT"] === "production" ? "BASE" as const : "BASE-SEPOLIA" as const;
-  const { challengeId } = await circle.initializeUser({
-    userToken,
-    idempotencyKey: userId,
-    blockchains: [blockchain],
-  });
 
-  return reply.send({ userToken, encryptionKey, challengeId });
+  try {
+    const { challengeId } = await circle.initializeUser({
+      userToken,
+      idempotencyKey: userId,
+      blockchains: [blockchain],
+    });
+    return reply.send({ userToken, encryptionKey, challengeId });
+  } catch (err: any) {
+    const httpStatus = err?.response?.status;
+    if (httpStatus === 409 || httpStatus === 400) {
+      const recovered = await findExistingUserWallet(circle, userId);
+      if (recovered) {
+        return reply.send({
+          alreadySetup: true,
+          walletAddress: recovered.walletAddress,
+          walletId: recovered.walletId,
+        });
+      }
+    }
+    throw err;
+  }
   });
 
   /**
    * Public endpoint for web onboarding.
    * Registers a new web user before Circle wallet setup.
    */
+  /**
+   * After web onboarding — link Circle wallet to a DB agent (not MetaMask).
+   */
+  app.post<{
+    Body: {
+      userId: string;
+      walletAddress: string;
+      policy?: Record<string, unknown>;
+      approvalMode?: "manual" | "delegated";
+    };
+  }>("/sync-web-agent", async (request, reply) => {
+    const { userId, walletAddress, policy = {}, approvalMode = "manual" } = request.body;
+
+    if (!UUID_RE.test(userId)) {
+      return reply.code(400).send({ error: "Invalid userId" });
+    }
+    if (!walletAddress?.match(/^0x[a-fA-F0-9]{40}$/)) {
+      return reply.code(400).send({ error: "Invalid walletAddress" });
+    }
+
+    let [user] = await db.select().from(users).where(eq(users.id, userId));
+    if (!user) {
+      const [created] = await db.insert(users).values({ id: userId }).returning();
+      user = created;
+    }
+
+    const circle = getCircleClient();
+    try { await circle.createCircleUser(userId); } catch (err: any) {
+      if (err?.response?.data?.code !== 155101) throw err;
+    }
+
+    const wallets = await circle.listUserWallets(userId);
+    if (wallets.length === 0) {
+      return reply.code(400).send({
+        error: "No Circle wallet found. Complete Circle PIN setup first.",
+      });
+    }
+
+    const firstWallet = wallets[0];
+    if (!firstWallet?.address) {
+      return reply.code(400).send({ error: "Circle wallet has no address" });
+    }
+    const circleWalletId = firstWallet.id;
+    const circleAddr = firstWallet.address.toLowerCase();
+    const linked = walletAddress.toLowerCase();
+
+    await db.update(users).set({ address: circleAddr }).where(eq(users.id, userId));
+
+    const existingAgents = await db.select().from(agents).where(eq(agents.userId, userId));
+    let agent = existingAgents.find(
+      (a) => a.walletAddress?.toLowerCase() === linked || a.walletAddress?.toLowerCase() === circleAddr,
+    );
+
+    const policyPayload = {
+      ...policy,
+      walletConnectionType: (policy as any).walletConnectionType ?? "circle",
+    };
+
+    if (!agent) {
+      const [created] = await db
+        .insert(agents)
+        .values({
+          userId,
+          walletAddress: circleAddr,
+          circleWalletId,
+          name: "Web Agent",
+          status: "active",
+          approvalMode,
+          policy: policyPayload as any,
+        })
+        .returning();
+      if (!created) return reply.code(500).send({ error: "Failed to create agent" });
+      agent = created;
+    } else {
+      const [updated] = await db
+        .update(agents)
+        .set({
+          walletAddress: circleAddr,
+          circleWalletId,
+          approvalMode,
+          policy: policyPayload as any,
+          status: "active",
+          updatedAt: new Date(),
+        })
+        .where(eq(agents.id, agent.id))
+        .returning();
+      agent = updated ?? agent;
+    }
+
+    if (!agent) return reply.code(500).send({ error: "Agent sync failed" });
+
+    return reply.send({
+      agentId: agent.id,
+      circleWalletId,
+      walletAddress: circleAddr,
+      userId,
+    });
+  });
+
+  /**
+   * Run heartbeat scan for all active agents owned by this web user (creates opportunities in DB).
+   */
+  app.post<{ Params: { userId: string } }>("/run-scan/:userId", async (request, reply) => {
+    const { userId } = request.params;
+    if (!UUID_RE.test(userId)) {
+      return reply.code(400).send({ error: "Invalid userId" });
+    }
+
+    const userAgents = await db.select().from(agents).where(eq(agents.userId, userId));
+    if (userAgents.length === 0) {
+      return reply.code(404).send({
+        error:
+          "No server agent for this user. Finish Circle onboarding and sync (Settings → Sync), or redeploy API with /circle/sync-web-agent.",
+      });
+    }
+
+    const { runHeartbeat } = await import("@taxee/agent/heartbeat");
+    const results: Array<{
+      agentId: string;
+      candidatesFound: number;
+      opportunitiesSaved: number;
+      actionsExecuted: number;
+    }> = [];
+
+    for (const agent of userAgents) {
+      if (agent.status !== "active") {
+        results.push({
+          agentId: agent.id,
+          candidatesFound: 0,
+          opportunitiesSaved: 0,
+          actionsExecuted: 0,
+        });
+        continue;
+      }
+      const r = await runHeartbeat(agent.id);
+      results.push({
+        agentId: agent.id,
+        candidatesFound: r.candidatesFound,
+        opportunitiesSaved: r.opportunitiesSaved,
+        actionsExecuted: r.actionsExecuted,
+      });
+    }
+
+    return reply.send({
+      ok: true,
+      scanned: results.length,
+      results,
+      totalSaved: results.reduce((s, x) => s + x.opportunitiesSaved, 0),
+    });
+  });
+
+  /**
+   * List opportunities for all agents owned by this web user (Telegram heartbeat writes here).
+   */
+  app.get<{ Params: { userId: string } }>("/opportunities/:userId", async (request, reply) => {
+    const { userId } = request.params;
+    if (!UUID_RE.test(userId)) {
+      return reply.code(400).send({ error: "Invalid userId" });
+    }
+
+    const userAgents = await db.select().from(agents).where(eq(agents.userId, userId));
+    if (userAgents.length === 0) return reply.send([]);
+
+    const all: typeof opportunities.$inferSelect[] = [];
+    for (const agent of userAgents) {
+      const rows = await db
+        .select()
+        .from(opportunities)
+        .where(eq(opportunities.agentId, agent.id))
+        .orderBy(opportunities.createdAt);
+      all.push(...rows);
+    }
+
+    return reply.send(
+      all.map((row) => ({
+        ...row,
+        taxSavingEstimate: Number(row.taxSavingEstimate),
+      })),
+    );
+  });
+
+  /**
+   * Session tokens for an existing Circle user (PIN prompted by SDK on execute).
+   */
+  app.get<{ Params: { userId: string } }>("/session/:userId", async (request, reply) => {
+    const { userId } = request.params;
+    if (!UUID_RE.test(userId)) {
+      return reply.code(400).send({ error: "Invalid userId" });
+    }
+
+    const circle = getCircleClient();
+    const existing = await findExistingUserWallet(circle, userId);
+    if (!existing?.walletAddress) {
+      return reply.code(404).send({ error: "No Circle wallet found. Create one first." });
+    }
+
+    const { userToken, encryptionKey } = await circle.getUserToken(userId);
+    return reply.send({
+      userToken,
+      encryptionKey,
+      walletAddress: existing.walletAddress,
+      walletId: existing.walletId,
+    });
+  });
+
+  /**
+   * Remove web agents (keeps Circle user + wallet). Clears bad MetaMask/Circle mix-ups.
+   */
+  app.delete<{ Params: { userId: string } }>("/web-reset/:userId", async (request, reply) => {
+    const { userId } = request.params;
+    if (!UUID_RE.test(userId)) {
+      return reply.code(400).send({ error: "Invalid userId" });
+    }
+
+    const userAgents = await db.select().from(agents).where(eq(agents.userId, userId));
+    for (const a of userAgents) {
+      await db.delete(agents).where(eq(agents.id, a.id));
+    }
+
+    // Unlink external (MetaMask) address so re-register does not hit users_address_unique
+    await db.update(users).set({ address: null }).where(eq(users.id, userId));
+
+    return reply.send({
+      ok: true,
+      deletedAgents: userAgents.length,
+      clearedUserAddress: true,
+    });
+  });
+
   app.post<{
     Body: { userId?: string; walletAddress?: string; source?: string };
   }>("/register-web-user", async (request, reply) => {
@@ -128,10 +391,26 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
       return reply.send({ success: true, message: "User already exists", userId });
     }
 
-    await db.insert(users).values({
-      id:      userId,
-      address: walletAddress?.toLowerCase() ?? null,
-    });
+    const normalizedAddress = walletAddress?.toLowerCase() ?? null;
+    try {
+      await db.insert(users).values({
+        id: userId,
+        address: normalizedAddress,
+      });
+    } catch (err: unknown) {
+      const pgCode = (err as { code?: string })?.code;
+      if (pgCode === "23505" && normalizedAddress) {
+        // MetaMask / external address already linked to another user — Circle user id only
+        await db.insert(users).values({ id: userId });
+        return reply.send({
+          success: true,
+          message: "User registered (address not linked — already in use)",
+          userId,
+          source,
+        });
+      }
+      throw err;
+    }
 
     return reply.send({ success: true, message: "User registered", userId, source });
   });
@@ -212,28 +491,44 @@ app.get<{ Params: { userId: string } }>("/setup/:userId", async (request, reply)
       if (!agent.circleWalletId) return reply.code(400).send({ error: "No Circle wallet on agent" });
 
       const candidate = (opp as any).candidateAction;
-      if (!candidate) return reply.code(400).send({ error: "No candidate action stored" });
+      if (!candidate) {
+        return reply.code(400).send({
+          error: "No execution payload for this opportunity. Wait for a new scan from the agent heartbeat.",
+        });
+      }
 
       const circle = getCircleClient();
       const { userToken, encryptionKey } = await circle.getUserToken(agent.userId);
 
       const lotRegistryAddress = process.env["TAXEE_LOT_REGISTRY_ADDRESS"] ?? "";
-      const { challengeId } = await circle.createUserContractExecution({
-        userToken,
-        idempotencyKey:       crypto.randomUUID(),
-        walletId:             agent.circleWalletId,
-        contractAddress:      lotRegistryAddress,
-        abiFunctionSignature: "commitDisposal(bytes32,uint256,bytes32)",
-        abiParameters:        [
-          uuidToBytes32(candidate.lots?.[0]?.id ?? "00000000-0000-0000-0000-000000000000"),
-          String(candidate.proceedsUsdc ?? 0),
-          uuidToBytes32(agent.id),
-        ],
-      });
+      if (!lotRegistryAddress) {
+        return reply.code(503).send({
+          error: "TAXEE_LOT_REGISTRY_ADDRESS not configured on API",
+        });
+      }
 
-      const frontendUrl = `${process.env["FRONTEND_URL"] ?? "http://localhost:3000"}/execute?oppId=${oppId}`;
+      try {
+        const { challengeId } = await circle.createUserContractExecution({
+          userToken,
+          idempotencyKey:       crypto.randomUUID(),
+          walletId:             agent.circleWalletId,
+          contractAddress:      lotRegistryAddress,
+          abiFunctionSignature: "commitDisposal(bytes32,uint256,bytes32)",
+          abiParameters:        [
+            uuidToBytes32(candidate.lots?.[0]?.id ?? "00000000-0000-0000-0000-000000000000"),
+            String(candidate.proceedsUsdc ?? 0),
+            uuidToBytes32(agent.id),
+          ],
+        });
 
-      return reply.send({ userToken, encryptionKey, challengeId, frontendUrl });
+        const frontendUrl = `${process.env["FRONTEND_URL"] ?? "http://localhost:3000"}/execute?oppId=${oppId}`;
+
+        return reply.send({ userToken, encryptionKey, challengeId, frontendUrl });
+      } catch (err: any) {
+        const msg = err?.response?.data?.message ?? err?.message ?? "Circle execution failed";
+        request.log.error({ err, oppId }, "circle challenge failed");
+        return reply.code(502).send({ error: msg });
+      }
     }
   );
 

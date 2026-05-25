@@ -1,8 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAccount, useSignTypedData } from 'wagmi';
-import { useCreateDelegation, createPolicyHash, UserPolicy } from '@/components/wallet/use-taxee-contracts';
+import {
+  useCreateDelegation,
+  createPolicyHash,
+  normalizeDelegationPolicy,
+} from '@/components/wallet/use-taxee-contracts';
+import type { UserPolicy } from '@/lib/types';
+import { parseUnits } from 'viem';
 import { baseSepolia } from 'wagmi/chains';
 
 interface AgentActivationProps {
@@ -38,12 +44,13 @@ export function AgentActivation({ policy, onSuccess, onBack }: AgentActivationPr
   
   const { createDelegation, isPending: isCreating, isSuccess } = useCreateDelegation();
   const { signTypedDataAsync } = useSignTypedData();
+  const successHandled = useRef(false);
 
-  // If successfully created, trigger success callback
-  if (isSuccess) {
+  useEffect(() => {
+    if (!isSuccess || successHandled.current) return;
+    successHandled.current = true;
     onSuccess();
-    return null;
-  }
+  }, [isSuccess, onSuccess]);
 
   const handleActivate = async () => {
     if (!address) {
@@ -55,10 +62,13 @@ export function AgentActivation({ policy, onSuccess, onBack }: AgentActivationPr
     setError(null);
     
     try {
-      const policyHash = createPolicyHash(policy);
-      const expiration = BigInt(Math.floor(Date.now() / 1000) + (policy.expirationDays * 24 * 60 * 60));
-      const maxPerTx = BigInt(policy.maxPerTransaction * 10**18);
-      const maxPerMonth = BigInt(policy.maxPerMonth * 10**18);
+      const delegation = normalizeDelegationPolicy(policy);
+      const policyHash = createPolicyHash(delegation);
+      const expiration = BigInt(
+        Math.floor(Date.now() / 1000) + delegation.expirationDays * 24 * 60 * 60,
+      );
+      const maxPerTx = parseUnits(delegation.maxPerTransaction.toString(), 18);
+      const maxPerMonth = parseUnits(delegation.maxPerMonth.toString(), 18);
       const nonce = BigInt(0);
 
       // Sign EIP-712 delegation message
@@ -76,8 +86,7 @@ export function AgentActivation({ policy, onSuccess, onBack }: AgentActivationPr
         },
       });
 
-      // Create delegation on-chain
-      createDelegation(policy, signature);
+      createDelegation(delegation, signature);
       
     } catch (err) {
       console.error('Failed to sign delegation:', err);
@@ -86,6 +95,15 @@ export function AgentActivation({ policy, onSuccess, onBack }: AgentActivationPr
       setIsSigning(false);
     }
   };
+
+  if (isSuccess) {
+    return (
+      <div className="space-y-6 text-center">
+        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+        <p className="font-landing text-sm text-white/60">Agent activated — continuing…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 text-center">
@@ -141,12 +159,7 @@ export function AgentActivation({ policy, onSuccess, onBack }: AgentActivationPr
         </button>
       </div>
 
-      <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-left">
-        <p className="text-white/60 text-xs">
-          <span className="text-blue-400 font-medium">Security:</span> Your private key stays in MetaMask. 
-          You&apos;re only signing a message that grants limited authority. You can revoke this anytime.
-        </p>
-      </div>
+     
     </div>
   );
 }

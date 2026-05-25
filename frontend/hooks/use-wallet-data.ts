@@ -78,9 +78,22 @@ async function getEthPriceUsd(): Promise<number> {
   return 3500;
 }
 
-export function useWalletData(customAddress?: string): WalletData {
+export type UseWalletDataOptions = {
+  /** When false, never substitute the connected MetaMask/Rainbow address */
+  fallbackToConnected?: boolean;
+};
+
+export function useWalletData(
+  customAddress?: string,
+  options: UseWalletDataOptions = {},
+): WalletData {
   const { address: connectedAddress, chainId } = useAccount();
-  const address = customAddress || connectedAddress;
+  const customValid =
+    customAddress && /^0x[a-fA-F0-9]{40}$/i.test(customAddress)
+      ? customAddress
+      : undefined;
+  const allowFallback = options.fallbackToConnected !== false;
+  const address = customValid ?? (allowFallback ? connectedAddress : undefined);
   
   const [data, setData] = useState<WalletData>({
     address: address || '',
@@ -98,9 +111,11 @@ export function useWalletData(customAddress?: string): WalletData {
     },
   });
 
+  const effectiveChainId = chainId ?? baseSepolia.id;
+
   useEffect(() => {
     async function fetchWalletData() {
-      if (!address || !chainId) {
+      if (!address) {
         setData(prev => ({ ...prev, isLoading: false }));
         return;
       }
@@ -108,15 +123,18 @@ export function useWalletData(customAddress?: string): WalletData {
       try {
         setData(prev => ({ ...prev, isLoading: true, error: null }));
 
-        const client = createClient(chainId);
-        const tokens = BASE_TOKENS[chainId as keyof typeof BASE_TOKENS] || [];
+        const client = createClient(effectiveChainId);
+        const tokens = BASE_TOKENS[effectiveChainId as keyof typeof BASE_TOKENS] || [];
         const ethPrice = await getEthPriceUsd();
         
         const positions: WalletPosition[] = [];
         let totalValueUsd = 0;
 
-        // Get ETH balance
-        const ethBalance = ethBalanceData?.value || BigInt(0);
+        // Native ETH (public RPC — works for watch/Circle addresses without wagmi)
+        let ethBalance = ethBalanceData?.value;
+        if (ethBalance === undefined) {
+          ethBalance = await client.getBalance({ address: address as `0x${string}` });
+        }
         const ethBalanceFormatted = formatUnits(ethBalance, 18);
         const ethValueUsd = parseFloat(ethBalanceFormatted) * ethPrice;
 
@@ -126,7 +144,7 @@ export function useWalletData(customAddress?: string): WalletData {
             symbol: 'ETH',
             quantity: ethBalanceFormatted,
             valueUsd: ethValueUsd,
-            chain: chainId === 8453 ? 'Base' : 'Base Sepolia',
+            chain: effectiveChainId === 8453 ? 'Base' : 'Base Sepolia',
             address: '0x0000000000000000000000000000000000000000',
             decimals: 18,
           });
@@ -159,7 +177,7 @@ export function useWalletData(customAddress?: string): WalletData {
                 symbol: token.symbol,
                 quantity: formatted,
                 valueUsd,
-                chain: chainId === 8453 ? 'Base' : 'Base Sepolia',
+                chain: effectiveChainId === 8453 ? 'Base' : 'Base Sepolia',
                 address: token.address,
                 decimals: token.decimals,
               });
@@ -190,7 +208,7 @@ export function useWalletData(customAddress?: string): WalletData {
     }
 
     fetchWalletData();
-  }, [address, chainId, ethBalanceData]);
+  }, [address, effectiveChainId, ethBalanceData]);
 
   return data;
 }
