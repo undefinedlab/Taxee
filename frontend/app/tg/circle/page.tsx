@@ -31,6 +31,19 @@ function TgCircleContent() {
 
     const appId = process.env.NEXT_PUBLIC_CIRCLE_APP_ID ?? 'e88bd88e-6c02-5d2a-aa01-5e751f693e7f';
 
+    async function notifyReady(): Promise<void> {
+      // Tell the backend to find the wallet, link it to the user's agents, and
+      // send the Telegram receipt with full wallet details. Safe to call
+      // whether the wallet was just created or already existed.
+      try {
+        await fetch(`${API_BASE_URL}/circle/wallet-ready/${userId}`, {
+          method: 'POST',
+        });
+      } catch {
+        // Telegram receipt is best-effort; the wallet itself is fine.
+      }
+    }
+
     async function run() {
       try {
         const res = await fetch(`${API_BASE_URL}/circle/setup/${userId}`);
@@ -40,6 +53,27 @@ function TgCircleContent() {
           setMessage(`API error: ${data.error}`);
           return;
         }
+
+        // Existing-wallet path: backend signals it via alreadySetup. Skip the
+        // PIN dance entirely, sync the wallet to agents + fire the Telegram
+        // receipt, and close the web app.
+        if (data.alreadySetup) {
+          await notifyReady();
+          setStatus('done');
+          const short = data.walletAddress
+            ? `${String(data.walletAddress).slice(0, 6)}…${String(data.walletAddress).slice(-4)}`
+            : 'unknown';
+          setMessage(`Already set up — wallet ${short}. Check Telegram for details.`);
+          if (isTelegramWebApp()) {
+            finishTelegramWebApp({
+              type: 'circle_setup_already',
+              userId,
+              walletAddress: data.walletAddress,
+            });
+          }
+          return;
+        }
+
         const { userToken, encryptionKey, challengeId } = data;
         const { W3SSdk } = await import('@circle-fin/w3s-pw-web-sdk');
         const sdk = new W3SSdk();
@@ -48,7 +82,7 @@ function TgCircleContent() {
         setStatus('ready');
         setMessage('Set your Circle PIN below.');
 
-        sdk.execute(challengeId, (err: unknown) => {
+        sdk.execute(challengeId, async (err: unknown) => {
           if (err) {
             setStatus('error');
             setMessage(
@@ -56,11 +90,9 @@ function TgCircleContent() {
             );
             return;
           }
-          void fetch(`${API_BASE_URL}/circle/wallet-ready/${userId}`, {
-            method: 'POST',
-          });
+          await notifyReady();
           setStatus('done');
-          setMessage('Wallet ready.');
+          setMessage('Wallet ready — check Telegram for the details.');
           if (isTelegramWebApp()) {
             finishTelegramWebApp({
               type: 'circle_setup_complete',
