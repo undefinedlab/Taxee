@@ -7,7 +7,15 @@ import { getChainConfig, getExecutionChainId } from "./chainConfig.js";
 export type { CctpBridgeParams, CctpBridgeResult } from "./cctp.js";
 export { bridgeUsdcViaCctp, CCTP_DOMAIN } from "./cctp.js";
 export type { ChainConfig } from "./chainConfig.js";
-export { getChainConfig, isSupportedChain, getExecutionChainId } from "./chainConfig.js";
+export {
+  getChainConfig,
+  isSupportedChain,
+  getExecutionChainId,
+  resolveExecutionChainId,
+  isSupportedExecutionChain,
+  SUPPORTED_EXECUTION_CHAINS,
+} from "./chainConfig.js";
+export type { ExecutionChainShortName } from "./chainConfig.js";
 
 /**
  * Execute an approved action via Circle Programmable Wallets.

@@ -17,6 +17,7 @@ export interface PendingAgentPolicy {
   harvestThresholdPct: number;
   minHarvestLossUsd: number;
   walletConnectionType: WalletConnectionType;
+  executionChainId: number;   // 84532 (Base Sepolia) or 11155111 (Sepolia)
 }
 
 const pendingByChat = new Map<string, Partial<PendingAgentPolicy>>();
@@ -36,7 +37,8 @@ export function isPolicySetupComplete(chatId: string): boolean {
       p.heartbeatIntervalMinutes != null &&
       p.harvestThresholdPct != null &&
       p.minHarvestLossUsd != null &&
-      p.walletConnectionType,
+      p.walletConnectionType &&
+      p.executionChainId != null,
   );
 }
 
@@ -83,6 +85,22 @@ export function walletTypeKeyboard() {
     .text("👀 Watch only", "wallet:type:watch");
 }
 
+/** Chain picker — only two for now until delegation + funding flows are
+ *  proven on additional chains. Keep this list in sync with
+ *  SUPPORTED_EXECUTION_CHAINS in `@taxee/execution/src/chainConfig.ts`. */
+export function executionChainKeyboard() {
+  return new InlineKeyboard()
+    .text("🟦 Base Sepolia",     "policy:chain:84532")
+    .row()
+    .text("⟠ Ethereum Sepolia", "policy:chain:11155111");
+}
+
+export function executionChainLabel(chainId: number): string {
+  if (chainId === 84532)    return "🟦 Base Sepolia";
+  if (chainId === 11155111) return "⟠ Ethereum Sepolia";
+  return `chain ${chainId}`;
+}
+
 export function setJurisdiction(chatId: string, code: JurisdictionCode) {
   const cur = pendingByChat.get(chatId) ?? {};
   pendingByChat.set(chatId, { ...cur, jurisdiction: code });
@@ -106,6 +124,11 @@ export function setMinLoss(chatId: string, usd: number) {
 export function setWalletConnectionType(chatId: string, type: WalletConnectionType) {
   const cur = pendingByChat.get(chatId) ?? {};
   pendingByChat.set(chatId, { ...cur, walletConnectionType: type });
+}
+
+export function setExecutionChainId(chatId: string, chainId: number) {
+  const cur = pendingByChat.get(chatId) ?? {};
+  pendingByChat.set(chatId, { ...cur, executionChainId: chainId });
 }
 
 function setupLinkBase(): string | null {
@@ -185,12 +208,14 @@ export function walletSetupKeyboard(
 
 export function formatPolicySummary(p: PendingAgentPolicy, userId?: string): string {
   const walletLine = `🔗 Wallet mode: *${WALLET_CONNECTION_LABELS[p.walletConnectionType]}*`;
+  const chainLine  = `⛓ Execution chain: *${executionChainLabel(p.executionChainId)}*`;
   return (
     `🌍 *${jurisdictionDisplay(p.jurisdiction)}*\n` +
     `⏱ Scan every *${p.heartbeatIntervalMinutes}* min\n` +
     `🌾 Harvest when loss ≥ *${Math.abs(p.harvestThresholdPct)}%*\n` +
     `💵 Min loss to act: *${p.minHarvestLossUsd === 0 ? "any" : `$${p.minHarvestLossUsd}`}*\n` +
-    `${walletLine}\n\n` +
+    `${walletLine}\n` +
+    `${chainLine}\n\n` +
     walletTypeNextStep(p.walletConnectionType, userId)
   );
 }

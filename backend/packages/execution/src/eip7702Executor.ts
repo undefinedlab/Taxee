@@ -149,6 +149,7 @@ export async function checkActiveDelegation(userAddress: Address, chainId?: numb
 export async function executeApprovedActionEip7702(
   action: ApprovedAction,
   userWalletAddress: string,
+  overrideChainId?: number,
 ): Promise<Eip7702ExecutionReceipt> {
   const pk = process.env["EIP7702_EXECUTOR_PRIVATE_KEY"];
   if (!pk?.startsWith("0x")) {
@@ -164,8 +165,11 @@ export async function executeApprovedActionEip7702(
     throw new Error("No lots in approved action");
   }
 
-  // Use the lot's chain for EIP-7702 — execution happens wherever the lots live
-  const chainId = firstLot.chainId;
+  // If the caller (executeOpportunity) passed an explicit chain override (from
+  // agent.policy.executionChainId), use it. Otherwise fall back to the lot's
+  // chain. The override exists so a user can pick which testnet to actually
+  // execute on regardless of where the synthetic lot says it lives.
+  const chainId = overrideChainId ?? firstLot.chainId;
 
   const hasDelegation = await checkActiveDelegation(user, chainId);
   if (!hasDelegation) {

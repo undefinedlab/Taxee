@@ -39,6 +39,8 @@ import {
   setMinLoss,
   setWalletConnectionType,
   walletTypeKeyboard,
+  executionChainKeyboard,
+  setExecutionChainId,
   walletConnectionHint,
   type PendingAgentPolicy,
 } from "./onboarding.js";
@@ -63,7 +65,7 @@ async function getOrCreateUser(chatId: string) {
 function policyFromPending(
   userJurisdiction: string | null | undefined,
   chatId: string,
-): UserPolicy {
+): UserPolicy & { executionChainId?: number } {
   const pending = getPendingPolicy(chatId);
   const overrides: Parameters<typeof buildAgentPolicy>[1] = { telegramChatId: chatId };
   if (pending?.harvestThresholdPct != null) {
@@ -78,7 +80,12 @@ function policyFromPending(
   if (pending?.walletConnectionType) {
     overrides.walletConnectionType = pending.walletConnectionType;
   }
-  return buildAgentPolicy(userJurisdiction, overrides);
+  const base = buildAgentPolicy(userJurisdiction, overrides);
+  // agent.policy is jsonb — add executionChainId as a free-form field
+  // (consumed by executeOpportunity via resolveExecutionChainId).
+  return pending?.executionChainId != null
+    ? { ...base, executionChainId: pending.executionChainId }
+    : base;
 }
 
 async function getOrCreateAgentForWallet(
@@ -412,6 +419,60 @@ bot.command("mode", async (ctx) => {
   );
 });
 
+/**
+ * Pick which testnet to execute on. Stored on every agent's policy.executionChainId.
+ * Limited to two for now — extend SUPPORTED_EXECUTION_CHAINS to add more.
+ */
+bot.command("chain", async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  const arg    = ctx.match?.trim().toLowerCase();
+
+  const SHORT_TO_ID: Record<string, { id: number; name: string }> = {
+    base:    { id: 84532,    name: "Base Sepolia"     },
+    sepolia: { id: 11155111, name: "Ethereum Sepolia" },
+  };
+
+  const [user] = await db.select().from(users).where(eq(users.telegramId, chatId));
+  if (!user) { await ctx.reply("No wallet linked. Send your address first."); return; }
+
+  const agentList = await db.select().from(agents).where(eq(agents.userId, user.id));
+
+  if (!arg || !SHORT_TO_ID[arg]) {
+    const current = agentList.length > 0
+      ? (() => {
+          const cid = (agentList[0]!.policy as { executionChainId?: number } | null)?.executionChainId;
+          if (cid === 11155111) return "Ethereum Sepolia";
+          if (cid === 84532)    return "Base Sepolia";
+          return "Base Sepolia _(default)_";
+        })()
+      : "_no agents yet_";
+    await ctx.reply(
+      `Usage: \`/chain base\` or \`/chain sepolia\`\n\n` +
+      `Current: *${current}*\n\n` +
+      `• *base* — Base Sepolia (84532)\n` +
+      `• *sepolia* — Ethereum Sepolia (11155111)`,
+      { parse_mode: "Markdown" },
+    );
+    return;
+  }
+
+  if (agentList.length === 0) { await ctx.reply("No agents found. Send your address first."); return; }
+
+  const target = SHORT_TO_ID[arg]!;
+  await Promise.all(
+    agentList.map((a) => {
+      const nextPolicy = { ...(a.policy as Record<string, unknown>), executionChainId: target.id };
+      return db.update(agents).set({ policy: nextPolicy as any }).where(eq(agents.id, a.id));
+    }),
+  );
+
+  await ctx.reply(
+    `🔗 Execution chain set to *${target.name}* for all ${agentList.length} agent(s).\n\n` +
+    `Next Approve will execute on ${target.name}. Make sure your wallet has funds + delegation there.`,
+    { parse_mode: "Markdown" },
+  );
+});
+
 bot.command("wallet", async (ctx) => {
   const chatId = String(ctx.chat.id);
   const [user] = await db.select().from(users).where(eq(users.telegramId, chatId));
@@ -735,6 +796,25 @@ bot.on("callback_query:data", async (ctx) => {
     setWalletConnectionType(chatId, type);
     await ctx.editMessageReplyMarkup(undefined);
     await ctx.answerCallbackQuery({ text: WALLET_CONNECTION_LABELS[type] });
+    await ctx.reply(
+      "⛓ *Which testnet chain do you want to execute on?*\n\n" +
+      "Pick the chain where your funds + delegation live. You can switch later with /chain.",
+      { parse_mode: "Markdown", reply_markup: executionChainKeyboard() },
+    );
+    return;
+  }
+
+  if (data.startsWith("policy:chain:")) {
+    const chainId = parseInt(data.split(":")[2] ?? "0", 10);
+    if (chainId !== 84532 && chainId !== 11155111) {
+      await ctx.answerCallbackQuery({ text: "Unsupported chain" });
+      return;
+    }
+    setExecutionChainId(chatId, chainId);
+    await ctx.editMessageReplyMarkup(undefined);
+    await ctx.answerCallbackQuery({
+      text: chainId === 84532 ? "🟦 Base Sepolia" : "⟠ Ethereum Sepolia",
+    });
     const pending = getPendingPolicy(chatId)! as PendingAgentPolicy;
     const [user] = await db.select().from(users).where(eq(users.telegramId, chatId));
     await ctx.reply(formatPolicySummary(pending, user?.id), {

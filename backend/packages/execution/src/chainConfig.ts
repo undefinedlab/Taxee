@@ -10,6 +10,7 @@ export interface ChainConfig {
   cctpMessageTransmitter?:    string;
   cctpDomain:                 number;
   rpcEnvVar:                  string;     // env var holding the JSON-RPC URL for viem reads
+  explorerTxUrl:              string;     // full prefix incl. trailing slash; append the hex hash
 }
 
 const CHAINS: Record<number, ChainConfig> = {
@@ -23,6 +24,7 @@ const CHAINS: Record<number, ChainConfig> = {
     cctpMessageTransmitter:  "0x0a992d191deec32afe36203ad87d7d289a738f81",
     cctpDomain:              0,
     rpcEnvVar:               "ETH_RPC_URL",
+    explorerTxUrl:           "https://etherscan.io/tx/",
   },
   11155111: {
     chainId:                 11155111,
@@ -34,6 +36,7 @@ const CHAINS: Record<number, ChainConfig> = {
     cctpMessageTransmitter:  "0x7865fafc2db2093669d92c0f33aeef291086befd",
     cctpDomain:              0,
     rpcEnvVar:               "ETH_SEPOLIA_RPC_URL",
+    explorerTxUrl:           "https://sepolia.etherscan.io/tx/",
   },
   8453: {
     chainId:                 8453,
@@ -45,6 +48,7 @@ const CHAINS: Record<number, ChainConfig> = {
     cctpMessageTransmitter:  "0xad09780d193884d503182ad4588450c416d6f9d4",
     cctpDomain:              6,
     rpcEnvVar:               "BASE_RPC_URL",
+    explorerTxUrl:           "https://basescan.org/tx/",
   },
   84532: {
     chainId:                 84532,
@@ -56,6 +60,7 @@ const CHAINS: Record<number, ChainConfig> = {
     cctpMessageTransmitter:  "0x7865fafc2db2093669d92c0f33aeef291086befd",
     cctpDomain:              6,
     rpcEnvVar:               "BASE_SEPOLIA_RPC_URL",
+    explorerTxUrl:           "https://sepolia.basescan.org/tx/",
   },
   42161: {
     chainId:                 42161,
@@ -67,6 +72,7 @@ const CHAINS: Record<number, ChainConfig> = {
     cctpMessageTransmitter:  "0xc30362313fbba5cf9163f0bb16a0e01f01a896ca",
     cctpDomain:              3,
     rpcEnvVar:               "ARB_RPC_URL",
+    explorerTxUrl:           "https://arbiscan.io/tx/",
   },
   // Arc Testnet — Circle's own L1, USDC is native gas token (chainId 5042002)
   5042002: {
@@ -77,6 +83,7 @@ const CHAINS: Record<number, ChainConfig> = {
     usdcAddress:             "0x0000000000000000000000000000000000000000", // USDC is native gas
     cctpDomain:              7,  // Arc testnet CCTP domain (TBC)
     rpcEnvVar:               "ARC_RPC_URL",
+    explorerTxUrl:           "https://explorer.testnet.arc-node.thecanteenapp.com/tx/",
   },
 };
 
@@ -91,7 +98,31 @@ export function isSupportedChain(chainId: number): boolean {
 }
 
 /**
- * The chain where TaxeeLotRegistry + TaxeeExecutor + USYC are deployed.
+ * Chains users can pick from at policy-creation time. Limited to two for now
+ * so we can be sure delegation + funding flows actually work on each.
+ */
+export const SUPPORTED_EXECUTION_CHAINS = [
+  { chainId: 84532,    name: "Base Sepolia",     short: "base"    },
+  { chainId: 11155111, name: "Ethereum Sepolia", short: "sepolia" },
+] as const;
+
+export type ExecutionChainShortName = (typeof SUPPORTED_EXECUTION_CHAINS)[number]["short"];
+
+export function isSupportedExecutionChain(chainId: number): boolean {
+  return SUPPORTED_EXECUTION_CHAINS.some((c) => c.chainId === chainId);
+}
+
+/**
+ * Resolve the chain to execute on. Per-agent policy override wins; otherwise
+ * fall back to the env default.
+ */
+export function resolveExecutionChainId(policyChainId?: number | null): number {
+  if (policyChainId && isSupportedExecutionChain(policyChainId)) return policyChainId;
+  return getExecutionChainId();
+}
+
+/**
+ * Default chain where TaxeeLotRegistry + TaxeeExecutor + USYC are deployed.
  * Arc Testnet for testnet flows, Base mainnet for production.
  */
 export function getExecutionChainId(): number {

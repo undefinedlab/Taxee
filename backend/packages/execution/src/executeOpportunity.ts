@@ -5,7 +5,7 @@ import { validateForExecution } from "@taxee/compliance";
 import type { CandidateAction, UserPolicy, WalletConnectionType } from "@taxee/shared";
 import axios from "axios";
 import { executeApprovedAction, type ExecutionStep } from "./index.js";
-import { getChainConfig, getExecutionChainId } from "./chainConfig.js";
+import { getChainConfig, resolveExecutionChainId } from "./chainConfig.js";
 import { executeApprovedActionEip7702 } from "./eip7702Executor.js";
 
 const DEFAULT_POLICY: UserPolicy = {
@@ -111,6 +111,12 @@ export async function executeOpportunity(opportunityId: string): Promise<Execute
     policy.walletConnectionType ??
     (agent.circleWalletId ? "circle" : "external_eip7702");
 
+  // Per-agent execution chain override (Base Sepolia or Sepolia). Falls back
+  // to env default if not set or unsupported.
+  const agentPolicyChainId = (agent.policy as { executionChainId?: number } | null)?.executionChainId;
+  const execChainId        = resolveExecutionChainId(agentPolicyChainId);
+  const execChainCfg       = getChainConfig(execChainId);
+
   const assetIds = [...new Set(candidate.lots.map((l) => l.assetId))];
   const prices   = await fetchPrices(assetIds, process.env["COINGECKO_API_KEY"]);
 
@@ -142,7 +148,7 @@ export async function executeOpportunity(opportunityId: string): Promise<Execute
     }
 
     try {
-      const eipReceipt = await executeApprovedActionEip7702(approved, wallet);
+      const eipReceipt = await executeApprovedActionEip7702(approved, wallet, execChainId);
       await db
         .update(opportunities)
         .set({
@@ -155,7 +161,8 @@ export async function executeOpportunity(opportunityId: string): Promise<Execute
       await sendTelegramReceipt(claimed.agentId, opportunityId, {
         ok:     true,
         txHash: eipReceipt.txHash,
-        executionChainName: getChainConfig(getExecutionChainId()).name,
+        executionChainName: execChainCfg.name,
+        explorerTxUrl:      execChainCfg.explorerTxUrl,
       });
 
       console.log(
@@ -200,10 +207,11 @@ export async function executeOpportunity(opportunityId: string): Promise<Execute
       "https://api.circle.com/arc/v1",
   );
 
-  // The execution chain (where commitDisposal + parkInUsyc live) is fixed by env;
   // candidate.lots[0].chainId is the *source* chain of the lot being disposed.
-  const sourceChainId    = candidate.lots[0]?.chainId ?? getExecutionChainId();
-  const executionChain   = getChainConfig(getExecutionChainId());
+  // Execution chain uses the per-agent override (execChainId / execChainCfg
+  // already resolved above) so the user can pick which testnet to commit on.
+  const sourceChainId  = candidate.lots[0]?.chainId ?? execChainId;
+  const executionChain = execChainCfg;
 
   const receipt = await executeApprovedAction(approved, circle, arc, {
     walletId:           agent.circleWalletId,
@@ -248,6 +256,7 @@ export async function executeOpportunity(opportunityId: string): Promise<Execute
     bridgeTxHash: receipt.bridgeTxHash,
     arcRecordId:  receipt.arcRecordId,
     executionChainName: executionChain.name,
+    explorerTxUrl:      executionChain.explorerTxUrl,
   });
 
   console.log(`[executeOpportunity] ${opportunityId} succeeded — tx ${receipt.txHash ?? "?"} park ${receipt.parkTxHash ?? "—"}`);
@@ -271,6 +280,7 @@ interface ReceiptPayload {
   bridgeTxHash?:       string | undefined;
   arcRecordId?:        string | undefined;
   executionChainName?: string | undefined;
+  explorerTxUrl?:      string | undefined;
   success?:            boolean;
   failedStep?:         ExecutionStep | undefined;
 }
@@ -287,9 +297,10 @@ async function sendTelegramReceipt(
   const chatId  = (agent?.policy as { telegramChatId?: string } | null)?.telegramChatId;
   if (!chatId) return;
 
-  const explorerBase = payload.executionChainName?.toLowerCase().includes("base")
-    ? "https://basescan.org/tx/"
-    : "https://etherscan.io/tx/";
+  // Use the per-chain explorer URL from chainConfig so testnet txs land on the
+  // correct explorer (sepolia.basescan.org, sepolia.etherscan.io, Arc explorer,
+  // etc.) instead of always pointing at mainnet which would show "tx not found".
+  const explorerBase = payload.explorerTxUrl ?? "https://basescan.org/tx/";
 
   const lines: string[] = [];
   if (payload.ok) {
