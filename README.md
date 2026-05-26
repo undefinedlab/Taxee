@@ -1,4 +1,4 @@
-# taxee
+# Taxee
 
 > **The first DeFi portfolio agent that optimizes after-tax return, not gross performance.**
 > Built for Agora Agents Hackathon 2026 · Primary execution chain: **Arc (5042002)**
