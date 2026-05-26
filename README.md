@@ -375,4 +375,6 @@ APP_URL=http://localhost:3000
 
 ---
 
-Built with love for Agora Agents Hackathon 2026 🤍 Built for the DeFi user who's tired of paying tax on every rebalance: no spreadsheets, no CPA, no April surprise. Just an agent that thinks in after-tax dollars.
+<p align="center">
+  Built with love for Agora Agents Hackathon 2026 🤍 Built for the DeFi user who's tired of paying tax on every rebalance: no spreadsheets, no CPA, no April surprise. Just an agent that thinks in after tax dollars.
+</p>
