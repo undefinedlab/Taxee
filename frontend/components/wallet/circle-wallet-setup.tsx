@@ -53,82 +53,74 @@ export function CircleWalletSetup({ onComplete, onBack }: CircleWalletSetupProps
   if (status === 'done') {
     return (
       <div className="space-y-6 text-center">
-        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-[#111827] border-t-transparent dark:border-[#f9fafb]" />
         <p className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
           Wallet created — importing portfolio…
         </p>
       </div>
     );
   }
+
+  const howItWorksItems = [
+    'Your private key is split into 3 parts across secure servers',
+    'Access with PIN or biometric (fingerprint/face)',
+    'No seed phrase to write down or lose',
+    'Can recover wallet if you lose your device',
+  ];
   
   // Show info screen first
   if (showInfo && status === 'idle') {
     return (
       <div className="space-y-8">
-        <div className="text-center space-y-2">
-          <h2 className="text-3xl font-display text-white">Connect Circle Wallet</h2>
-          <p className="text-white/60">
+        <div className="space-y-2">
+          <h2 className="font-serif text-2xl font-bold text-black dark:text-[#f9fafb]">
+            Connect Circle Wallet
+          </h2>
+          <p className="font-landing text-sm leading-relaxed text-[#6b7280] dark:text-[#9ca3af]">
             MPC-based wallet with institutional-grade security
           </p>
         </div>
         
-        <div className="p-6 rounded-xl bg-blue-500/10 border border-blue-500/20">
+        <div className="rounded-xl border border-[#e5e7eb] bg-white p-6 dark:border-[#2a2a2a] dark:bg-[#141414]">
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white">
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#f3f4f6] dark:bg-[#2a2a2a]">
+              <svg className="h-6 w-6 text-[#111827] dark:text-[#f9fafb]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
             </div>
             <div>
-              <h3 className="text-white font-medium mb-2">How it works</h3>
-              <ul className="space-y-2 text-sm text-white/60">
-                <li className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Your private key is split into 3 parts across secure servers
-                </li>
-                <li className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Access with PIN or biometric (fingerprint/face)
-                </li>
-                <li className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  No seed phrase to write down or lose
-                </li>
-                <li className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Can recover wallet if you lose your device
-                </li>
+              <h3 className="mb-2 font-landing font-medium text-[#111827] dark:text-[#f9fafb]">How it works</h3>
+              <ul className="space-y-2 font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
+                {howItWorksItems.map((item) => (
+                  <li key={item} className="flex items-center gap-2">
+                    <svg className="h-4 w-4 shrink-0 text-[#111827] dark:text-[#f9fafb]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    {item}
+                  </li>
+                ))}
               </ul>
             </div>
           </div>
         </div>
         
-        <div className="flex gap-3 justify-center">
+        <div className="flex flex-wrap justify-center gap-3">
           <button
+            type="button"
             onClick={onBack}
-            className="px-6 py-3 rounded-xl border border-white/20 text-white font-medium hover:bg-white/5 transition-colors"
+            className="rounded-xl border border-[#e5e7eb] px-6 py-3 font-landing text-sm font-medium text-[#111827] transition-colors hover:bg-[#f3f4f6] dark:border-[#2a2a2a] dark:text-[#f9fafb] dark:hover:bg-[#1f1f1f]"
           >
             Back
           </button>
           <button
+            type="button"
             onClick={() => {
               setShowInfo(false);
               void setupWallet();
             }}
-            className="inline-flex items-center gap-2 px-8 py-3 rounded-xl bg-white text-slate-950 font-medium hover:bg-white/90 transition-colors"
+            className="rounded-lg bg-black px-6 py-3 font-landing text-[14px] font-medium text-white shadow-[0_4px_16px_rgba(0,0,0,0.12)] transition-colors hover:bg-[#1f2937] dark:bg-[#f9fafb] dark:text-[#111827] dark:shadow-none dark:hover:bg-[#e5e7eb]"
           >
             {hasExisting ? 'Connect Circle wallet' : 'Create wallet'}
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
           </button>
         </div>
       </div>
@@ -138,9 +130,11 @@ export function CircleWalletSetup({ onComplete, onBack }: CircleWalletSetupProps
   // Show setup UI
   return (
     <div className="space-y-6">
-      <div className="text-center space-y-2">
-        <h2 className="text-3xl font-display text-white">Create Circle Wallet</h2>
-        <p className="text-white/60">
+      <div className="space-y-2">
+        <h2 className="font-serif text-2xl font-bold text-black dark:text-[#f9fafb]">
+          Create Circle Wallet
+        </h2>
+        <p className="font-landing text-sm leading-relaxed text-[#6b7280] dark:text-[#9ca3af]">
           Set up your MPC-secured wallet
         </p>
       </div>
@@ -148,22 +142,39 @@ export function CircleWalletSetup({ onComplete, onBack }: CircleWalletSetupProps
       {status === 'idle' && (
         <div className="text-center">
           <button
+            type="button"
             onClick={setupWallet}
-            className="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium hover:from-blue-600 hover:to-blue-700 transition-all"
+            className="group inline-flex items-stretch overflow-hidden rounded-lg bg-black shadow-[0_4px_16px_rgba(0,0,0,0.12)] dark:bg-[#f9fafb] dark:shadow-none"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-            Start Wallet Setup
+            <span className="flex items-center gap-2 px-6 py-3.5 font-landing text-[14px] font-medium text-white dark:text-[#111827]">
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              Start Wallet Setup
+            </span>
+            <span className="flex w-[52px] items-center justify-center bg-[#374151] transition-colors group-hover:bg-[#4b5563] dark:bg-[#4b5563] dark:group-hover:bg-[#6b7280]">
+              <svg
+                className="landing-cta-arrow"
+                width="20"
+                height="20"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="#111827"
+                strokeWidth="2.2"
+                aria-hidden
+              >
+                <path d="M5 10h10M11 6l4 4-4 4" />
+              </svg>
+            </span>
           </button>
-          <p className="text-white/40 text-sm mt-4">
+          <p className="mt-4 font-landing text-sm text-[#9ca3af]">
             You&apos;ll set up a PIN and optional biometric
           </p>
         </div>
       )}
       
       {status === 'connect-ready' && (
-        <div className="space-y-4 rounded-xl border border-blue-200 bg-blue-50 p-6 text-center dark:border-blue-900/40 dark:bg-blue-900/20">
+        <div className="space-y-4 rounded-xl border border-[#e5e7eb] bg-white p-6 text-center dark:border-[#2a2a2a] dark:bg-[#141414]">
           <p className="font-landing text-sm text-[#374151] dark:text-[#d1d5db]">{message}</p>
           {existingAddress && (
             <p className="font-mono text-xs text-[#6b7280] dark:text-[#9ca3af]">
@@ -173,7 +184,7 @@ export function CircleWalletSetup({ onComplete, onBack }: CircleWalletSetupProps
           <button
             type="button"
             onClick={() => void unlockWithPin()}
-            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 font-landing text-sm font-medium text-white hover:bg-blue-700"
+            className="inline-flex items-center gap-2 rounded-lg bg-black px-6 py-3 font-landing text-sm font-medium text-white transition-colors hover:bg-[#1f2937] dark:bg-[#f9fafb] dark:text-[#111827] dark:hover:bg-[#e5e7eb]"
           >
             Enter PIN to connect
           </button>
@@ -182,7 +193,7 @@ export function CircleWalletSetup({ onComplete, onBack }: CircleWalletSetupProps
 
       {(status === 'loading' || status === 'ready') && (
         <div className="rounded-xl border border-[#e5e7eb] bg-white p-8 text-center dark:border-[#262626] dark:bg-[#141414]">
-          <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+          <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-[#111827] border-t-transparent dark:border-[#f9fafb]" />
           <p className="font-landing text-sm text-[#6b7280] dark:text-[#9ca3af]">
             {message}
           </p>
@@ -213,8 +224,9 @@ export function CircleWalletSetup({ onComplete, onBack }: CircleWalletSetupProps
       
       <div className="flex justify-center">
         <button
+          type="button"
           onClick={onBack}
-          className="text-white/50 hover:text-white/80 text-sm transition-colors"
+          className="font-landing text-sm text-[#6b7280] transition-colors hover:text-[#111827] dark:text-[#9ca3af] dark:hover:text-[#f9fafb]"
         >
           ← Back
         </button>

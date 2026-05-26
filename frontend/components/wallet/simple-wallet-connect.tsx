@@ -37,29 +37,13 @@ export function SimpleWalletConnect({ onComplete, onBack }: SimpleWalletConnectP
       <div className="text-center space-y-2">
         <h2 className="text-3xl font-display text-white">Connect Self-Custody Wallet</h2>
         <p className="text-white/60">
-          MetaMask, Rainbow, or any EIP-7702-compatible wallet. Your keys, your control.
-        </p>
+          MetaMask, Rainbow, or any EIP-7702-compatible wallet.</p>
+      
       </div>
 
       {/* Step 1: Connect Wallet */}
       <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-medium ${
-            canProceed ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/10 text-white/60'
-          }`}>
-            {canProceed ? (
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            ) : (
-              '1'
-            )}
-          </div>
-          <span className={`font-medium ${canProceed ? 'text-white' : 'text-white/60'}`}>
-            Connect your wallet
-          </span>
-        </div>
-        
+    
         <div className="ml-11">
           {canProceed && address ? (
             <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
