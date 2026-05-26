@@ -8,6 +8,7 @@
 
 1. [What Is Taxee](#1-what-is-taxee)
 2. [System Architecture Overview](#2-system-architecture-overview)
+   - [Circle Stack Integration](#circle-stack-integration)
 3. [Monorepo Structure](#3-monorepo-structure)
 4. [Backend Apps](#4-backend-apps)
    - [apps/api](#41-appsapi)
@@ -91,499 +92,6 @@ User Goal (natural language)
                                 │
                                 ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│  LLM Action Reasoner  (judgment   <p className="text-white/60">
-
-        </p>layer)                                    │
-│  Receives structured CandidateAction, applies edge-case reasoning:        │
-│  wash-sale windows, regime direction, gas economics → EXECUTE/DEFER/SKIP  │
-└───────────────────────────────┬──────────────────────────────────────────┘
-                                │
-                    ┌───────────┴────────────┐
-                    ▼                        ▼
-          approval.mode = manual    approval.mode = delegated
-          Notify user               Policy guardrail check
-          await Execute/Defer/Skip  Auto-execute if clear
-                    │                        │
-                    └───────────┬────────────┘
-                                ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  Execution Layer  (Circle Stack)                                          │
-│  Circle Wallets → CCTP/Gateway → USYC park → Paymaster (USDC gas)        │
-└───────────────────────────────┬──────────────────────────────────────────┘
-                                │
-                                ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  Arc Ledger Write                                                         │
-│  Immutable disposal record → Form 8949 pre-fill                           │
-└───────────────────────────────┬──────────────────────────────────────────┘
-                                │
-                                ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  LLM Explanation → Dashboard + Notification                               │
-│  Plain-English rationale card, after-tax alpha metrics                    │
-└──────────────────────────────────────────────────────────────────────────┘
-```
-
-### What LLM does vs what code does
-
-| Task                                             | Owner              |
-|--------------------------------------------------|--------------------|
-| Parse natural-language goals                     | **LLM**            |
-| Regime classification from mixed onchain signals | **LLM**            |
-| Edge-case judgment (wash sale + regime + gas)    | **LLM**            |
-| "Should we act now or defer?"                    | **LLM**            |
-| Plain-English explanation to user                | **LLM**            |
-| Harvest threshold math (`unrealized_loss > −8%`) | **Code**           |
-| Lot selection (HIFO / specific-ID)               | **Code**           |
-| Rebalance drift vs tax cost calculation          | **Code**           |
-| Policy guardrail enforcement                     | **Code**           |
-| Transaction execution                            | **Circle stack**   |
-| Immutable disposal record                        | **Arc API**        |
-
----
-
-## 3. Monorepo Structure
-
-```
-taxee/
-├── apps/
-│   ├── api/                    # REST API — Agent CRUD, action loop, webhooks
-│   ├── agent/                  # Heartbeat worker — always-on portfolio scan
-│   ├── telegram-bot/           # Telegram onboarding + notifications + inline approve
-│   └── mcp-server/             # MCP tools for OpenClaw / Claude Desktop
-│
-├── packages/
-│   ├── shared/                 # Core types: Agent, Lot, PortfolioSnapshot, CandidateAction
-│   ├── tax-engine/             # Decision Engine — harvest, rebalance, maturation (pure TS)
-│   ├── aggregator/             # Data Aggregator — Circle Wallets, Arc, oracles, signals
-│   ├── llm/                    # Goal Parser, Regime Classifier, Action Reasoner, Explanation
-│   │   ├── prompts/            # Versioned prompt templates (.v1.md, .v2.md)
-│   │   └── schemas/            # Zod schemas for structured LLM output
-│   ├── execution/              # Circle Wallets, Paymaster, USYC, CCTP adapters
-│   ├── compliance/             # Arc writer, Form 8949 projection, lot store
-│   └── notifications/          # TG, email, push adapters — shared OpportunityNotification
-│
-├── contracts/
-│   ├── src/
-│   │   ├── TaxeeLotRegistry.sol      # On-chain lot ID → cost basis registry
-│   │   ├── TaxeeExecutor.sol         # Atomic harvest + USYC park executor
-│   │   └── interfaces/
-│   │       ├── ICircleCCTP.sol
-│   │       └── IUsyc.sol
-│   ├── test/
-│   ├── script/
-│   └── foundry.toml
-│
-├── fixtures/
-│   └── demo-portfolio.json     # Deterministic demo portfolio for hackathon
-│
-├── frontend/                   # Next.js dashboard (separate package)
-│
-├── architecture.md             # Full system architecture reference
-├── doc.md                      # Product overview
-├── README.md                   # This file
-├── package.json                # Workspace root
-├── turbo.json                  # Turborepo build pipeline
-└── tsconfig.base.json          # Shared TypeScript config
-```
-
-**Toolchain:**
-- **Monorepo:** [Turborepo](https://turbo.build/) with npm workspaces
-- **Runtime:** Node 20 + TypeScript 5
-- **Smart contracts:** Foundry (Solidity 0.8.24)
-- **DB migrations:** Drizzle ORM
-
----
-
-## 4. Backend Apps
-
-### 4.1 `apps/api`
-
-Central REST + WebSocket API. All surfaces (web, Telegram, MCP) talk to this.
-
-**Responsibilities:**
-- Agent registration and CRUD
-- Action loop state machine (`execute / defer / skip`)
-- Opportunity retrieval and WebSocket push
-- Telegram callback handler (inline button webhooks)
-- Auth: SIWE (web), Telegram `chat_id` binding, MCP API key
-
-**Folder layout:**
-```
-apps/api/
-├── src/
-│   ├── index.ts                  # Fastify app entry
-│   ├── routes/
-│   │   ├── agents.ts             # POST /agents, GET /agents/:id
-│   │   ├── opportunities.ts      # GET /opportunities, PATCH /:id/decision
-│   │   ├── actions.ts            # POST /actions/:id/execute|defer|skip
-│   │   ├── portfolio.ts          # GET /portfolio/:agentId
-│   │   ├── arc.ts                # GET /arc/:agentId (compliance export)
-│   │   └── webhooks/
-│   │       └── telegram.ts       # Telegram inline button callbacks
-│   ├── middleware/
-│   │   ├── auth.ts               # SIWE + TG + MCP API key verification
-│   │   └── validate.ts           # Zod request validation
-│   ├── db/
-│   │   ├── schema.ts             # Drizzle schema
-│   │   └── migrations/
-│   └── lib/
-│       └── actionStateMachine.ts # OPPORTUNITY_DETECTED → execute/defer/skip FSM
-├── package.json
-└── tsconfig.json
-```
-
-**Key endpoints — see [§8. API Reference](#8-api-reference) for full spec.**
-
----
-
-### 4.2 `apps/agent`
-
-Always-on heartbeat worker. One job per active `agentId`, running every `heartbeatIntervalMinutes` (default 60).
-
-**Responsibilities:**
-- Orchestrate the full scan cycle (Aggregator → Classifier → Decision Engine → LLM Reasoner)
-- Dispatch execution (delegated mode) or emit notification (manual mode)
-- Handle deferred action re-checks
-- Log `"nothing found"` silently; surface opportunities to notification layer
-
-**Folder layout:**
-```
-apps/agent/
-├── src/
-│   ├── index.ts                  # Worker entry pointt
-│   ├── heartbeat.ts              # Main cycle: 9-step pipeline per agent
-│   ├── scheduler.ts              # Inngest / BullMQ job registration
-│   ├── guardrails.ts             # Policy enforcement before any execution
-│   └── conflict.ts               # Conflict resolution: PARK overrides rebalance, etc.
-├── package.json
-└── tsconfig.json
-```
-
-**Heartbeat cycle (per agent):**
-
-```
-1.  Data Aggregator          → PortfolioSnapshot
-2.  LLM Regime Classifier    → RegimeState  (cache hit: skip if < 4h old)
-3.  Decision Engine          → CandidateAction[]
-4.  if candidates == []      → log "no opportunities"; wait; rescan
-5.  for each candidate:
-    LLM Action Reasoner      → { decision, reasoning, scheduledAction? }
-6a. [delegated] guardrail check → Execution Layer → Arc → notify (receipt)
-6b. [manual]    emit OpportunityNotification with buttons → await user
-7.  LLM Explanation          → dashboard card + notification body
-```
-
-**Job queue:** Inngest preferred (durable, retryable, per-agent fan-out). BullMQ as fallback.
-
----
-
-### 4.3 `apps/telegram-bot`
-
-Telegram bot handles frictionless onboarding and is the primary notification channel.
-
-**Responsibilities:**
-- `/start` → welcome + command overview
-- Accept wallet address → live balance scan + lot import + heartbeat trigger
-- **Multi-wallet:** each address sent creates a new independent agent
-- `/wallets` → list all linked wallets with pending opportunity counts
-- `/status` → per-wallet agent status
-- `/opportunities` → pending actions across all wallets, labeled per wallet
-- `/mode manual|delegated` → updates all wallets simultaneously
-- Rich opportunity notifications → inline **[✅ Approve] [⏰ Defer] [❌ Skip]** buttons
-
-**Folder layout:**
-```
-apps/telegram-bot/
-├── src/
-│   ├── index.ts                  # Bot entry (grammy)
-│   ├── commands/
-│   │   ├── start.ts              # /start onboarding wizard
-│   │   ├── mode.ts               # /mode manual|delegated
-│   │   ├── status.ts             # /status — active lots + YTD
-│   │   └── portfolio.ts          # /portfolio — current snapshot
-│   ├── handlers/
-│   │   ├── callbackQuery.ts      # Inline button: execute/defer/skip
-│   │   └── message.ts            # Address + preference capture
-│   ├── notify.ts                 # Send OpportunityNotification cards
-│   └── session.ts                # grammy session: onboarding state machine
-├── package.json
-└── tsconfig.json
-```
-
-**Wallet flow (triggered by any 0x address message):**
-```
-User sends: 0xabc...
-  → Create user (telegramId) + wallet record + agent for that wallet
-  → 🔍 Scan live balances across 4 chains (Alchemy)
-  → 💼 Display: asset · quantity · price · USD value per chain
-  → 📚 Import transfer history → tax lots with cost basis (Alchemy + CoinGecko)
-  → 🧠 Trigger heartbeat (background) → Claude analysis → push notification
-
-User sends another address:
-  → Second wallet + independent agent created
-  → Same scan pipeline runs for the new wallet
-```
-
-**Security:** Never requests seed phrases. `telegramId` bound to `userId` in DB. Each wallet address is checksummed and lowercased before storage.
-
----
-
-### 4.4 `apps/mcp-server`
-
-Exposes taxee as an MCP server so external agents (OpenClaw, Claude Desktop) can invoke taxee tools on demand, replacing the hosted heartbeat with user-controlled invocation.
-
-**Folder layout:**
-```
-apps/mcp-server/
-├── src/
-│   ├── index.ts                  # MCP server entry (@modelcontextprotocol/sdk)
-│   └── tools/
-│       ├── registerWallet.ts     # taxee_register_wallet
-│       ├── getPortfolio.ts       # taxee_get_portfolio
-│       ├── scan.ts               t# taxee_scan (run one heartbeat cycle)
-│       ├── listOpportunities.ts  # taxee_list_opportunities
-│       ├── approveAction.ts      # taxee_approve_action
-│       └── getArcRecords.ts      # taxee_get_arc_records
-├── package.json
-└── tsconfig.json
-```
-
-**MCP tool manifest:**
-
-| Tool                        | Input                                 | Output                                  |
-|-----------------------------|---------------------------------------|-----------------------------------------|
-| `taxee_register_wallet`     | `{ address, chains?, importSource? }` | `{ agentId, status, lotsImported }`     |
-| `taxee_get_portfolio`       | `{ agentId }`                         | `PortfolioSnapshot`                     |
-| `taxee_scan`                | `{ agentId }`                         | `CandidateAction[]` + LLM reasoning     |
-| `taxee_list_opportunities`  | `{ agentId, status? }`                | `Opportunity[]`                         |
-| `taxee_approve_action`      | `{ actionId, decision: execute/defer/skip }` | `ActionResult`               |
-| `taxee_get_arc_records`     | `{ agentId, from?, to? }`             | `ArcRecord[]` (Form 8949 ready)         |
-
-Auth: per-`agentId` API key, passed as MCP transport header. `taxee_scan` respects `agent.approval.mode` — delegated mode auto-executes; manual mode returns proposals only.
-
----
-
-## 5. Shared Packages
-
-### 5.1 `packages/shared`
-
-Single source of truth for all TypeScript types used across apps and packages. No business logic — types, enums, and Zod schemas only.
-
-```typescript
-// Core entity types
-
-Agent {
-  id: string
-  userId: string
-  status: "pending" | "active" | "paused"
-  wallets: WalletBinding[]
-  policy: UserPolicy
-  approval: ApprovalSettings
-  deploymentMode: "hosted" | "mcp"
-  notificationChannels: Channel[]
-  heartbeatIntervalMinutes: number   // default: 60
-  createdAt: Date
-}
-
-ApprovalSettings {
-  mode: "manual" | "delegated"
-  autoApproveTypes?: ("HARVEST" | "REBALANCE" | "PARK")[]
-  notifyOnExecute: boolean           // default: true
-  vetoWindowSeconds?: number         // notify-first + auto-execute after N sec
-}
-
-WalletBinding {
-  address: string
-  chains: number[]                   // chain IDs
-  circleWalletId?: string
-  importSource: "onchain" | "csv" | "manual"
-}
-
-UserPolicy {
-  primaryObjective: "minimize_tax" | "maximize_return" | "balanced"
-  harvestThresholdPct: number        // e.g. -8 (%)
-  maturationBufferDays: number       // don't dispose lots within N days of LT threshold
-  rebalanceAggressiveness: "conservative" | "moderate" | "aggressive"
-  allowedActions: ("HARVEST" | "REBALANCE" | "PARK")[]
-  maxTaxPerAction?: number           // USD cap
-  jurisdiction: "US" | "OTHER"
-}
-
-// Portfolio types
-
-PortfolioSnapshot {
-  agentId: string
-  capturedAt: Date
-  positions: Position[]
-  prices: Record<string, number>     // assetId → USD
-  realizedYtd: {
-    shortTerm: number
-    longTerm: number
-    lossesHarvested: number
-  }
-  regimeSignals: RegimeSignals
-  userPolicy: UserPolicy
-}
-
-Position {
-  assetId: string
-  chainId: number
-  quantity: string                   // Decimal as string
-  lots: Lot[]
-}
-
-Lot {
-  id: string
-  agentId: string
-  assetId: string
-  chainId: number
-  acquiredAt: Date
-  costBasisUsd: string               // Decimal as string
-  quantity: string
-  sourceTx: string
-  status: "open" | "partial" | "closed"
-  holdingPeriodDays: number          // derived daily
-  provisional: boolean               // true = not yet user-confirmed
-}
-
-// Decision types
-
-CandidateAction {
-  id: string
-  type: "REBALANCE" | "HARVEST" | "PARK" | "HOLD"
-  priority: number
-  lots: Lot[]
-  estimatedTaxImpact: number         // USD
-  estimatedGas: number               // USD
-  replacementAsset?: string
-  washSaleDaysRemaining?: number
-  deterministicRecommendation: "EXECUTE" | "DEFER"
-}
-
-Opportunity {
-  id: string
-  agentId: string
-  candidateAction: CandidateAction
-  llmDecision: "EXECUTE" | "DEFER" | "SKIP"
-  llmReasoning: string
-  scheduledAction?: ScheduledAction
-  interimAction?: "PARK_IN_USYC"
-  status: "pending" | "approved" | "deferred" | "skipped" | "executed" | "failed"
-  createdAt: Date
-  decidedAt?: Date
-}
-```
-
----
-
-### 5.2 `packages/tax-engine`
-
-**Pure TypeScript — zero API calls, zero side effects.** The deterministic brain of taxee.
-
-Three modules, all unit-testable with no mocks:
-
-#### Rebalance Optimizer (`rebalanceOptimizer.ts`)
-
-```typescript
-function computeRebalanceCandidates(
-  snapshot: PortfolioSnapshot,
-  regime: RegimeState,
-  policy: UserPolicy
-): CandidateAction[]
-```
-
-Logic:
-```
-drift_cost   = f(current_allocation, target_allocation, regime.targetAllocationDelta)
-tax_cost     = Σ estimatedCapitalGains(requiredDisposals, lotSelection = HIFO)
-
-if drift_cost > tax_cost → flag REBALANCE
-else                     → flag HOLD, re-check in 24h
-```
-
-#### Loss Harvest Scanner (`harvestScanner.ts`)
-
-```typescript
-function scanForHarvestOpportunities(
-  snapshot: PortfolioSnapshot,
-  policy: UserPolicy
-): CandidateAction[]
-```
-
-Logic:
-```
-for each position across all chains:
-  unrealized_loss_pct = (current_value - cost_basis) / cost_basis
-
-  if unrealized_loss_pct < policy.harvestThresholdPct:
-    flag HARVEST
-    attach correlated_replacement (correlation table in /data/correlations.json)
-    check wash_sale_window (30d since last buy of same asset)
-```
-
-Correlation pairs (maintained in `packages/tax-engine/data/correlations.json`):
-```json
-{ "wETH": "stETH", "wBTC": "TBTC", "SOL": "mSOL", "MATIC": "stMATIC" }
-```
-
-#### Holding Period Tracker (`maturationTracker.ts`)
-
-```typescript
-function trackMaturationOpportunities(
-  snapshot: PortfolioSnapshot,
-  policy: UserPolicy
-): CandidateAction[]
-```
-
-Logic:
-```
-for each lot:
-  days_held        = today - lot.acquiredAt
-  days_to_longterm = 365 - days_held
-
-  if days_to_longterm <= policy.maturationBufferDays AND lot has unrealized gain:
-    flag PARK_IN_USYC — do not dispose, park
----
-
-## 2. System Architecture Overview
-
-```
-User Goal (natural language)
-        │
-        ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  LLM Goal Parser                                                          │
-│  Translate intent → UserPolicy (structured JSON)                          │
-└───────────────────────────────┬──────────────────────────────────────────┘
-                                │
-                                ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  Data Aggregator                                                          │
-│  Circle Wallets + Arc Ledger + Price Oracles + Onchain Signals           │
-│  Output: PortfolioSnapshot                                                │
-└───────────────────────────────┬──────────────────────────────────────────┘
-                                │
-                                ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  LLM Regime Classifier                                                    │
-│  Structured onchain signals → RegimeState { label, confidence, reasoning }│
-└───────────────────────────────┬──────────────────────────────────────────┘
-                                │
-                                ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  Decision Engine  (deterministic, pure TypeScript)                        │
-│  ┌─────────────────────┐  ┌──────────────────────┐  ┌─────────────────┐ │
-│  │ Rebalance Optimizer  │  │ Loss Harvest Scanner  │  │ Maturation      │ │
-│  │ drift_cost vs        │  │ unrealized_loss >     │  │ Tracker         │ │
-│  │ tax_cost of HIFO     │  │ threshold → HARVEST   │  │ days_to_LT < 30 │ │
-│  │ disposal             │  │ + correlated replace  │  │ → PARK_IN_USYC  │ │
-│  └─────────────────────┘  └──────────────────────┘  └─────────────────┘ │
-│  Output: CandidateAction[]                                                │
-└───────────────────────────────┬──────────────────────────────────────────┘
-                                │
-                                ▼
-┌──────────────────────────────────────────────────────────────────────────┐
 │  LLM Action Reasoner  (judgment layer)                                    │
 │  Receives structured CandidateAction, applies edge-case reasoning:        │
 │  wash-sale windows, regime direction, gas economics → EXECUTE/DEFER/SKIP  │
@@ -633,6 +141,108 @@ User Goal (natural language)
 
 ---
 
+### Circle Stack Integration
+
+How taxee uses each Circle product in production.
+
+#### Programmable Wallets (user-controlled MPC)
+
+**Goal:** Let a Telegram-only user create a self-custodial wallet without a seed phrase, then have taxee execute transactions on their behalf only after PIN confirmation.
+
+**Build:**
+
+- **Backend** (`backend/packages/aggregator/circleClient.ts`, `backend/apps/api/src/routes/circle.ts`) wraps the Circle W3S API. The entity secret is RSA-OAEP-SHA256 encrypted per request and never leaves the backend.
+- **Onboarding** — when a user registers, the API calls `POST /v1/w3s/users` to register a Circle user keyed by the agent UUID, then issues a one-shot `userToken` + `encryptionKey` + `challengeId` for PIN setup.
+- **Frontend** (`frontend/app/setup-wallet/page.tsx`, `frontend/components/wallet/circle-wallet-setup.tsx`) loads `@circle-fin/w3s-pw-web-sdk`, opens the PIN overlay, and creates the MPC wallet on Arc Testnet (`ARC-TESTNET` blockchain ID).
+- **Execution** — when the agent decides to act, the backend creates an execution challenge (`POST /circle/challenge/:oppId`); the user opens `/execute`, taps Confirm, and Circle MPC nodes co-sign and broadcast.
+
+**Key design:** taxee never holds the user's key. Every disposal requires a fresh challenge → PIN → MPC signature; there is no long-lived authority on the Circle side.
+
+#### Arc — execution + compliance ledger
+
+**Goal:** Use Arc as both an EVM execution chain (cheap, fast, USDC-native gas) and an append-only audit trail that backs every Form 8949 line item.
+
+**Build:**
+
+- **Execution chain** — custom contracts (`LotRegistry`, `Executor`, `DelegationRegistry`, `TaxeeManager`) deploy to Arc Testnet (chain `5042002`). USDC is native gas on Arc; Circle Programmable Wallets sign USDC-paid transactions with no ETH gas wallet.
+- **Compliance ledger** — every executed disposal writes `ArcRecord { lotId, dateAcquired, dateSold, proceeds, costBasis, gainLoss, term, txHash, rationale }` via `backend/packages/aggregator/arcClient.ts`, then anchors `keccak256(ArcRecord)` on-chain via `TaxeeLotRegistry.commitDisposal`.
+- **Form 8949 export** — `backend/packages/compliance` aggregates Arc records per agent / tax year, splits ST vs LT, and exports CSV.
+
+Arc is the system of record (rich, queryable); the on-chain lot hash makes each record non-repudiable.
+
+#### CCTP — cross-chain USDC
+
+**Goal:** When taxee harvests on Base and parks proceeds in USYC (or rebalances to Arc), USDC moves natively — no wrapped tokens or drainable bridges.
+
+**Build:** `backend/packages/execution/cctp.ts` wraps `depositForBurn` on the source TokenMessenger, polls the Circle Iris attestation API, then `receiveMessage` on the destination MessageTransmitter. Circle Programmable Wallets call `depositForBurn` directly — no separate relayer.
+
+Per-chain addresses and CCTP domain numbers live in `backend/packages/execution/chainConfig.ts`:
+
+| Chain            | chainId  | CCTP Domain | TokenMessenger                                      |
+|------------------|----------|-------------|-----------------------------------------------------|
+| Ethereum         | 1        | 0           | `0xbd3fa81b58ba92a82136038b25adec7066af3155`        |
+| Ethereum Sepolia | 11155111 | 0           | `0x9f3b8679c73c2fef8b59b4f3444d4e156fb70aa5`        |
+| Base             | 8453     | 6           | `0x1682ae6375c4e4a97e4b583bc394c861a46d8962`        |
+| Base Sepolia     | 84532    | 6           | `0x9f3b8679c73c2fef8b59b4f3444d4e156fb70aa5`        |
+| Arbitrum         | 42161    | 3           | (see `chainConfig.ts`)                              |
+| Arc Testnet      | 5042002  | 7           | (Circle Iris)                                       |
+
+#### Paymaster — gasless UX
+
+**Goal:** New users should not need a separate ETH gas wallet before their first action.
+
+**Build:** On Arc, USDC-native gas makes Paymaster optional (primary execution chain). On Base / Base Sepolia, `backend/packages/execution/executeOpportunity.ts` uses ERC-4337 with Circle Paymaster (`CIRCLE_PAYMASTER_WALLET_ID` in `backend/.env`) so gas is paid in USDC from the same balance being rebalanced.
+
+#### USYC — yield while parked
+
+**Goal:** When a lot is near the 365-day long-term threshold (or a wash-sale window must close), park capital in USYC (Hashnote / BlackRock USD Institutional Digital Liquidity) instead of leaving it idle.
+
+**Build:** `TaxeeExecutor.parkInUsyc(usdcAmount, lotId, agent)` atomically transfers USDC, approves USYC, deposits, and emits `ParkedInUsyc`. `redeemFromUsyc(shares)` reverses when the lot matures. On testnet, `USYC_ADDRESS == USDC_ADDRESS` (pass-through); mainnet uses Hashnote USYC on Base.
+
+#### EIP-7702 — self-custody delegation
+
+**Goal:** MetaMask / Rainbow users delegate execution to `TaxeeManager` via signature without moving funds into Circle MPC.
+
+**Build:** `DelegationRegistry` stores delegation limits and revocation; `TaxeeManager` executes harvest / rebuy / yield-move with slippage and cooldown guardrails; `backend/packages/execution/eip7702Executor.ts` is the heartbeat path for EIP-7702 agents; signing lives in `frontend/components/wallet/use-taxee-contracts.ts`.
+
+#### Deployed contracts (authoritative)
+
+Source: `contracts/deployments/` (one JSON per chain, written by Forge script).
+
+**Arc Testnet** — chainId `5042002` (primary execution chain)
+
+| Contract           | Address                                      |
+|--------------------|----------------------------------------------|
+| TaxeeLotRegistry   | `0x0a4aa21D151635e16DD659ad607Eb6cFD11E27A1` |
+| DelegationRegistry | `0xbC8E45D8314EA7b46CaE4de0856d28262b3b244d` |
+| TaxeeManager       | `0xd335C4B56Ac9664413120f21c10b9F7aaC651AE0` |
+| TaxeeExecutor      | `0x7fD85458A0958C5EB52234f3FF4f0C6bf7cC999c` |
+| USDC (native gas)  | `0x0000000000000000000000000000000000000000` |
+
+RPC: `https://rpc.testnet.arc-node.thecanteenapp.com/v1/...`
+
+**Ethereum Sepolia** — chainId `11155111`
+
+| Contract           | Address                                      |
+|--------------------|----------------------------------------------|
+| DelegationRegistry | `0x786D17590AF61F06d6BBc2B77621a72a25F4A527` |
+| TaxeeManager       | `0x919B8F07Ec889922AE08BA8CC64C43aaA9a34A37` |
+| USDC               | `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` |
+| WETH               | `0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14` |
+
+**Base Sepolia** — chainId `84532`
+
+| Contract                        | Address                                      |
+|---------------------------------|----------------------------------------------|
+| DelegationRegistry (EIP-7702)   | `0x403Fe0408976b518b2952BdF590135Ec6ba12ebc` |
+| TaxeeManager (EIP-7702)         | `0xEE8DAE2D3f142052bDb704Ba0D94e04eC1680193` |
+| USDC                            | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
+| WETH                            | `0x4200000000000000000000000000000000000006` |
+
+Full per-chain config (CCTP domains, RPC env vars, explorer URLs): `backend/packages/execution/chainConfig.ts`.
+
+---
+
 ## 3. Monorepo Structure
 
 ```
@@ -646,7 +256,7 @@ taxee/
 ├── packages/
 │   ├── shared/                 # Core types: Agent, Lot, PortfolioSnapshot, CandidateAction
 │   ├── tax-engine/             # Decision Engine — harvest, rebalance, maturation (pure TS)
-│   ├── aggregator/             # Data Aggregator — Circle Wallets, Arc, oracles, signals
+│   ├── aggregator/              # Data Aggregator — Circle Wallets, Arc, oracles, signals
 │   ├── llm/                    # Goal Parser, Regime Classifier, Action Reasoner, Explanation
 │   │   ├── prompts/            # Versioned prompt templates (.v1.md, .v2.md)
 │   │   └── schemas/            # Zod schemas for structured LLM output
@@ -760,9 +370,9 @@ apps/agent/
 4.  if candidates == []      → log "no opportunities"; wait; rescan
 5.  for each candidate:
     LLM Action Reasoner      → { decision, reasoning, scheduledAction? }
-6a. [delegated] guardrail check → Execution Layer → Arc → notify (receipt)
-6b. [manual]    emit OpportunityNotification with buttons → await user
-7.  LLM Explanation          → dashboard card + notification body
+6. [delegated] guardrail check → Execution Layer → Arc → notify (receipt)
+7. [manual]    emit OpportunityNotification with buttons → await user
+8.  LLM Explanation          → dashboard card + notification body
 ```
 
 **Job queue:** Inngest preferred (durable, retryable, per-agent fan-out). BullMQ as fallback.
@@ -832,945 +442,7 @@ apps/mcp-server/
 │   └── tools/
 │       ├── registerWallet.ts     # taxee_register_wallet
 │       ├── getPortfolio.ts       # taxee_get_portfolio
-│       ├── scan.ts               t# taxee_scan (run one heartbeat cycle)
-│       ├── listOpportunities.ts  # taxee_list_opportunities
-│       ├── approveAction.ts      # taxee_approve_action
-│       └── getArcRecords.ts      # taxee_get_arc_records
-├── package.json
-└── tsconfig.json
-```
-
-**MCP tool manifest:**
-
-| Tool                        | Input                                 | Output                                  |
-|-----------------------------|---------------------------------------|-----------------------------------------|
-| `taxee_register_wallet`     | `{ address, chains?, importSource? }` | `{ agentId, status, lotsImported }`     |
-| `taxee_get_portfolio`       | `{ agentId }`                         | `PortfolioSnapshot`                     |
-| `taxee_scan`                | `{ agentId }`                         | `CandidateAction[]` + LLM reasoning     |
-| `taxee_list_opportunities`  | `{ agentId, status? }`                | `Opportunity[]`                         |
-| `taxee_approve_action`      | `{ actionId, decision: execute/defer/skip }` | `ActionResult`               |
-| `taxee_get_arc_records`     | `{ agentId, from?, to? }`             | `ArcRecord[]` (Form 8949 ready)         |
-
-Auth: per-`agentId` API key, passed as MCP transport header. `taxee_scan` respects `agent.approval.mode` — delegated mode auto-executes; manual mode returns proposals only.
-
----
-
-## 5. Shared Packages
-
-### 5.1 `packages/shared`
-
-Single source of truth for all TypeScript types used across apps and packages. No business logic — types, enums, and Zod schemas only.
-
-```typescript
-// Core entity types
-
-Agent {
-  id: string
-  userId: string
-  status: "pending" | "active" | "paused"
-  wallets: WalletBinding[]
-  policy: UserPolicy
-  approval: ApprovalSettings
-  deploymentMode: "hosted" | "mcp"
-  notificationChannels: Channel[]
-  heartbeatIntervalMinutes: number   // default: 60
-  createdAt: Date
-}
-
-ApprovalSettings {
-  mode: "manual" | "delegated"
-  autoApproveTypes?: ("HARVEST" | "REBALANCE" | "PARK")[]
-  notifyOnExecute: boolean           // default: true
-  vetoWindowSeconds?: number         // notify-first + auto-execute after N sec
-}
-
-WalletBinding {
-  address: string
-  chains: number[]                   // chain IDs
-  circleWalletId?: string
-  importSource: "onchain" | "csv" | "manual"
-}
-
-UserPolicy {
-  primaryObjective: "minimize_tax" | "maximize_return" | "balanced"
-  harvestThresholdPct: number        // e.g. -8 (%)
-  maturationBufferDays: number       // don't dispose lots within N days of LT threshold
-  rebalanceAggressiveness: "conservative" | "moderate" | "aggressive"
-  allowedActions: ("HARVEST" | "REBALANCE" | "PARK")[]
-  maxTaxPerAction?: number           // USD cap
-  jurisdiction: "US" | "OTHER"
-}
-
-// Portfolio types
-
-PortfolioSnapshot {
-  agentId: string
-  capturedAt: Date
-  positions: Position[]
-  prices: Record<string, number>     // assetId → USD
-  realizedYtd: {
-    shortTerm: number
-    longTerm: number
-    lossesHarvested: number
-  }
-  regimeSignals: RegimeSignals
-  userPolicy: UserPolicy
-}
-
-Position {
-  assetId: string
-  chainId: number
-  quantity: string                   // Decimal as string
-  lots: Lot[]
-}
-
-Lot {
-  id: string
-  agentId: string
-  assetId: string
-  chainId: number
-  acquiredAt: Date
-  costBasisUsd: string               // Decimal as string
-  quantity: string
-  sourceTx: string
-  status: "open" | "partial" | "closed"
-  holdingPeriodDays: number          // derived daily
-  provisional: boolean               // true = not yet user-confirmed
-}
-
-// Decision types
-
-CandidateAction {
-  id: string
-  type: "REBALANCE" | "HARVEST" | "PARK" | "HOLD"
-  priority: number
-  lots: Lot[]
-  estimatedTaxImpact: number         // USD
-  estimatedGas: number               // USD
-  replacementAsset?: string
-  washSaleDaysRemaining?: number
-  deterministicRecommendation: "EXECUTE" | "DEFER"
-}
-
-Opportunity {
-  id: string
-  agentId: string
-  candidateAction: CandidateAction
-  llmDecision: "EXECUTE" | "DEFER" | "SKIP"
-  llmReasoning: string
-  scheduledAction?: ScheduledAction
-  interimAction?: "PARK_IN_USYC"
-  status: "pending" | "approved" | "deferred" | "skipped" | "executed" | "failed"
-  createdAt: Date
-  decidedAt?: Date
-}
-```
-
----
-
-### 5.2 `packages/tax-engine`
-
-**Pure TypeScript — zero API calls, zero side effects.** The deterministic brain of taxee.
-
-Three modules, all unit-testable with no mocks:
-
-#### Rebalance Optimizer (`rebalanceOptimizer.ts`)
-
-```typescript
-function computeRebalanceCandidates(
-  snapshot: PortfolioSnapshot,
-  regime: RegimeState,
-  policy: UserPolicy
-): CandidateAction[]
-```
-
-Logic:
-```
-drift_cost   = f(current_allocation, target_allocation, regime.targetAllocationDelta)
-tax_cost     = Σ estimatedCapitalGains(requiredDisposals, lotSelection = HIFO)
-
-if drift_cost > tax_cost → flag REBALANCE
-else                     → flag HOLD, re-check in 24h
-```
-
-#### Loss Harvest Scanner (`harvestScanner.ts`)
-
-```typescript
-function scanForHarvestOpportunities(
-  snapshot: PortfolioSnapshot,
-  policy: UserPolicy
-): CandidateAction[]
-```
-
-Logic:
-```
-for each position across all chains:
-  unrealized_loss_pct = (current_value - cost_basis) / cost_basis
-
-  if unrealized_loss_pct < policy.harvestThresholdPct:
-    flag HARVEST
-    attach correlated_replacement (correlation table in /data/correlations.json)
-    check wash_sale_window (30d since last buy of same asset)
-```
-
-Correlation pairs (maintained in `packages/tax-engine/data/correlations.json`):
-```json
-{ "wETH": "stETH", "wBTC": "TBTC", "SOL": "mSOL", "MATIC": "stMATIC" }
-```
-
-#### Holding Period Tracker (`maturationTracker.ts`)
-
-```typescript
----
-
-## 2. System Architecture Overview
-
-```
-User Goal (natural language)
-        │
-        ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  LLM Goal Parser                                                          │
-│  Translate intent → UserPolicy (structured JSON)                          │
-└───────────────────────────────┬──────────────────────────────────────────┘
-                                │
-                                ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  Data Aggregator                                                          │
-│  Circle Wallets + Arc Ledger + Price Oracles + Onchain Signals           │
-│  Output: PortfolioSnapshot                                                │
-└───────────────────────────────┬──────────────────────────────────────────┘
-                                │
-                                ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  LLM Regime Classifier                                                    │
-│  Structured onchain signals → RegimeState { label, confidence, reasoning }│
-└───────────────────────────────┬──────────────────────────────────────────┘
-                                │
-                                ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  Decision Engine  (deterministic, pure TypeScript)                        │
-│  ┌─────────────────────┐  ┌──────────────────────┐  ┌─────────────────┐ │
-│  │ Rebalance Optimizer  │  │ Loss Harvest Scanner  │  │ Maturation      │ │
-│  │ drift_cost vs        │  │ unrealized_loss >     │  │ Tracker         │ │
-│  │ tax_cost of HIFO     │  │ threshold → HARVEST   │  │ days_to_LT < 30 │ │
-│  │ disposal             │  │ + correlated replace  │  │ → PARK_IN_USYC  │ │
-│  └─────────────────────┘  └──────────────────────┘  └─────────────────┘ │
-│  Output: CandidateAction[]                                                │
-└───────────────────────────────┬──────────────────────────────────────────┘
-                                │
-                                ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  LLM Action Reasoner  (judgment layer)                                    │
-│  Receives structured CandidateAction, applies edge-case reasoning:        │
-│  wash-sale windows, regime direction, gas economics → EXECUTE/DEFER/SKIP  │
-└───────────────────────────────┬──────────────────────────────────────────┘
-                                │
-                    ┌───────────┴────────────┐
-                    ▼                        ▼
-          approval.mode = manual    approval.mode = delegated
-          Notify user               Policy guardrail check
-          await Execute/Defer/Skip  Auto-execute if clear
-                    │                        │
-                    └───────────┬────────────┘
-                                ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  Execution Layer  (Circle Stack)                                          │
-│  Circle Wallets → CCTP/Gateway → USYC park → Paymaster (USDC gas)        │
-└───────────────────────────────┬──────────────────────────────────────────┘
-                                │
-                                ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  Arc Ledger Write                                                         │
-│  Immutable disposal record → Form 8949 pre-fill                           │
-└───────────────────────────────┬──────────────────────────────────────────┘
-                                │
-                                ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  LLM Explanation → Dashboard + Notification                               │
-│  Plain-English rationale card, after-tax alpha metrics                    │
-└──────────────────────────────────────────────────────────────────────────┘
-```
-
-### What LLM does vs what code does
-
-| Task                                             | Owner              |
-|--------------------------------------------------|--------------------|
-| Parse natural-language goals                     | **LLM**            |
-| Regime classification from mixed onchain signals | **LLM**            |
-| Edge-case judgment (wash sale + regime + gas)    | **LLM**            |
-| "Should we act now or defer?"                    | **LLM**            |
-| Plain-English explanation to user                | **LLM**            |
-| Harvest threshold math (`unrealized_loss > −8%`) | **Code**           |
-| Lot selection (HIFO / specific-ID)               | **Code**           |
-| Rebalance drift vs tax cost calculation          | **Code**           |
-| Policy guardrail enforcement                     | **Code**           |
-| Transaction execution                            | **Circle stack**   |
-| Immutable disposal record                        | **Arc API**        |
-
----
-
-## 3. Monorepo Structure
-
-```
-taxee/
-├── apps/
-│   ├── api/                    # REST API — Agent CRUD, action loop, webhooks
-│   ├── agent/                  # Heartbeat worker — always-on portfolio scan
-│   ├── telegram-bot/           # Telegram onboarding + notifications + inline approve
-│   └── mcp-server/             # MCP tools for OpenClaw / Claude Desktop
-│
-├── packages/
-│   ├── shared/                 # Core types: Agent, Lot, PortfolioSnapshot, CandidateAction
-│   ├── tax-engine/             # Decision Engine — harvest, rebalance, maturation (pure TS)
-│   ├── aggregator/             # Data Aggregator — Circle Wallets, Arc, oracles, signals
-│   ├── llm/                    # Goal Parser, Regime Classifier, Action Reasoner, Explanation
-│   │   ├── prompts/            # Versioned prompt templates (.v1.md, .v2.md)
-│   │   └── schemas/            # Zod schemas for structured LLM output
-│   ├── execution/              # Circle Wallets, Paymaster, USYC, CCTP adapters
-│   ├── compliance/             # Arc writer, Form 8949 projection, lot store
-│   └── notifications/          # TG, email, push adapters — shared OpportunityNotification
-│
-├── contracts/
-│   ├── src/
-│   │   ├── TaxeeLotRegistry.sol      # On-chain lot ID → cost basis registry
-│   │   ├── TaxeeExecutor.sol         # Atomic harvest + USYC park executor
-│   │   └── interfaces/
-│   │       ├── ICircleCCTP.sol
-│   │       └── IUsyc.sol
-│   ├── test/
-│   ├── script/
-│   └── foundry.toml
-│
-├── fixtures/
-│   └── demo-portfolio.json     # Deterministic demo portfolio for hackathon
-│
-├── frontend/                   # Next.js dashboard (separate package)
-│
-├── architecture.md             # Full system architecture reference
-├── doc.md                      # Product overview
-├── README.md                   # This file
-├── package.json                # Workspace root
-├── turbo.json                  # Turborepo build pipeline
-└── tsconfig.base.json          # Shared TypeScript config
-```
-
-**Toolchain:**
-- **Monorepo:** [Turborepo](https://turbo.build/) with npm workspaces
-- **Runtime:** Node 20 + TypeScript 5
-- **Smart contracts:** Foundry (Solidity 0.8.24)
-- **DB migrations:** Drizzle ORM
-
----
-
-## 4. Backend Apps
-
-### 4.1 `apps/api`
-
-Central REST + WebSocket API. All surfaces (web, Telegram, MCP) talk to this.
-
-**Responsibilities:**
-- Agent registration and CRUD
-- Action loop state machine (`execute / defer / skip`)
-- Opportunity retrieval and WebSocket push
-- Telegram callback handler (inline button webhooks)
-- Auth: SIWE (web), Telegram `chat_id` binding, MCP API key
-
-**Folder layout:**
-```
-apps/api/
-├── src/
-│   ├── index.ts                  # Fastify app entry
-│   ├── routes/
-│   │   ├── agents.ts             # POST /agents, GET /agents/:id
-│   │   ├── opportunities.ts      # GET /opportunities, PATCH /:id/decision
-│   │   ├── actions.ts            # POST /actions/:id/execute|defer|skip
-│   │   ├── portfolio.ts          # GET /portfolio/:agentId
-│   │   ├── arc.ts                # GET /arc/:agentId (compliance export)
-│   │   └── webhooks/
-│   │       └── telegram.ts       # Telegram inline button callbacks
-│   ├── middleware/
-│   │   ├── auth.ts               # SIWE + TG + MCP API key verification
-│   │   └── validate.ts           # Zod request validation
-│   ├── db/
-│   │   ├── schema.ts             # Drizzle schema
-│   │   └── migrations/
-│   └── lib/
-│       └── actionStateMachine.ts # OPPORTUNITY_DETECTED → execute/defer/skip FSM
-├── package.json
-└── tsconfig.json
-```
-
-**Key endpoints — see [§8. API Reference](#8-api-reference) for full spec.**
-
----
-
-### 4.2 `apps/agent`
-
-Always-on heartbeat worker. One job per active `agentId`, running every `heartbeatIntervalMinutes` (default 60).
-
-**Responsibilities:**
-- Orchestrate the full scan cycle (Aggregator → Classifier → Decision Engine → LLM Reasoner)
-- Dispatch execution (delegated mode) or emit notification (manual mode)
-- Handle deferred action re-checks
-- Log `"nothing found"` silently; surface opportunities to notification layer
-
-**Folder layout:**
-```
-apps/agent/
-├── src/
-│   ├── index.ts                  # Worker entry pointt
-│   ├── heartbeat.ts              # Main cycle: 9-step pipeline per agent
-│   ├── scheduler.ts              # Inngest / BullMQ job registration
-│   ├── guardrails.ts             # Policy enforcement before any execution
-│   └── conflict.ts               # Conflict resolution: PARK overrides rebalance, etc.
-├── package.json
-└── tsconfig.json
-```
-
-**Heartbeat cycle (per agent):**
-
-```
-1.  Data Aggregator          → PortfolioSnapshot
-2.  LLM Regime Classifier    → RegimeState  (cache hit: skip if < 4h old)
-3.  Decision Engine          → CandidateAction[]
-4.  if candidates == []      → log "no opportunities"; wait; rescan
-5.  for each candidate:
-    LLM Action Reasoner      → { decision, reasoning, scheduledAction? }
-6a. [delegated] guardrail check → Execution Layer → Arc → notify (receipt)
-6b. [manual]    emit OpportunityNotification with buttons → await user
-7.  LLM Explanation          → dashboard card + notification body
-```
-
-**Job queue:** Inngest preferred (durable, retryable, per-agent fan-out). BullMQ as fallback.
-
----
-
-### 4.3 `apps/telegram-bot`
-
-Telegram bot handles frictionless onboarding and is the primary notification channel.
-
-**Responsibilities:**
-- `/start` → welcome + command overview
-- Accept wallet address → live balance scan + lot import + heartbeat trigger
-- **Multi-wallet:** each address sent creates a new independent agent
-- `/wallets` → list all linked wallets with pending opportunity counts
-- `/status` → per-wallet agent status
-- `/opportunities` → pending actions across all wallets, labeled per wallet
-- `/mode manual|delegated` → updates all wallets simultaneously
-- Rich opportunity notifications → inline **[✅ Approve] [⏰ Defer] [❌ Skip]** buttons
-
-**Folder layout:**
-```
-apps/telegram-bot/
-├── src/
-│   ├── index.ts                  # Bot entry (grammy)
-│   ├── commands/
-│   │   ├── start.ts              # /start onboarding wizard
-│   │   ├── mode.ts               # /mode manual|delegated
-│   │   ├── status.ts             # /status — active lots + YTD
-│   │   └── portfolio.ts          # /portfolio — current snapshot
-│   ├── handlers/
-│   │   ├── callbackQuery.ts      # Inline button: execute/defer/skip
-│   │   └── message.ts            # Address + preference capture
-│   ├── notify.ts                 # Send OpportunityNotification cards
-│   └── session.ts                # grammy session: onboarding state machine
-├── package.json
-└── tsconfig.json
-```
-
-**Wallet flow (triggered by any 0x address message):**
-```
-User sends: 0xabc...
-  → Create user (telegramId) + wallet record + agent for that wallet
-  → 🔍 Scan live balances across 4 chains (Alchemy)
-  → 💼 Display: asset · quantity · price · USD value per chain
-  → 📚 Import transfer history → tax lots with cost basis (Alchemy + CoinGecko)
-  → 🧠 Trigger heartbeat (background) → Claude analysis → push notification
-
-User sends another address:
-  → Second wallet + independent agent created
-  → Same scan pipeline runs for the new wallet
-```
-
-**Security:** Never requests seed phrases. `telegramId` bound to `userId` in DB. Each wallet address is checksummed and lowercased before storage.
-
----
-
-### 4.4 `apps/mcp-server`
-
-Exposes taxee as an MCP server so external agents (OpenClaw, Claude Desktop) can invoke taxee tools on demand, replacing the hosted heartbeat with user-controlled invocation.
-
-**Folder layout:**
-```
-apps/mcp-server/
-├── src/
-│   ├── index.ts                  # MCP server entry (@modelcontextprotocol/sdk)
-│   └── tools/
-│       ├── registerWallet.ts     # taxee_register_wallet
-│       ├── getPortfolio.ts       # taxee_get_portfolio
-│       ├── scan.ts               t# taxee_scan (run one heartbeat cycle)
-│       ├── listOpportunities.ts  # taxee_list_opportunities
-│       ├── approveAction.ts      # taxee_approve_action
-│       └── getArcRecords.ts      # taxee_get_arc_records
-├── package.json
-└── tsconfig.json
-```
-
-**MCP tool manifest:**
-
-| Tool                        | Input                                 | Output                                  |
-|-----------------------------|---------------------------------------|-----------------------------------------|
-| `taxee_register_wallet`     | `{ address, chains?, importSource? }` | `{ agentId, status, lotsImported }`     |
-| `taxee_get_portfolio`       | `{ agentId }`                         | `PortfolioSnapshot`                     |
-| `taxee_scan`                | `{ agentId }`                         | `CandidateAction[]` + LLM reasoning     |
-| `taxee_list_opportunities`  | `{ agentId, status? }`                | `Opportunity[]`                         |
-| `taxee_approve_action`      | `{ actionId, decision: execute/defer/skip }` | `ActionResult`               |
-| `taxee_get_arc_records`     | `{ agentId, from?, to? }`             | `ArcRecord[]` (Form 8949 ready)         |
-
-Auth: per-`agentId` API key, passed as MCP transport header. `taxee_scan` respects `agent.approval.mode` — delegated mode auto-executes; manual mode returns proposals only.
-
----
-
-## 5. Shared Packages
-
-### 5.1 `packages/shared`
-
-Single source of truth for all TypeScript types used across apps and packages. No business logic — types, enums, and Zod schemas only.
-
-```typescript
-// Core entity types
-
-Agent {
-  id: string
-  userId: string
-  status: "pending" | "active" | "paused"
-  wallets: WalletBinding[]
-  policy: UserPolicy
-  approval: ApprovalSettings
-  deploymentMode: "hosted" | "mcp"
-  notificationChannels: Channel[]
-  heartbeatIntervalMinutes: number   // default: 60
-  createdAt: Date
-}
-
-ApprovalSettings {
-  mode: "manual" | "delegated"
-  autoApproveTypes?: ("HARVEST" | "REBALANCE" | "PARK")[]
-  notifyOnExecute: boolean           // default: true
-  vetoWindowSeconds?: number         // notify-first + auto-execute after N sec
-}
-
-WalletBinding {
-  address: string
-  chains: number[]                   // chain IDs
-  circleWalletId?: string
-  importSource: "onchain" | "csv" | "manual"
-}
-
-UserPolicy {
-  primaryObjective: "minimize_tax" | "maximize_return" | "balanced"
-  harvestThresholdPct: number        // e.g. -8 (%)
-  maturationBufferDays: number       // don't dispose lots within N days of LT threshold
-  rebalanceAggressiveness: "conservative" | "moderate" | "aggressive"
-  allowedActions: ("HARVEST" | "REBALANCE" | "PARK")[]
-  maxTaxPerAction?: number           // USD cap
-  jurisdiction: "US" | "OTHER"
-}
-
-// Portfolio types
-
-PortfolioSnapshot {
-  agentId: string
-  capturedAt: Date
-  positions: Position[]
-  prices: Record<string, number>     // assetId → USD
-  realizedYtd: {
-    shortTerm: number
-    longTerm: number
-    lossesHarvested: number
-  }
-  regimeSignals: RegimeSignals
-  userPolicy: UserPolicy
-}
-
-Position {
-  assetId: string
-  chainId: number
-  quantity: string                   // Decimal as string
-  lots: Lot[]
-}
-
-Lot {
-  id: string
-  agentId: string
-  assetId: string
-  chainId: number
-  acquiredAt: Date
-  costBasisUsd: string               // Decimal as string
-  quantity: string
-  sourceTx: string
-  status: "open" | "partial" | "closed"
-  holdingPeriodDays: number          // derived daily
-  provisional: boolean               // true = not yet user-confirmed
-}
-
-// Decision types
-
-CandidateAction {
-  id: string
-  type: "REBALANCE" | "HARVEST" | "PARK" | "HOLD"
-  priority: number
-  lots: Lot[]
-  estimatedTaxImpact: number         // USD
-  estimatedGas: number               // USD
-  replacementAsset?: string
-  washSaleDaysRemaining?: number
-  deterministicRecommendation: "EXECUTE" | "DEFER"
-}
-
-Opportunity {
-  id: string
-  agentId: string
-  candidateAction: CandidateAction
-  llmDecision: "EXECUTE" | "DEFER" | "SKIP"
-  llmReasoning: string
-  scheduledAction?: ScheduledAction
-  interimAction?: "PARK_IN_USYC"
-  status: "pending" | "approved" | "deferred" | "skipped" | "executed" | "failed"
-  createdAt: Date
-  decidedAt?: Date
-}
-```
-
----
-
-### 5.2 `packages/tax-engine`
-
-**Pure TypeScript — zero API calls, zero side effects.** The deterministic brain of taxee.
-
-Three modules, all unit-testable with no mocks:
-
-#### Rebalance Optimizer (`rebalanceOptimizer.ts`)
-
-```typescript
-function computeRebalanceCandidates(
-  snapshot: PortfolioSnapshot,
-  regime: RegimeState,
-  policy: UserPolicy
-): CandidateAction[]
-```
-
-Logic:
-```
-drift_cost   = f(current_allocation, target_allocation, regime.targetAllocationDelta)
-tax_cost     = Σ estimatedCapitalGains(requiredDisposals, lotSelection = HIFO)
-
-if drift_cost > tax_cost → flag REBALANCE
-else                     → flag HOLD, re-check in 24h
-```
-
-#### Loss Harvest Scanner (`harvestScanner.ts`)
-
-```typescript
-function scanForHarvestOpportunities(
-  snapshot: PortfolioSnapshot,
-  policy: UserPolicy
-): CandidateAction[]
-```
-
-Logic:
-```
-for each position across all chains:
----
-
-## 2. System Architecture Overview
-
-```
-User Goal (natural language)
-        │
-        ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  LLM Goal Parser                                                          │
-│  Translate intent → UserPolicy (structured JSON)                          │
-└───────────────────────────────┬──────────────────────────────────────────┘
-                                │
-                                ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  Data Aggregator                                                          │
-│  Circle Wallets + Arc Ledger + Price Oracles + Onchain Signals           │
-│  Output: PortfolioSnapshot                                                │
-└───────────────────────────────┬──────────────────────────────────────────┘
-                                │
-                                ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  LLM Regime Classifier                                                    │
-│  Structured onchain signals → RegimeState { label, confidence, reasoning }│
-└───────────────────────────────┬──────────────────────────────────────────┘
-                                │
-                                ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  Decision Engine  (deterministic, pure TypeScript)                        │
-│  ┌─────────────────────┐  ┌──────────────────────┐  ┌─────────────────┐ │
-│  │ Rebalance Optimizer  │  │ Loss Harvest Scanner  │  │ Maturation      │ │
-│  │ drift_cost vs        │  │ unrealized_loss >     │  │ Tracker         │ │
-│  │ tax_cost of HIFO     │  │ threshold → HARVEST   │  │ days_to_LT < 30 │ │
-│  │ disposal             │  │ + correlated replace  │  │ → PARK_IN_USYC  │ │
-│  └─────────────────────┘  └──────────────────────┘  └─────────────────┘ │
-│  Output: CandidateAction[]                                                │
-└───────────────────────────────┬──────────────────────────────────────────┘
-                                │
-                                ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  LLM Action Reasoner  (judgment layer)                                    │
-│  Receives structured CandidateAction, applies edge-case reasoning:        │
-│  wash-sale windows, regime direction, gas economics → EXECUTE/DEFER/SKIP  │
-└───────────────────────────────┬──────────────────────────────────────────┘
-                                │
-                    ┌───────────┴────────────┐
-                    ▼                        ▼
-          approval.mode = manual    approval.mode = delegated
-          Notify user               Policy guardrail check
-          await Execute/Defer/Skip  Auto-execute if clear
-                    │                        │
-                    └───────────┬────────────┘
-                                ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  Execution Layer  (Circle Stack)                                          │
-│  Circle Wallets → CCTP/Gateway → USYC park → Paymaster (USDC gas)        │
-└───────────────────────────────┬──────────────────────────────────────────┘
-                                │
-                                ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  Arc Ledger Write                                                         │
-│  Immutable disposal record → Form 8949 pre-fill                           │
-└───────────────────────────────┬──────────────────────────────────────────┘
-                                │
-                                ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  LLM Explanation → Dashboard + Notification                               │
-│  Plain-English rationale card, after-tax alpha metrics                    │
-└──────────────────────────────────────────────────────────────────────────┘
-```
-
-### What LLM does vs what code does
-
-| Task                                             | Owner              |
-|--------------------------------------------------|--------------------|
-| Parse natural-language goals                     | **LLM**            |
-| Regime classification from mixed onchain signals | **LLM**            |
-| Edge-case judgment (wash sale + regime + gas)    | **LLM**            |
-| "Should we act now or defer?"                    | **LLM**            |
-| Plain-English explanation to user                | **LLM**            |
-| Harvest threshold math (`unrealized_loss > −8%`) | **Code**           |
-| Lot selection (HIFO / specific-ID)               | **Code**           |
-| Rebalance drift vs tax cost calculation          | **Code**           |
-| Policy guardrail enforcement                     | **Code**           |
-| Transaction execution                            | **Circle stack**   |
-| Immutable disposal record                        | **Arc API**        |
-
----
-
-## 3. Monorepo Structure
-
-```
-taxee/
-├── apps/
-│   ├── api/                    # REST API — Agent CRUD, action loop, webhooks
-│   ├── agent/                  # Heartbeat worker — always-on portfolio scan
-│   ├── telegram-bot/           # Telegram onboarding + notifications + inline approve
-│   └── mcp-server/             # MCP tools for OpenClaw / Claude Desktop
-│
-├── packages/
-│   ├── shared/                 # Core types: Agent, Lot, PortfolioSnapshot, CandidateAction
-│   ├── tax-engine/             # Decision Engine — harvest, rebalance, maturation (pure TS)
-│   ├── aggregator/             # Data Aggregator — Circle Wallets, Arc, oracles, signals
-│   ├── llm/                    # Goal Parser, Regime Classifier, Action Reasoner, Explanation
-│   │   ├── prompts/            # Versioned prompt templates (.v1.md, .v2.md)
-│   │   └── schemas/            # Zod schemas for structured LLM output
-│   ├── execution/              # Circle Wallets, Paymaster, USYC, CCTP adapters
-│   ├── compliance/             # Arc writer, Form 8949 projection, lot store
-│   └── notifications/          # TG, email, push adapters — shared OpportunityNotification
-│
-├── contracts/
-│   ├── src/
-│   │   ├── TaxeeLotRegistry.sol      # On-chain lot ID → cost basis registry
-│   │   ├── TaxeeExecutor.sol         # Atomic harvest + USYC park executor
-│   │   └── interfaces/
-│   │       ├── ICircleCCTP.sol
-│   │       └── IUsyc.sol
-│   ├── test/
-│   ├── script/
-│   └── foundry.toml
-│
-├── fixtures/
-│   └── demo-portfolio.json     # Deterministic demo portfolio for hackathon
-│
-├── frontend/                   # Next.js dashboard (separate package)
-│
-├── architecture.md             # Full system architecture reference
-├── doc.md                      # Product overview
-├── README.md                   # This file
-├── package.json                # Workspace root
-├── turbo.json                  # Turborepo build pipeline
-└── tsconfig.base.json          # Shared TypeScript config
-```
-
-**Toolchain:**
-- **Monorepo:** [Turborepo](https://turbo.build/) with npm workspaces
-- **Runtime:** Node 20 + TypeScript 5
-- **Smart contracts:** Foundry (Solidity 0.8.24)
-- **DB migrations:** Drizzle ORM
-
----
-
-## 4. Backend Apps
-
-### 4.1 `apps/api`
-
-Central REST + WebSocket API. All surfaces (web, Telegram, MCP) talk to this.
-
-**Responsibilities:**
-- Agent registration and CRUD
-- Action loop state machine (`execute / defer / skip`)
-- Opportunity retrieval and WebSocket push
-- Telegram callback handler (inline button webhooks)
-- Auth: SIWE (web), Telegram `chat_id` binding, MCP API key
-
-**Folder layout:**
-```
-apps/api/
-├── src/
-│   ├── index.ts                  # Fastify app entry
-│   ├── routes/
-│   │   ├── agents.ts             # POST /agents, GET /agents/:id
-│   │   ├── opportunities.ts      # GET /opportunities, PATCH /:id/decision
-│   │   ├── actions.ts            # POST /actions/:id/execute|defer|skip
-│   │   ├── portfolio.ts          # GET /portfolio/:agentId
-│   │   ├── arc.ts                # GET /arc/:agentId (compliance export)
-│   │   └── webhooks/
-│   │       └── telegram.ts       # Telegram inline button callbacks
-│   ├── middleware/
-│   │   ├── auth.ts               # SIWE + TG + MCP API key verification
-│   │   └── validate.ts           # Zod request validation
-│   ├── db/
-│   │   ├── schema.ts             # Drizzle schema
-│   │   └── migrations/
-│   └── lib/
-│       └── actionStateMachine.ts # OPPORTUNITY_DETECTED → execute/defer/skip FSM
-├── package.json
-└── tsconfig.json
-```
-
-**Key endpoints — see [§8. API Reference](#8-api-reference) for full spec.**
-
----
-
-### 4.2 `apps/agent`
-
-Always-on heartbeat worker. One job per active `agentId`, running every `heartbeatIntervalMinutes` (default 60).
-
-**Responsibilities:**
-- Orchestrate the full scan cycle (Aggregator → Classifier → Decision Engine → LLM Reasoner)
-- Dispatch execution (delegated mode) or emit notification (manual mode)
-- Handle deferred action re-checks
-- Log `"nothing found"` silently; surface opportunities to notification layer
-
-**Folder layout:**
-```
-apps/agent/
-├── src/
-│   ├── index.ts                  # Worker entry pointt
-│   ├── heartbeat.ts              # Main cycle: 9-step pipeline per agent
-│   ├── scheduler.ts              # Inngest / BullMQ job registration
-│   ├── guardrails.ts             # Policy enforcement before any execution
-│   └── conflict.ts               # Conflict resolution: PARK overrides rebalance, etc.
-├── package.json
-└── tsconfig.json
-```
-
-**Heartbeat cycle (per agent):**
-
-```
-1.  Data Aggregator          → PortfolioSnapshot
-2.  LLM Regime Classifier    → RegimeState  (cache hit: skip if < 4h old)
-3.  Decision Engine          → CandidateAction[]
-4.  if candidates == []      → log "no opportunities"; wait; rescan
-5.  for each candidate:
-    LLM Action Reasoner      → { decision, reasoning, scheduledAction? }
-6a. [delegated] guardrail check → Execution Layer → Arc → notify (receipt)
-6b. [manual]    emit OpportunityNotification with buttons → await user
-7.  LLM Explanation          → dashboard card + notification body
-```
-
-**Job queue:** Inngest preferred (durable, retryable, per-agent fan-out). BullMQ as fallback.
-
----
-
-### 4.3 `apps/telegram-bot`
-
-Telegram bot handles frictionless onboarding and is the primary notification channel.
-
-**Responsibilities:**
-- `/start` → welcome + command overview
-- Accept wallet address → live balance scan + lot import + heartbeat trigger
-- **Multi-wallet:** each address sent creates a new independent agent
-- `/wallets` → list all linked wallets with pending opportunity counts
-- `/status` → per-wallet agent status
-- `/opportunities` → pending actions across all wallets, labeled per wallet
-- `/mode manual|delegated` → updates all wallets simultaneously
-- Rich opportunity notifications → inline **[✅ Approve] [⏰ Defer] [❌ Skip]** buttons
-
-**Folder layout:**
-```
-apps/telegram-bot/
-├── src/
-│   ├── index.ts                  # Bot entry (grammy)
-│   ├── commands/
-│   │   ├── start.ts              # /start onboarding wizard
-│   │   ├── mode.ts               # /mode manual|delegated
-│   │   ├── status.ts             # /status — active lots + YTD
-│   │   └── portfolio.ts          # /portfolio — current snapshot
-│   ├── handlers/
-│   │   ├── callbackQuery.ts      # Inline button: execute/defer/skip
-│   │   └── message.ts            # Address + preference capture
-│   ├── notify.ts                 # Send OpportunityNotification cards
-│   └── session.ts                # grammy session: onboarding state machine
-├── package.json
-└── tsconfig.json
-```
-
-**Wallet flow (triggered by any 0x address message):**
-```
-User sends: 0xabc...
-  → Create user (telegramId) + wallet record + agent for that wallet
-  → 🔍 Scan live balances across 4 chains (Alchemy)
-  → 💼 Display: asset · quantity · price · USD value per chain
-  → 📚 Import transfer history → tax lots with cost basis (Alchemy + CoinGecko)
-  → 🧠 Trigger heartbeat (background) → Claude analysis → push notification
-
-User sends another address:
-  → Second wallet + independent agent created
-  → Same scan pipeline runs for the new wallet
-```
-
-**Security:** Never requests seed phrases. `telegramId` bound to `userId` in DB. Each wallet address is checksummed and lowercased before storage.
-
----
-
-### 4.4 `apps/mcp-server`
-
-Exposes taxee as an MCP server so external agents (OpenClaw, Claude Desktop) can invoke taxee tools on demand, replacing the hosted heartbeat with user-controlled invocation.
-
-**Folder layout:**
-```
-apps/mcp-server/
-├── src/
-│   ├── index.ts                  # MCP server entry (@modelcontextprotocol/sdk)
-│   └── tools/
-│       ├── registerWallet.ts     # taxee_register_wallet
-│       ├── getPortfolio.ts       # taxee_get_portfolio
-│       ├── scan.ts               t# taxee_scan (run one heartbeat cycle)
+│       ├── scan.ts               # taxee_scan (run one heartbeat cycle)
 │       ├── listOpportunities.ts  # taxee_list_opportunities
 │       ├── approveAction.ts      # taxee_approve_action
 │       └── getArcRecords.ts      # taxee_get_arc_records
@@ -1973,158 +645,6 @@ for each lot:
 
   if days_to_longterm <= policy.maturationBufferDays AND lot has unrealized gain:
     flag PARK_IN_USYC — do not dispose, park for yield while aging
-```
-
-#### HIFO Lot Selector (`lotSelector.ts`)
-
-```typescript
-function selectLotsHIFO(
-  position: Position,
-  quantityToDispose: Decimal,
-  method: "HIFO" | "FIFO" | "SPECIFIC_ID"
-): LotManifest
-```
-
-HIFO (Highest-In, First-Out) = select lots with highest cost basis first → minimizes realized gain. IRS-compliant when combined with specific identification at execution.
-
----
-
-### 5.3 `packages/aggregator`
-
-Pulls live portfolio data from all sources and assembles `PortfolioSnapshot`.
-
-**Sources:**
-
-| Source            | Data                                            | Implementation         |
-|-------------------|-------------------------------------------------|------------------------|
-| Alchemy RPC       | Live ETH + ERC-20 balances, transfer history    | `balanceReader.ts` + `lotImporter.ts` |
-| CoinGecko         | Current prices + historical prices at lot acquisition | `priceAggregator.ts` |
-| Arc Ledger        | Cost basis per lot, YTD realized G/L (execution path) | Arc REST API |
-| Onchain Signals   | Funding rates, vol, stablecoin flows, ETH/BTC   | Defillama + Glassnode stubs |
-
-**Chains supported:** Ethereum mainnet (1), Ethereum Sepolia (11155111), Base mainnet (8453), Base Sepolia (84532)
-
-**Folder layout:**
-```
-packages/aggregator/
-├── src/
-│   ├── index.ts                  # assembleSnapshot(agentId): PortfolioSnapshot
-│   ├── circle.ts                 # Circle W
-  unrealized_loss_pct = (current_value - cost_basis) / cost_basis
-
-  if unrealized_loss_pct < policy.harvestThresholdPct:
-    flag HARVEST
-    attach correlated_replacement (correlation table in /data/correlations.json)
-    check wash_sale_window (30d since last buy of same asset)
-```
-
-Correlation pairs (maintained in `packages/tax-engine/data/correlations.json`):
-```json
-{ "wETH": "stETH", "wBTC": "TBTC", "SOL": "mSOL", "MATIC": "stMATIC" }
-```
-
-#### Holding Period Tracker (`maturationTracker.ts`)
-
-```typescript
-function trackMaturationOpportunities(
-  snapshot: PortfolioSnapshot,
-  policy: UserPolicy
-): CandidateAction[]
-```
-
-Logic:
-```
-for each lot:
-  days_held        = today - lot.acquiredAt
-  days_to_longterm = 365 - days_held
-
-  if days_to_longterm <= policy.maturationBufferDays AND lot has unrealized gain:
-    flag PARK_IN_USYC — do not dispose, park for yield while aging
-```
-
-#### HIFO Lot Selector (`lotSelector.ts`)
-
-```typescript
-function selectLotsHIFO(
-  position: Position,
-  quantityToDispose: Decimal,
-  method: "HIFO" | "FIFO" | "SPECIFIC_ID"
-): LotManifest
-```
-
-HIFO (Highest-In, First-Out) = select lots with highest cost basis first → minimizes realized gain. IRS-compliant when combined with specific identification at execution.
-
----
-
-### 5.3 `packages/aggregator`
-
-Pulls live portfolio data from all sources and assembles `PortfolioSnapshot`.
-
-**Sources:**
-
-| Source            | Data                                            | Implementation         |
-|-------------------|-------------------------------------------------|------------------------|
-| Alchemy RPC       | Live ETH + ERC-20 balances, transfer history    | `balanceReader.ts` + `lotImporter.ts` |
-| CoinGecko         | Current prices + historical prices at lot acquisition | `priceAggregator.ts` |
-| Arc Ledger        | Cost basis per lot, YTD realized G/L (execution path) | Arc REST API |
-| Onchain Signals   | Funding rates, vol, stablecoin flows, ETH/BTC   | Defillama + Glassnode stubs |
-
-**Chains supported:** Ethereum mainnet (1), Ethereum Sepolia (11155111), Base mainnet (8453), Base Sepolia (84532)
-
-**Folder layout:**
-```
-packages/aggregator/
-├── src/
-│   ├── index.ts                  # assembleSnapshot(agentId): PortfolioSnapshot
-│   ├── circle.ts                 # Circle W
-): CandidateAction[]
-```
-
-Logic:
-```
-for each lot:
-  days_held        = today - lot.acquiredAt
-  days_to_longterm = 365 - days_held
-
-  if days_to_longterm <= policy.maturationBufferDays AND lot has unrealized gain:
-    flag PARK_IN_USYC — do not dispose, park for yield while aging
-```
-
-#### HIFO Lot Selector (`lotSelector.ts`)
-
-```typescript
-function selectLotsHIFO(
-  position: Position,
-  quantityToDispose: Decimal,
-  method: "HIFO" | "FIFO" | "SPECIFIC_ID"
-): LotManifest
-```
-
-HIFO (Highest-In, First-Out) = select lots with highest cost basis first → minimizes realized gain. IRS-compliant when combined with specific identification at execution.
-
----
-
-### 5.3 `packages/aggregator`
-
-Pulls live portfolio data from all sources and assembles `PortfolioSnapshot`.
-
-**Sources:**
-
-| Source            | Data                                            | Implementation         |
-|-------------------|-------------------------------------------------|------------------------|
-| Alchemy RPC       | Live ETH + ERC-20 balances, transfer history    | `balanceReader.ts` + `lotImporter.ts` |
-| CoinGecko         | Current prices + historical prices at lot acquisition | `priceAggregator.ts` |
-| Arc Ledger        | Cost basis per lot, YTD realized G/L (execution path) | Arc REST API |
-| Onchain Signals   | Funding rates, vol, stablecoin flows, ETH/BTC   | Defillama + Glassnode stubs |
-
-**Chains supported:** Ethereum mainnet (1), Ethereum Sepolia (11155111), Base mainnet (8453), Base Sepolia (84532)
-
-**Folder layout:**
-```
-packages/aggregator/
-├── src/
-│   ├── index.ts                  # assembleSnapshot(agentId): PortfolioSnapshot
-│   ├── circle.ts                 # Circle W for yield while aging
 ```
 
 #### HIFO Lot Selector (`lotSelector.ts`)
@@ -2872,3 +1392,38 @@ forge script script/Deploy.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL --broadcast
 # Runs one full pipeline cycle for all active agents and sends Telegram notifications
 export $(grep -v '^#' .env | xargs) && pnpm --filter @taxee/agent dev:trigger
 ```
+
+---
+
+## 13. Testing Strategy
+
+| Layer              | What to run                                              |
+|--------------------|----------------------------------------------------------|
+| `packages/tax-engine` | Unit tests — pure functions, no mocks (`pnpm test`)   |
+| `contracts`        | Foundry (`forge test -vvv`)                              |
+| `apps/api`         | Route + DB integration tests against local Postgres      |
+| `apps/agent`       | Heartbeat dry-run via `dev:trigger` on demo portfolio    |
+| E2E                | Onboarding → scan → manual approve → Arc record written  |
+
+Deterministic engine tests are the highest-value suite: they guard harvest thresholds, HIFO selection, and rebalance math without LLM variance.
+
+---
+
+## 14. Hackathon MVP Scope
+
+**In scope**
+
+- Register agent (web + Telegram) with manual or delegated approval
+- Live portfolio import (Alchemy + CoinGecko) across Ethereum / Base testnets
+- Heartbeat scan → LLM reasoner → opportunity notification
+- Circle MPC wallet onboarding + PIN-gated execution
+- Arc disposal record + Form 8949 CSV export
+- Dashboard: opportunities, reasoning chain, portfolio snapshot
+
+**Out of scope (post-hackathon)**
+
+- Multi-jurisdiction tax rules beyond US Form 8949 framing
+- Production mainnet deploy on all chains
+- Full Glassnode / advanced regime data feeds
+
+
