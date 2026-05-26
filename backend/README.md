@@ -1,6 +1,6 @@
-# taxee — Backend
+# Taxee — Backend
 
-Turborepo + pnpm monorepo running the taxee tax-routing agent:
+Turborepo + pnpm monorepo running the taxee tax routing agent:
 Fastify API, a heartbeat worker, the Telegram bot, an MCP server, plus all the shared packages (aggregator, tax-engine, llm, execution, compliance).
 
 ---

@@ -1,9 +1,9 @@
 # taxee
 
 > **The first DeFi portfolio agent that optimizes after-tax return, not gross performance.**
-> Built for the Circle Developer Hackathon 2026 · Primary execution chain: **Arc (5042002)**
+> Built for Agora Agents Hackathon 2026 · Primary execution chain: **Arc (5042002)**
 
-taxee watches your wallets, finds harvest / rebalance / park opportunities across chains, and lets a Claude-powered agent reason about whether to act now, defer, or skip — always in light of your tax position. Execution rides the full Circle stack: Programmable Wallets for MPC signing, CCTP for cross-chain USDC, Paymaster for gasless UX, USYC for yield while you wait for long-term treatment, and Arc as the immutable compliance ledger.
+taxee watches your wallets, finds harvest / rebalance / park opportunities across chains, and lets a Claude powered agent reason about whether to act now, defer, or skip always in light of your tax position. Execution rides the full Circle stack: Programmable Wallets for MPC signing, CCTP for cross-chain USDC, Paymaster for gasless UX, USYC for yield while you wait for long-term treatment, and Arc as the immutable compliance ledger.
 
 ---
 
@@ -29,7 +29,7 @@ taxee watches your wallets, finds harvest / rebalance / park opportunities acros
 
 ## 1. What Is taxee
 
-DeFi portfolio agents today are tax-blind — they rebalance on drift, rotate on regime, and harvest gains across chains, silently destroying after-tax returns. Every disposal is a taxable event. Every rebalance has a tax cost. Every win held one day short of long-term treatment is money left on the table.
+DeFi portfolio agents today are tax-blind they rebalance on drift, rotate on regime, and harvest gains across chains, silently destroying after-tax returns. Every disposal is a taxable event. Every rebalance has a tax cost. Every win held one day short of long-term treatment is money left on the table.
 
 taxee embeds tax awareness as a first-class input into every agent decision:
 
@@ -103,19 +103,19 @@ taxee/
                            └─ /portfolio, /lot, /action
                                       |
                                       ▼
-            ┌─────────────────────────┴──────────────────────────┐
+            ┌─────────────────────────┴───────────────────────────┐
             │           Heartbeat  (backend/apps/agent)           │
             │           runs every 15 min per active agent        │
-            └─────────────────────────┬──────────────────────────┘
+            └─────────────────────────┬───────────────────────────┘
                                       ▼
                           aggregator → tax-engine → llm
                                       │
                           CandidateAction[] (HARVEST | REBALANCE | PARK)
                                       ▼
-            ┌─────────────────────────┴──────────────────────────┐
+            ┌─────────────────────────┴────────────────────────────────┐
             │  approval.mode = manual    │   approval.mode = delegated │
             │  Telegram card w/ buttons  │   guardrails → auto-execute │
-            └─────────────────────────┬──────────────────────────┘
+            └─────────────────────────┬────────────────────────────────┘
                                       ▼
                           execution package → Circle / EIP-7702
                                       │
@@ -149,7 +149,7 @@ This is the section judges and contributors should read first — how taxee actu
 
 ### 4.1 Circle Programmable Wallets (user-controlled MPC)
 
-**Goal:** Let a Telegram-only user create a self-custodial wallet without a seed phrase, then have taxee execute transactions on their behalf — but only after the user confirms each one with a PIN.
+**Goal:** Let a Telegram only user create a self custodial wallet without a seed phrase, then have taxee execute transactions on their behalf but only after the user confirms each one with a PIN.
 
 **Build:**
 
@@ -258,17 +258,6 @@ RPC: `https://rpc.testnet.arc-node.thecanteenapp.com/v1/...`
 | `TaxeeManager` (EIP-7702)       | `0xEE8DAE2D3f142052bDb704Ba0D94e04eC1680193` |
 | USDC                 | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
 | WETH                 | `0x4200000000000000000000000000000000000006` |
-
-### Base Mainnet — chainId `8453` (read-only, not yet deployed)
-
-| Contract             | Address                                      |
-|----------------------|----------------------------------------------|
-| USDC                 | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
-| WETH                 | `0x4200000000000000000000000000000000000006` |
-| CCTP TokenMessenger  | `0x1682ae6375c4e4a97e4b583bc394c861a46d8962` |
-| CCTP MessageTransmitter | `0xad09780d193884d503182ad4588450c416d6f9d4` |
-
-Deployer (executor on all chains): `0xc5b7b574EE84A9B59B475FE32Eaf908C246d3859`
 
 Full per-chain config (CCTP domains, RPC env vars, explorer URLs) lives in [backend/packages/execution/chainConfig.ts](backend/packages/execution/src/chainConfig.ts).
 
@@ -383,3 +372,7 @@ APP_URL=http://localhost:3000
 6. **taxee never stores private keys.** Watch tier = address only. Execute tier = Circle Programmable Wallet (MPC) or EIP-7702 delegation.
 7. **Every LLM call is logged.** `promptVersion + input + output` in `llm_logs` — essential for debugging and compliance.
 8. **Arc write is non-negotiable.** Every executed disposal writes to Arc and commits a hash to `TaxeeLotRegistry` before the agent considers the action complete.
+
+---
+
+Built with love for Agora Agents Hackathon 2026 🤍 Built for the DeFi user who's tired of paying tax on every rebalance: no spreadsheets, no CPA, no April surprise. Just an agent that thinks in after-tax dollars.
